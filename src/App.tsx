@@ -21,6 +21,7 @@ export default function App() {
   const [currentStep, setCurrentStep] = useState<number>(3);
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState<boolean>(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState<boolean>(false);
 
   // Sovereign Comparison stats
   const [uaeData, setUaeData] = useState<UaeIndicator>({
@@ -64,9 +65,8 @@ export default function App() {
     { code: "egypt", nameEn: "Egypt", nameAr: "مصر", flag: "🇪🇬" },
   ];
 
-  // Manual country onboarding options
-  const [customCountryName, setCustomCountryName] = useState("");
-  const [isOnboardingCustom, setIsOnboardingCustom] = useState(false);
+  // Meeting objective and search initializer state
+  const [meetingObjective, setMeetingObjective] = useState("");
 
   // Initialize and load default comparison values
   useEffect(() => {
@@ -86,7 +86,6 @@ export default function App() {
             });
           } catch (e) {
             console.warn("Firestore collection inactive/empty on boot. Continuing with fallbacks.", e);
-            // Log error cleanly without throwing/halting boot flow
             try {
               handleFirestoreError(e, OperationType.GET, "countries");
             } catch (err) {
@@ -95,66 +94,41 @@ export default function App() {
           }
           setCountriesIndex(combinedCountries);
           setUaeData(data.uae);
+          
+          // Load default country (brazil) on initial execution
+          setIsGenerating(true);
+          const briefResp = await fetch("/api/advisor/brief", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              country: "brazil",
+              language: language,
+            }),
+          });
+          const briefData = await briefResp.json();
+          if (briefData.success) {
+            setAiBriefingText(briefData.aiBriefing.rawText);
+            setBriefingSource(briefData.source || "gemini-strategic-ai");
+            setActiveCountry(combinedCountries["brazil"] || briefData.countryData);
+          }
         }
       } catch (err) {
         console.error("Failed to load compare parameters from server:", err);
+      } finally {
+        setIsGenerating(false);
       }
     }
     loadInitialDatabase();
   }, []);
 
-  // Sync selected country dataset or automatically trigger backend brief compilation
-  useEffect(() => {
-    async function syncCountryDataset() {
-      setIsGenerating(true);
-      try {
-        const resp = await fetch("/api/advisor/brief", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            country: selectedCountryCode,
-            language: language,
-          }),
-        });
-        const data = await resp.json();
-        if (data.success) {
-          setAiBriefingText(data.aiBriefing.rawText);
-          setBriefingSource(data.source || "gemini-strategic-ai");
-          if (data.countryData) {
-            // Prefer detailed local merged Firestore record to preserve schema definitions
-            const fsDetailedRecord = countriesIndex[selectedCountryCode];
-            if (fsDetailedRecord && fsDetailedRecord.profile && fsDetailedRecord.sectors) {
-              setActiveCountry(fsDetailedRecord);
-            } else {
-              setActiveCountry(data.countryData);
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Critical error syncing bilateral dataset:", err);
-      } finally {
-        setIsGenerating(false);
-      }
-    }
-    syncCountryDataset();
-  }, [selectedCountryCode, language, countriesIndex]);
-
-  // Handle activeTab redirect from chat tab to side floating layout
-  useEffect(() => {
-    if (activeTab === "chat") {
-      setIsChatOpen(true);
-      setActiveTab("passport"); // revert to main tab so workspace is not empty
-    }
-  }, [activeTab]);
-
-  // Onboard external custom countries using generative intelligence (Gemini-3.5-flash) on the fly
-  const handleOnboardCustomCountry = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customCountryName.trim()) return;
-
-    setIsOnboardingCustom(true);
+  // Sync selected country dataset manually based on selection and meeting objective
+  const triggerSyncSearch = async (
+    targetCountry: string = selectedCountryCode,
+    targetLang: "en" | "ar" = language,
+    activeIndex: Record<string, PrebuiltCountry> = countriesIndex
+  ) => {
     setIsGenerating(true);
     try {
       const resp = await fetch("/api/advisor/brief", {
@@ -163,48 +137,54 @@ export default function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          country: customCountryName,
-          question: `Onboard country file for "${customCountryName}". Provide general details, energy vectors, port options, and trade compatibility.`,
-          language: language,
+          country: targetCountry,
+          language: targetLang,
+          question: meetingObjective.trim() 
+            ? `Draft briefing for ${targetCountry} centered around this objective: ${meetingObjective}`
+            : undefined,
         }),
       });
       const data = await resp.json();
       if (data.success) {
-        // Embed mock custom indices in memory
-        const customId = customCountryName.toLowerCase().replace(/\s+/g, "-");
-        const fallbackId = selectedCountryCode;
-        const baseDataset = countriesIndex[fallbackId] || countriesIndex["brazil"];
-
-        const customPackage: PrebuiltCountry = {
-          ...baseDataset,
-          id: customId,
-          nameEn: customCountryName,
-          nameAr: customCountryName,
-          flag: "🌐",
-          profile: {
-            ...baseDataset.profile,
-            overviewEn: `Generative intelligence onboarding for ${customCountryName}. Detailed dynamic briefs compiling across general government, transport logistics and energy infrastructure systems.`,
-            overviewAr: `ملف مخصص تم توليده ذاتياً لـ ${customCountryName}. يجري سحب ومطابقة مؤشرات الموانئ واللوجستيات وشبكات التوليد مع الإمارات ثنائياً.`
-          }
-        };
-
-        setCountriesIndex(prev => ({ ...prev, [customId]: customPackage }));
-        setActiveCountry(customPackage);
-        setSelectedCountryCode(customId);
         setAiBriefingText(data.aiBriefing.rawText);
         setBriefingSource(data.source || "gemini-strategic-ai");
-        setCustomCountryName("");
-        setIsOnboardingCustom(false);
-        setActiveTab("briefing"); // Jump straight to briefing memo tab
-        setCurrentStep(6); // Progress current timeline stage to Summary Written
+        if (data.countryData) {
+          const fsDetailedRecord = activeIndex[targetCountry];
+          if (fsDetailedRecord && fsDetailedRecord.profile && fsDetailedRecord.sectors) {
+            setActiveCountry(fsDetailedRecord);
+          } else {
+            setActiveCountry(data.countryData);
+          }
+        }
+        
+        if (meetingObjective.trim()) {
+          setActiveTab("briefing");
+          setCurrentStep(8); // Elevate workflow straight to briefing presentation stage
+        } else {
+          setCurrentStep(4); // Workspace successfully updated
+        }
       }
     } catch (err) {
-      console.error("Failed to dynamically onboard custom country file:", err);
+      console.error("Critical error syncing bilateral dataset:", err);
     } finally {
       setIsGenerating(false);
-      setIsOnboardingCustom(false);
     }
   };
+
+  // Synchronize language changes on demand
+  useEffect(() => {
+    if (activeCountry) {
+      triggerSyncSearch(selectedCountryCode, language, countriesIndex);
+    }
+  }, [language]);
+
+  // Handle activeTab redirect from chat tab to side floating layout
+  useEffect(() => {
+    if (activeTab === "chat") {
+      setIsChatOpen(true);
+      setActiveTab("passport"); // revert to main tab so workspace is not empty
+    }
+  }, [activeTab]);
 
   const handleCountryPicked = (code: string) => {
     setSelectedCountryCode(code);
@@ -224,10 +204,11 @@ export default function App() {
         selectedCountryNameAr={activeCountry?.nameAr || selectedCountryCode}
         isDeveloperMode={isDeveloperMode}
         setIsDeveloperMode={setIsDeveloperMode}
+        onOpenCalendar={() => setIsCalendarOpen(true)}
       />
 
       {/* Primary Workspace container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8" id="application-primary-workspace">
+      <main className="max-w-[1700px] xl:max-w-[1850px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 flex-1 w-full space-y-8" id="application-primary-workspace">
         {isDeveloperMode ? (
           <DeveloperDashboard
             language={language}
@@ -359,33 +340,31 @@ export default function App() {
               )}
             </div>
 
-            {/* Custom On-the-fly Onboarding Input Form */}
-            <form onSubmit={handleOnboardCustomCountry} className="flex items-center gap-2 border border-gray-200 rounded-sm p-1 bg-white shadow-sm">
+            {/* Meeting Objective Input Field & Search Initializer Button */}
+            <form onSubmit={(e) => { e.preventDefault(); triggerSyncSearch(); }} className="flex items-center gap-3 border border-gold-border rounded-sm p-1 bg-white shadow-sm" id="meeting-objective-search-form">
               <input
                 type="text"
-                placeholder={isEn ? "Onboard country..." : "ملف دولة أخرى..."}
-                value={customCountryName}
-                onChange={(e) => setCustomCountryName(e.target.value)}
-                disabled={isOnboardingCustom}
-                className="px-2 py-1 text-xs w-28 sm:w-36 outline-none bg-transparent placeholder-gray-400 font-sans border-0"
+                placeholder={isEn ? "Meeting objective (e.g. Infrastructure Corridor)..." : "هدف الاجتماع (مثال: ممر البنية التحتية)..."}
+                value={meetingObjective}
+                onChange={(e) => setMeetingObjective(e.target.value)}
+                disabled={isGenerating}
+                className="px-2 py-1.5 text-xs w-56 sm:w-72 outline-none bg-transparent placeholder-gray-400 font-sans border-0"
+                id="meeting-objective-input"
               />
               <button
                 type="submit"
-                disabled={isOnboardingCustom || !customCountryName.trim()}
-                className="px-2.5 py-1.5 bg-gold-deep hover:bg-gold-deep/80 text-slate-vip text-[10px] uppercase tracking-widest font-extrabold rounded flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                disabled={isGenerating}
+                className="px-3.5 py-2 bg-slate-vip hover:bg-gold-deep hover:text-slate-vip text-white text-[10px] uppercase tracking-widest font-extrabold rounded-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all font-mono"
+                id="initialize-search-btn"
               >
-                <span>{isOnboardingCustom ? "..." : (isEn ? "Onboard" : "توليد")}</span>
-                <ArrowRight className="w-2.5 h-2.5" />
+                <span>{isGenerating ? (isEn ? "Syncing..." : "جاري التحضير...") : (isEn ? "Initialize Search" : "تحضير الإيجاز")}</span>
+                <ArrowRight className="w-3 h-3" />
               </button>
             </form>
           </div>
         </div>
 
-        {/* TOP LEVEL CABINET BILATERAL SUMMIT & MEETING SCHEDULER */}
-        <BilateralCalendar
-          country={activeCountry}
-          language={language}
-        />
+        {/* TOP LEVEL CABINET BILATERAL SUMMIT & MEETING SCHEDULER REMOVED FROM MAIN INLINE ROW GRID TO OVERLAY PORTAL TRIGGERED VIA HEADER */}
 
         {/* CORE WORKSPACE BOARD */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8" id="primary-workspace-grid-layout">
@@ -493,7 +472,7 @@ export default function App() {
                 {/* Tab 6: Dialogue Center */}
                 <button
                   onClick={() => setIsChatOpen(!isChatOpen)}
-                  className="fixed bottom-6 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#C5A059] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm"
+                  className="fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#C5A059] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm"
                   style={{ direction: language === "ar" ? "rtl" : "ltr" }}
                 >
                   <div className="flex items-center gap-2.5">
@@ -528,31 +507,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Quick action checklist helper for dignitaries */}
-            <div className="bg-white border-l-4 border-[#C5A059] rounded-sm p-5 shadow-md space-y-3" id="quick-delegation-checklist">
-              <span className="text-[10px] uppercase font-mono tracking-widest text-[#9c7823] font-bold block">
-                {isEn ? "PRE-DELEGATION VERIFICATION" : "مجموعة التحقق لوفد الدولة"}
-              </span>
-              
-              <ul className="space-y-2.5 text-xs text-gray-700 leading-relaxed font-sans font-medium" id="quick-checklist-ul">
-                <li className="flex items-start gap-2">
-                  <span className="text-emerald-deep">✔</span>
-                  <span>{isEn ? "Bilateral overview retrieved & evaluated" : "تم استرجاع النبذة العامة وتدقيق الهيكل"}</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-emerald-deep">✔</span>
-                  <span>{isEn ? "Bilateral mutual port agreements active" : "تم رصد مجمعات استثمارات الموانئ والممرات"}</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-emerald-deep">✔</span>
-                  <span>{isEn ? "Presentation slides cleared for sharing" : "جاهزية شرائح العرض والنشر للتلفزة"}</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-emerald-deep">✔</span>
-                  <span>{isEn ? "Representative talking points synthesized" : "صياغة وتخمير نقاط الحديث الموجهة للدبلوماسي"}</span>
-                </li>
-              </ul>
-            </div>
+
           </div>
 
           {/* MAIN COLUMN PANELS: DISPLAY CHOSEN CATEGORY WORKSPACE COMPONENTS */}
@@ -608,7 +563,7 @@ export default function App() {
 
       {/* Flag footer details following the executive standards */}
       <footer className="bg-slate-vip border-t border-gold-deep/15 py-6 mt-12 text-white" id="cabinet-briefing-footer">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-mono text-gray-400">
+        <div className="max-w-[1700px] xl:max-w-[1850px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-mono text-gray-400">
           <div className="flex items-center gap-3">
             <span className="font-serif font-extrabold text-gold-deep">Ministry of Energy & Infrastructure</span>
             <span className="h-4 w-px bg-white/10 hidden md:block"></span>
@@ -623,7 +578,7 @@ export default function App() {
       {/* Floating Chatbot Popup Window */}
       {isChatOpen && activeCountry && (
         <div 
-          className="fixed bottom-24 right-6 z-50 w-96 sm:w-[440px] max-w-[calc(100vw-3rem)] h-[580px] bg-white rounded-lg shadow-2xl border border-[#C5A059] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
+          className="fixed bottom-28 right-6 z-50 w-96 sm:w-[440px] max-w-[calc(100vw-3rem)] h-[580px] bg-white rounded-lg shadow-2xl border border-[#C5A059] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
           style={{ direction: language === "ar" ? "rtl" : "ltr" }}
         >
           <AiChatAssistant
@@ -637,6 +592,24 @@ export default function App() {
             }}
             onClose={() => setIsChatOpen(false)}
           />
+        </div>
+      )}
+
+      {/* Portfolio Schedule Calendar Modal */}
+      {isCalendarOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[200] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200" id="calendar-modal-backdrop" onClick={() => setIsCalendarOpen(false)}>
+          <div 
+            className="bg-white rounded-md shadow-2xl border border-gold-border w-full max-w-[1200px] max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200 relative"
+            id="calendar-modal-content-container"
+            onClick={(e) => e.stopPropagation()}
+            style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+          >
+            <BilateralCalendar
+              country={activeCountry}
+              language={language}
+              onClose={() => setIsCalendarOpen(false)}
+            />
+          </div>
         </div>
       )}
 

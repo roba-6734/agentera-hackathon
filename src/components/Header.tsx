@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Shield, Globe, Award, Calendar, Clock, Sparkles } from "lucide-react";
+import React from "react";
+import { Shield, Globe, Award, Calendar, Sparkles } from "lucide-react";
 
 interface HeaderProps {
   language: "en" | "ar";
@@ -8,29 +8,10 @@ interface HeaderProps {
   selectedCountryNameAr: string;
   isDeveloperMode: boolean;
   setIsDeveloperMode: (val: boolean) => void;
+  onOpenCalendar: () => void;
 }
 
-export default function Header({ language, setLanguage, selectedCountryNameEn, selectedCountryNameAr, isDeveloperMode, setIsDeveloperMode }: HeaderProps) {
-  const [dubaiTime, setDubaiTime] = useState("");
-
-  useEffect(() => {
-    const updateTime = () => {
-      // Dubai is UTC+4
-      const options: Intl.DateTimeFormatOptions = {
-        timeZone: "Asia/Dubai",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-      };
-      const formatted = new Intl.DateTimeFormat("en-US", options).format(new Date());
-      setDubaiTime(formatted);
-    };
-
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
+export default function Header({ language, setLanguage, selectedCountryNameEn, selectedCountryNameAr, isDeveloperMode, setIsDeveloperMode, onOpenCalendar }: HeaderProps) {
 
   return (
     <header className="bg-white relative border-b border-gold-border text-slate-vip overflow-hidden shadow-sm" id="moei-executive-header">
@@ -41,7 +22,7 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
       <div className="absolute -right-32 -top-32 w-96 h-96 rounded-full bg-gold-deep/5 blur-3xl pointer-events-none"></div>
       <div className="absolute -left-32 -bottom-32 w-96 h-96 rounded-full bg-emerald-deep/5 blur-3xl pointer-events-none"></div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 relative z-10">
+      <div className="max-w-[1700px] xl:max-w-[1850px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-5 relative z-10">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6" id="header-internal-container">
           
           {/* UAE Logo Emblem & Official Ministry Brand */}
@@ -77,19 +58,7 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
 
           {/* Real-time Status and Language Toggle */}
           <div className="flex flex-wrap items-center gap-4 md:self-center" id="header-controls-section">
-            {/* Dubai standard clock */}
-            <div className="bg-[#F8F8F6] rounded-md p-2.5 border border-gold-border flex items-center gap-3 shadow-xs" id="dubai-gst-clock">
-              <Clock className="w-4 h-4 text-gold-deep" />
-              <div className="text-right font-sans">
-                <p className="text-[9px] text-gray-500 font-mono uppercase tracking-wider block">
-                  {language === "en" ? "Dubai Time (GST)" : "توقيت دبي (GST)"}
-                </p>
-                <p className="text-sm font-bold font-mono text-emerald-deep leading-none mt-0.5">
-                  {dubaiTime || "Clock Active"}
-                </p>
-              </div>
-            </div>
-
+            
             {/* Preparation Indicator Badge */}
             <div className="bg-[#F8F8F6] rounded-md p-2.5 border border-gold-border flex items-center gap-3 shadow-xs" id="briefing-target-badge">
               <Award className="w-4 h-4 text-emerald-deep" />
@@ -114,6 +83,17 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
               id="header-terminal-toggle-btn"
             >
               <span>{isDeveloperMode ? (language === "en" ? "🖥️ Console Active" : "🖥️ وحدة التحكم نشطة") : (language === "en" ? "🛠️ Developer Console" : "🛠️ وحدة المطور")}</span>
+            </button>
+
+            {/* Cabinet Portfolio Schedule Calendar Toggle Button */}
+            <button
+              onClick={onOpenCalendar}
+              className="bg-[#FAF8F5] hover:bg-gold-bg text-slate-vip border border-gold-border font-semibold font-mono text-xs tracking-wide px-3.5 py-2.5 rounded shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+              id="header-calendar-toggle-btn"
+              title={language === "en" ? "Bilateral Schedule Calendar" : "مفكرة المواعيد الثنائية"}
+            >
+              <Calendar className="w-4 h-4 text-emerald-deep" />
+              <span>{language === "en" ? "Portfolio Schedule" : "المواعيد والوفود"}</span>
             </button>
 
             {/* Bilingual Switcher Toggle Button */}

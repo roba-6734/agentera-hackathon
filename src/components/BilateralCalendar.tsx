@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { PrebuiltCountry } from "../types";
-import { Calendar, CalendarPlus, Clock, Plus, Download, RefreshCw, CheckCircle, Trash2, MapPin, UserCheck, Shield, Clipboard, HelpCircle } from "lucide-react";
+import { Calendar, CalendarPlus, Clock, Plus, Download, RefreshCw, CheckCircle, Trash2, MapPin, UserCheck, Shield, Clipboard, HelpCircle, X } from "lucide-react";
 
 interface BilateralSession {
   id: string;
@@ -21,14 +21,15 @@ interface BilateralSession {
 interface BilateralCalendarProps {
   country: PrebuiltCountry | null;
   language: "en" | "ar";
+  onClose?: () => void;
 }
 
-export default function BilateralCalendar({ country, language }: BilateralCalendarProps) {
+export default function BilateralCalendar({ country, language, onClose }: BilateralCalendarProps) {
   const isEn = language === "en";
   
   // State for universal session logs (shared across active country selections)
   const [sessions, setSessions] = useState<BilateralSession[]>([]);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   
   // Sync state simulation variables
   const [isSyncingAll, setIsSyncingAll] = useState(false);
@@ -307,6 +308,17 @@ export default function BilateralCalendar({ country, language }: BilateralCalend
           >
             <span>{isExpanded ? (isEn ? "Collapse [-]" : "طوي [-]") : (isEn ? `Expand Scheduler (+${sessions.length})` : `عرض المفكرة (+${sessions.length})`)}</span>
           </button>
+
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 hover:border-red-300 font-mono font-bold text-[10px] uppercase tracking-wider p-2 rounded-sm transition-all cursor-pointer flex items-center justify-center"
+              title={isEn ? "Close" : "إغلاق"}
+              id="calendar-close-modal-btn"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 

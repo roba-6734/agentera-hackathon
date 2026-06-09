@@ -224,16 +224,18 @@ export default function BriefingGenerator({ country, language, aiBriefingText, i
           fill: { color: "C5A85A" }
         });
 
-        // Map list bullet items nicely
+        // Map list bullet items nicely using native pptxgen bullets to ensure perfect word wrap
         const bulletsList = isEn ? sl.bulletsEn : sl.bulletsAr;
         const textObjects = bulletsList.map((bullet) => {
           return {
-            text: `• ${bullet}\n\n`,
+            text: bullet,
             options: {
-              fontSize: 16,
+              bullet: true,
+              fontSize: 13, // Slightly reduced from 16 to fit long country dossiers beautifully
               color: "E2E8F0", // Slate grey text
               fontFace: "Arial",
-              lineSpacing: 24,
+              paraSpaceAfter: 12, // Clean block spacing after each item
+              align: (isEn ? "left" : "right") as "left" | "right",
             }
           };
         });
@@ -244,6 +246,7 @@ export default function BriefingGenerator({ country, language, aiBriefingText, i
           w: 11.7,
           h: 4.5,
           align: isEn ? "left" : "right",
+          wrap: true, // Forces text-wrapping inside the text-box bounds
         });
 
         // Add brand agency marker on slide footer
