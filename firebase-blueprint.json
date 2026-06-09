@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "CountryProfile": {
+      "title": "CountryProfile",
+      "description": "Bilateral profile of a nation with general indices.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The country ID code." },
+        "nameEn": { "type": "string", "description": "English name of the country." },
+        "nameAr": { "type": "string", "description": "Arabic name of the country." },
+        "flag": { "type": "string", "description": "Flag emoji representation." },
+        "profile": { "type": "object", "description": "General political profile info." },
+        "indicators": { "type": "object", "description": "National economic and development metrics." },
+        "sectors": { "type": "object", "description": "Sector intelligence (Energy/Infrastructure/Sustainability)." },
+        "strategicInsights": { "type": "object", "description": "Bilateral relations and strategic initiatives." },
+        "predictive": { "type": "object", "description": "Predictive warnings, emerging markets & forward proposals." }
+      },
+      "required": ["id", "nameEn", "nameAr"]
+    },
+    "BilateralSession": {
+      "title": "BilateralSession",
+      "description": "A scheduled bilateral meeting or summit agenda item.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique id of the session." },
+        "countryName": { "type": "string", "description": "Assigned country name En." },
+        "countryNameAr": { "type": "string", "description": "Assigned country name Ar." },
+        "title": { "type": "string", "description": "The bilateral session title." },
+        "titleAr": { "type": "string", "description": "Translation of the session title." },
+        "objective": { "type": "string", "description": "Strategic goals & requirements of the summit." },
+        "objectiveAr": { "type": "string", "description": "Arabic version of the meeting objective." },
+        "date": { "type": "string", "description": "Proposed date of meeting." },
+        "time": { "type": "string", "description": "Proposed time of meeting." },
+        "location": { "type": "string", "description": "Meeting venue address En." },
+        "locationAr": { "type": "string", "description": "Meeting venue address Ar." },
+        "sector": { "type": "string", "description": "Assigned sector focus classification." },
+        "sectorAr": { "type": "string", "description": "Sector focus in Arabic language." }
+      },
+      "required": ["id", "countryName", "title", "date", "time"]
+    }
+  },
+  "firestore": {
+    "/countries/{countryId}": {
+      "schema": "CountryProfile",
+      "description": "Custom or preloaded bilateral country indices."
+    },
+    "/meetings/{meetingId}": {
+      "schema": "BilateralSession",
+      "description": "Scheduled diplomatic and bilateral sessions."
+    }
+  }
+}

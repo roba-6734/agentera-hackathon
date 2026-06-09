@@ -1,0 +1,645 @@
+import React, { useState, useEffect } from "react";
+import Header from "./components/Header";
+import IntelligenceProfile from "./components/IntelligenceProfile";
+import StrategicInsightsView from "./components/StrategicInsightsView";
+import BriefingGenerator from "./components/BriefingGenerator";
+import ComparisonEngine from "./components/ComparisonEngine";
+import PredictiveIntelligenceView from "./components/PredictiveIntelligenceView";
+import AiChatAssistant from "./components/AiChatAssistant";
+import BilateralCalendar from "./components/BilateralCalendar";
+import DeveloperDashboard from "./components/DeveloperDashboard";
+import { db, OperationType, handleFirestoreError } from "./firebase";
+import { collection, getDocs } from "firebase/firestore";
+import { PrebuiltCountry, UaeIndicator, activeTabCode } from "./types";
+import { ShieldAlert, Globe, Layers, Award, Landmark, Eye, ArrowRight, HelpCircle, FileText, CheckCircle2, ChevronRight, Activity, Cpu, ChevronDown } from "lucide-react";
+
+export default function App() {
+  const [language, setLanguage] = useState<"en" | "ar">("en");
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>("brazil");
+  const [activeTab, setActiveTab] = useState<activeTabCode>("passport");
+  const [isDeveloperMode, setIsDeveloperMode] = useState<boolean>(false);
+  const [currentStep, setCurrentStep] = useState<number>(3);
+  const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState<boolean>(false);
+  const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
+
+  // Sovereign Comparison stats
+  const [uaeData, setUaeData] = useState<UaeIndicator>({
+    nameEn: "United Arab Emirates",
+    nameAr: "دولة الإمارات العربية المتحدة",
+    flag: "🇦🇪",
+    gdp: "$504 Billion (USD)",
+    gdpAr: "504 مليار دولار أمريكي",
+    growth: "3.7%",
+    energyMix: "Natural Gas (55%), Solar & Clean Nuclear (42%), Oil & Clean Coal (3%)",
+    energyMixAr: "غاز طبيعي (55%)، طاقة شمسية ونووية نظيفة (42%)، نفط وفحم نظيف (3%)",
+    infrastructureIndex: "96.5/100 (Global Top Rank on Roads/Ports)",
+    infrastructureIndexAr: "96.5/100 (مرتبة رائدة عالمياً في جودة الطرق والموانئ)",
+    environmentalRank: "Net Zero Strategic Initiative 2050 Active",
+    environmentalRankAr: "مبادرة الحياد المناخي 2050 نشطة كلياً",
+    competitivenessRank: "Top 10th globally",
+    competitivenessRankAr: "ضمن أفضل 10 دول تنافسية عالمياً",
+    cooperationAgreementEn: "Host of COP28, Global Green Corridor Champion",
+    cooperationAgreementAr: "مستضيف مؤتمر الأطراف COP28 ورائد الممرات العالمية الخضراء",
+  });
+
+  const [countriesIndex, setCountriesIndex] = useState<Record<string, PrebuiltCountry>>({});
+  const [activeCountry, setActiveCountry] = useState<PrebuiltCountry | null>(null);
+
+  // Strategic AI briefing state loaded back and forth from server
+  const [aiBriefingText, setAiBriefingText] = useState<string>("");
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [briefingSource, setBriefingSource] = useState<string>("gemini-strategic-ai");
+
+  // Country listing options (pre-seeded with high fidelity research)
+  const availableBilateralOptions = [
+    { code: "brazil", nameEn: "Brazil", nameAr: "البرازيل", flag: "🇧🇷" },
+    { code: "germany", nameEn: "Germany", nameAr: "ألمانيا", flag: "🇩🇪" },
+    { code: "india", nameEn: "India", nameAr: "الهند", flag: "🇮🇳" },
+    { code: "singapore", nameEn: "Singapore", nameAr: "سنغافورة", flag: "🇸🇬" },
+    { code: "united-states", nameEn: "United States", nameAr: "الولايات المتحدة", flag: "🇺🇸" },
+    { code: "united-kingdom", nameEn: "United Kingdom", nameAr: "المملكة المتحدة", flag: "🇬🇧" },
+    { code: "china", nameEn: "China", nameAr: "الصين", flag: "🇨🇳" },
+    { code: "japan", nameEn: "Japan", nameAr: "اليابان", flag: "🇯🇵" },
+    { code: "saudi-arabia", nameEn: "Saudi Arabia", nameAr: "المملكة العربية السعودية", flag: "🇸🇦" },
+    { code: "egypt", nameEn: "Egypt", nameAr: "مصر", flag: "🇪🇬" },
+  ];
+
+  // Manual country onboarding options
+  const [customCountryName, setCustomCountryName] = useState("");
+  const [isOnboardingCustom, setIsOnboardingCustom] = useState(false);
+
+  // Initialize and load default comparison values
+  useEffect(() => {
+    async function loadInitialDatabase() {
+      try {
+        const resp = await fetch("/api/advisor/compare");
+        const data = await resp.json();
+        if (data.countries) {
+          const combinedCountries = { ...data.countries };
+          try {
+            const querySnapshot = await getDocs(collection(db, "countries"));
+            querySnapshot.forEach((docSnap) => {
+              const fsData = docSnap.data() as PrebuiltCountry;
+              if (fsData.id) {
+                combinedCountries[fsData.id] = fsData;
+              }
+            });
+          } catch (e) {
+            console.warn("Firestore collection inactive/empty on boot. Continuing with fallbacks.", e);
+            // Log error cleanly without throwing/halting boot flow
+            try {
+              handleFirestoreError(e, OperationType.GET, "countries");
+            } catch (err) {
+              console.error("Gracefully caught boot error log wrapper:", err);
+            }
+          }
+          setCountriesIndex(combinedCountries);
+          setUaeData(data.uae);
+        }
+      } catch (err) {
+        console.error("Failed to load compare parameters from server:", err);
+      }
+    }
+    loadInitialDatabase();
+  }, []);
+
+  // Sync selected country dataset or automatically trigger backend brief compilation
+  useEffect(() => {
+    async function syncCountryDataset() {
+      setIsGenerating(true);
+      try {
+        const resp = await fetch("/api/advisor/brief", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            country: selectedCountryCode,
+            language: language,
+          }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+          setAiBriefingText(data.aiBriefing.rawText);
+          setBriefingSource(data.source || "gemini-strategic-ai");
+          if (data.countryData) {
+            // Prefer detailed local merged Firestore record to preserve schema definitions
+            const fsDetailedRecord = countriesIndex[selectedCountryCode];
+            if (fsDetailedRecord && fsDetailedRecord.profile && fsDetailedRecord.sectors) {
+              setActiveCountry(fsDetailedRecord);
+            } else {
+              setActiveCountry(data.countryData);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Critical error syncing bilateral dataset:", err);
+      } finally {
+        setIsGenerating(false);
+      }
+    }
+    syncCountryDataset();
+  }, [selectedCountryCode, language, countriesIndex]);
+
+  // Handle activeTab redirect from chat tab to side floating layout
+  useEffect(() => {
+    if (activeTab === "chat") {
+      setIsChatOpen(true);
+      setActiveTab("passport"); // revert to main tab so workspace is not empty
+    }
+  }, [activeTab]);
+
+  // Onboard external custom countries using generative intelligence (Gemini-3.5-flash) on the fly
+  const handleOnboardCustomCountry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customCountryName.trim()) return;
+
+    setIsOnboardingCustom(true);
+    setIsGenerating(true);
+    try {
+      const resp = await fetch("/api/advisor/brief", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          country: customCountryName,
+          question: `Onboard country file for "${customCountryName}". Provide general details, energy vectors, port options, and trade compatibility.`,
+          language: language,
+        }),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        // Embed mock custom indices in memory
+        const customId = customCountryName.toLowerCase().replace(/\s+/g, "-");
+        const fallbackId = selectedCountryCode;
+        const baseDataset = countriesIndex[fallbackId] || countriesIndex["brazil"];
+
+        const customPackage: PrebuiltCountry = {
+          ...baseDataset,
+          id: customId,
+          nameEn: customCountryName,
+          nameAr: customCountryName,
+          flag: "🌐",
+          profile: {
+            ...baseDataset.profile,
+            overviewEn: `Generative intelligence onboarding for ${customCountryName}. Detailed dynamic briefs compiling across general government, transport logistics and energy infrastructure systems.`,
+            overviewAr: `ملف مخصص تم توليده ذاتياً لـ ${customCountryName}. يجري سحب ومطابقة مؤشرات الموانئ واللوجستيات وشبكات التوليد مع الإمارات ثنائياً.`
+          }
+        };
+
+        setCountriesIndex(prev => ({ ...prev, [customId]: customPackage }));
+        setActiveCountry(customPackage);
+        setSelectedCountryCode(customId);
+        setAiBriefingText(data.aiBriefing.rawText);
+        setBriefingSource(data.source || "gemini-strategic-ai");
+        setCustomCountryName("");
+        setIsOnboardingCustom(false);
+        setActiveTab("briefing"); // Jump straight to briefing memo tab
+        setCurrentStep(6); // Progress current timeline stage to Summary Written
+      }
+    } catch (err) {
+      console.error("Failed to dynamically onboard custom country file:", err);
+    } finally {
+      setIsGenerating(false);
+      setIsOnboardingCustom(false);
+    }
+  };
+
+  const handleCountryPicked = (code: string) => {
+    setSelectedCountryCode(code);
+    setCurrentStep(2); // Set workflow timeline stage to Step 2: Target country selected
+  };
+
+  const isEn = language === "en";
+
+  return (
+    <div className="min-h-screen bg-[#F8F8F6] flex flex-col justify-between" id="uae-advisor-application-root">
+      
+      {/* UAE themed global header */}
+      <Header
+        language={language}
+        setLanguage={setLanguage}
+        selectedCountryNameEn={activeCountry?.nameEn || selectedCountryCode}
+        selectedCountryNameAr={activeCountry?.nameAr || selectedCountryCode}
+        isDeveloperMode={isDeveloperMode}
+        setIsDeveloperMode={setIsDeveloperMode}
+      />
+
+      {/* Primary Workspace container */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8" id="application-primary-workspace">
+        {isDeveloperMode ? (
+          <DeveloperDashboard
+            language={language}
+            countriesCount={Object.keys(countriesIndex).length}
+            onRefreshDatabase={async () => {
+              try {
+                const resp = await fetch("/api/advisor/compare");
+                const data = await resp.json();
+                if (data.countries) {
+                  const combinedCountries = { ...data.countries };
+                  try {
+                    const querySnapshot = await getDocs(collection(db, "countries"));
+                    querySnapshot.forEach((docSnap) => {
+                      const fsData = docSnap.data() as PrebuiltCountry;
+                      if (fsData.id) {
+                        combinedCountries[fsData.id] = fsData;
+                      }
+                    });
+                  } catch (e) {
+                    console.warn("Firestore refresh failed:", e);
+                  }
+                  setCountriesIndex(combinedCountries);
+                }
+              } catch (e) {
+                console.error("Failed to refresh database index:", e);
+              }
+            }}
+            onClose={() => setIsDeveloperMode(false)}
+          />
+        ) : (
+          <>
+            {/* UPPER BANNER PROTOCOL */}
+        <div className="bg-white rounded-sm shadow-md border-l-4 border-[#C5A059] p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 relative" id="cabinet-briefing-upper-ribbon">
+          <div className="absolute top-0 right-0 w-2 bg-gradient-to-b from-gold-deep to-emerald-deep h-full pointer-events-none rounded-r-sm"></div>
+          
+          <div className="space-y-1">
+            <span className="text-[10px] uppercase font-mono tracking-widest text-emerald-deep font-bold flex items-center gap-1">
+              <Activity className="w-3.5 h-3.5" />
+              <span>{isEn ? "COUNCIL DECISION SUPPORT" : "نظام تدقيق وتخطيط المخرجات الدبلوماسية"}</span>
+            </span>
+            <h2 className="text-xl font-bold font-serif text-slate-vip">
+              {isEn ? "Bilateral Delegation Intelligence Room" : "غرفة استخبارات الوفود وجاهزية صناع القرار"}
+            </h2>
+            <p className="text-xs text-gray-400">
+              {isEn ? "Select a strategic nation or onboard custom country directories to prepare talking points and interactive briefing boards instantly." : "اختر شريكاً دولياً لوجستياً أو ولد ملفات استتثنائية لأي دولة بالعالم في ثوانٍ لاستعراض مذكرات وشرائح العرض الفورية."}
+            </p>
+          </div>
+
+           {/* Styled premium spinner country selector with dropdown options */}
+          <div className="flex flex-wrap items-center gap-3" id="quick-bilateral-selector">
+            <div className="relative inline-block text-left" id="country-dropdown-spinner-wrapper">
+              <button
+                type="button"
+                onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
+                className="bg-white hover:bg-gray-50 border border-gold-border rounded-sm shadow-sm px-4 py-2.5 inline-flex items-center justify-between gap-3 text-xs font-bold text-slate-vip focus:outline-none focus:ring-1 focus:ring-gold-deep cursor-pointer min-w-[200px]"
+                id="country-spinner-trigger-btn"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-base leading-none">
+                    {(() => {
+                      const found = [...availableBilateralOptions, ...(Object.values(countriesIndex) as PrebuiltCountry[])
+                        .filter((c) => !availableBilateralOptions.some((b) => b.code === c.id))
+                        .map((c) => ({ code: c.id, nameEn: c.nameEn, nameAr: c.nameAr, flag: c.flag || "🌐" }))
+                      ].find(o => o.code === selectedCountryCode);
+                      return found?.flag || activeCountry?.flag || "🌐";
+                    })()}
+                  </span>
+                  <span className="truncate max-w-[130px]">
+                    {(() => {
+                      const found = [...availableBilateralOptions, ...(Object.values(countriesIndex) as PrebuiltCountry[])
+                        .filter((c) => !availableBilateralOptions.some((b) => b.code === c.id))
+                        .map((c) => ({ code: c.id, nameEn: c.nameEn, nameAr: c.nameAr, flag: c.flag || "🌐" }))
+                      ].find(o => o.code === selectedCountryCode);
+                      return found ? (isEn ? found.nameEn : found.nameAr) : (isEn ? activeCountry?.nameEn : activeCountry?.nameAr) || selectedCountryCode;
+                    })()}
+                  </span>
+                </div>
+                <ChevronDown className="w-4 h-4 text-gold-deep shrink-0 transition-transform duration-200" style={{ transform: isCountryDropdownOpen ? "rotate(180deg)" : "none" }} />
+              </button>
+
+              {isCountryDropdownOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setIsCountryDropdownOpen(false)}
+                  ></div>
+                  
+                  <div 
+                    className="origin-top-left absolute left-0 mt-1.5 w-64 rounded-sm shadow-xl bg-white border border-gold-border z-50 focus:outline-none divide-y divide-gray-100 max-h-60 overflow-y-auto"
+                    id="country-spinner-options-panel"
+                  >
+                    <div className="py-1">
+                      {[
+                        ...availableBilateralOptions,
+                        ...(Object.values(countriesIndex) as PrebuiltCountry[])
+                          .filter((c) => !availableBilateralOptions.some((b) => b.code === c.id))
+                          .map((c) => ({
+                            code: c.id,
+                            nameEn: c.nameEn,
+                            nameAr: c.nameAr,
+                            flag: c.flag || "🌐",
+                          }))
+                      ].map((opt) => (
+                        <button
+                          key={opt.code}
+                          type="button"
+                          onClick={() => {
+                            handleCountryPicked(opt.code);
+                            setIsCountryDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-4 py-2.5 text-xs flex items-center justify-between transition-colors cursor-pointer ${
+                            selectedCountryCode === opt.code
+                              ? "bg-gold-bg text-emerald-deep font-extrabold"
+                              : "text-slate-vip hover:bg-gray-50 font-medium"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-base leading-none">{opt.flag}</span>
+                            <span>{isEn ? opt.nameEn : opt.nameAr}</span>
+                          </div>
+                          {selectedCountryCode === opt.code && (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-deep shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Custom On-the-fly Onboarding Input Form */}
+            <form onSubmit={handleOnboardCustomCountry} className="flex items-center gap-2 border border-gray-200 rounded-sm p-1 bg-white shadow-sm">
+              <input
+                type="text"
+                placeholder={isEn ? "Onboard country..." : "ملف دولة أخرى..."}
+                value={customCountryName}
+                onChange={(e) => setCustomCountryName(e.target.value)}
+                disabled={isOnboardingCustom}
+                className="px-2 py-1 text-xs w-28 sm:w-36 outline-none bg-transparent placeholder-gray-400 font-sans border-0"
+              />
+              <button
+                type="submit"
+                disabled={isOnboardingCustom || !customCountryName.trim()}
+                className="px-2.5 py-1.5 bg-gold-deep hover:bg-gold-deep/80 text-slate-vip text-[10px] uppercase tracking-widest font-extrabold rounded flex items-center gap-1 cursor-pointer disabled:opacity-50"
+              >
+                <span>{isOnboardingCustom ? "..." : (isEn ? "Onboard" : "توليد")}</span>
+                <ArrowRight className="w-2.5 h-2.5" />
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* TOP LEVEL CABINET BILATERAL SUMMIT & MEETING SCHEDULER */}
+        <BilateralCalendar
+          country={activeCountry}
+          language={language}
+        />
+
+        {/* CORE WORKSPACE BOARD */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8" id="primary-workspace-grid-layout">
+          
+          {/* LEFT PANELS: PRIMARY SECTOR WORKSPACE SELECTION TABS */}
+          <div className="lg:col-span-1 space-y-4" id="left-rail-selector">
+            <div className="bg-white rounded-sm shadow-md border border-gold-border overflow-hidden" id="left-rail-navigation-card">
+              <div className="bg-slate-vip p-4 border-b border-gold-deep/20 flex items-center gap-2" id="navigation-rail-brand">
+                <Cpu className="w-4 h-4 text-gold-deep" />
+                <span className="text-xs uppercase font-mono tracking-widest text-gray-200 font-extrabold">
+                  {isEn ? "Intelligence Hub" : "قنوات البحث الفني"}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-1 p-2 gap-1" id="navigation-rail-buttons">
+                {/* Tab 1: Country Background */}
+                <button
+                  onClick={() => setActiveTab("passport")}
+                  className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
+                    activeTab === "passport"
+                      ? "bg-gold-bg text-emerald-deep font-extrabold border-l-4 border-emerald-deep"
+                      : "hover:bg-gray-50 text-gray-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="opacity-90">📋</span>
+                    <span>{isEn ? "Country Intelligence" : "الملف الذكي للدولة"}</span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-gold-deep" style={{ transform: language === "ar" ? "rotate(180deg)" : "none" }} />
+                </button>
+
+                {/* Tab 2: Strategic Insights */}
+                <button
+                  onClick={() => setActiveTab("strategic")}
+                  className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
+                    activeTab === "strategic"
+                      ? "bg-gold-bg text-emerald-deep font-extrabold border-l-4 border-emerald-deep"
+                      : "hover:bg-gray-50 text-gray-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="opacity-90">🤝</span>
+                    <span>{isEn ? "Strategic Insights" : "الدليل الاستراتيجي الثنائي"}</span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-gold-deep" style={{ transform: language === "ar" ? "rotate(180deg)" : "none" }} />
+                </button>
+
+                {/* Tab 3: Briefing Generator */}
+                <button
+                  onClick={() => {
+                    setActiveTab("briefing");
+                    setCurrentStep(8); // Elevate workflow on navigation
+                  }}
+                  className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
+                    activeTab === "briefing"
+                      ? "bg-gold-bg text-emerald-deep font-extrabold border-l-4 border-emerald-deep"
+                      : "hover:bg-gray-50 text-gray-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="opacity-90">✨</span>
+                    <span>{isEn ? "Briefings & Presentation" : "مولد الإحاطات والشرائح"}</span>
+                  </div>
+                  <span className="text-[9px] bg-red-600 text-white font-mono px-1.5 py-0.5 rounded font-extrabold">MEMO</span>
+                </button>
+
+                {/* Tab 4: Comparison Engine */}
+                <button
+                  onClick={() => {
+                    setActiveTab("compare");
+                    setCurrentStep(4);
+                  }}
+                  className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
+                    activeTab === "compare"
+                      ? "bg-gold-bg text-emerald-deep font-extrabold border-l-4 border-emerald-deep"
+                      : "hover:bg-gray-50 text-gray-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="opacity-90">⚖️</span>
+                    <span>{isEn ? "Sovereign Comparison" : "مقارنة المؤشرات السيادية"}</span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-gold-deep" style={{ transform: language === "ar" ? "rotate(180deg)" : "none" }} />
+                </button>
+
+                {/* Tab 5: Predictive Analytics */}
+                <button
+                  onClick={() => {
+                    setActiveTab("predictive");
+                    setCurrentStep(5);
+                  }}
+                  className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
+                    activeTab === "predictive"
+                      ? "bg-gold-bg text-emerald-deep font-extrabold border-l-4 border-emerald-deep"
+                      : "hover:bg-gray-50 text-gray-700"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="opacity-90">🔮</span>
+                    <span>{isEn ? "Predictive Intelligence" : "التنبؤات المستقبلية والمخاطر"}</span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-gold-deep" style={{ transform: language === "ar" ? "rotate(180deg)" : "none" }} />
+                </button>
+
+                {/* Tab 6: Dialogue Center */}
+                <button
+                  onClick={() => setIsChatOpen(!isChatOpen)}
+                  className="fixed bottom-6 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#C5A059] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm"
+                  style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="opacity-90">🗣️</span>
+                    <span>{isEn ? "AI Policy Advisor Chat" : "المستشار الرقمي الفوري"}</span>
+                  </div>
+                  {!isChatOpen && (
+                    <span className="h-2 w-2 rounded-full bg-emerald-light animate-pulse ml-2 shrink-0 block"></span>
+                  )}
+                  {isChatOpen && (
+                    <span className="text-gold-deep text-xs font-bold ml-2">✕</span>
+                  )}
+                </button>
+
+                {/* Tab 7: Unified Systems Terminal Console */}
+                <button
+                  onClick={() => setIsDeveloperMode(true)}
+                  className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
+                    isDeveloperMode
+                      ? "bg-emerald-deep text-white font-extrabold border-l-4 border-gold-deep"
+                      : "hover:bg-gray-50 text-gray-700"
+                  }`}
+                  id="tab-trigger-database-control"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="opacity-90">🛠️</span>
+                    <span className="font-bold">{isEn ? "Systems Developer Panel" : "لوحة التحكم للمطور الفني"}</span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-gold-deep" style={{ transform: language === "ar" ? "rotate(180deg)" : "none" }} />
+                </button>
+
+              </div>
+            </div>
+
+            {/* Quick action checklist helper for dignitaries */}
+            <div className="bg-white border-l-4 border-[#C5A059] rounded-sm p-5 shadow-md space-y-3" id="quick-delegation-checklist">
+              <span className="text-[10px] uppercase font-mono tracking-widest text-[#9c7823] font-bold block">
+                {isEn ? "PRE-DELEGATION VERIFICATION" : "مجموعة التحقق لوفد الدولة"}
+              </span>
+              
+              <ul className="space-y-2.5 text-xs text-gray-700 leading-relaxed font-sans font-medium" id="quick-checklist-ul">
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-deep">✔</span>
+                  <span>{isEn ? "Bilateral overview retrieved & evaluated" : "تم استرجاع النبذة العامة وتدقيق الهيكل"}</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-deep">✔</span>
+                  <span>{isEn ? "Bilateral mutual port agreements active" : "تم رصد مجمعات استثمارات الموانئ والممرات"}</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-deep">✔</span>
+                  <span>{isEn ? "Presentation slides cleared for sharing" : "جاهزية شرائح العرض والنشر للتلفزة"}</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-deep">✔</span>
+                  <span>{isEn ? "Representative talking points synthesized" : "صياغة وتخمير نقاط الحديث الموجهة للدبلوماسي"}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* MAIN COLUMN PANELS: DISPLAY CHOSEN CATEGORY WORKSPACE COMPONENTS */}
+          <div className="lg:col-span-3 space-y-6" id="right-workspace-panel" style={{ direction: language === "ar" ? "rtl" : "ltr" }}>
+            {activeCountry ? (
+              <>
+                {/* 1. Country Intelligence Background */}
+                {activeTab === "passport" && (
+                  <IntelligenceProfile country={activeCountry} language={language} />
+                )}
+
+                {/* 2. Strategic Insights & Bilateral Proposals */}
+                {activeTab === "strategic" && (
+                  <StrategicInsightsView country={activeCountry} language={language} />
+                )}
+
+                {/* 3. Briefings & Presentation Slides */}
+                {activeTab === "briefing" && (
+                  <BriefingGenerator
+                    country={activeCountry}
+                    language={language}
+                    aiBriefingText={aiBriefingText}
+                    isGenerating={isGenerating}
+                    briefingSource={briefingSource}
+                  />
+                )}
+
+                {/* 4. Sovereign Indicators Comparison */}
+                {activeTab === "compare" && (
+                  <ComparisonEngine country={activeCountry} uaeData={uaeData} language={language} />
+                )}
+
+                {/* 5. Predictive intelligence forecasts */}
+                {activeTab === "predictive" && (
+                  <PredictiveIntelligenceView country={activeCountry} language={language} />
+                )}
+              </>
+            ) : (
+              <div className="bg-white rounded-sm shadow-md border border-gold-border p-12 text-center" id="no-country-fallback">
+                <ShieldAlert className="w-12 h-12 text-gold-deep mx-auto mb-4" />
+                <h3 className="text-lg font-serif font-bold text-slate-vip">
+                  {isEn ? "Synchronizing Bilateral Repositories..." : "جارٍ سحب ومعالجة قواعد البيانات الثنائية..."}
+                </h3>
+              </div>
+            )}
+          </div>
+
+        </div>
+          </>
+        )}
+
+      </main>
+
+      {/* Flag footer details following the executive standards */}
+      <footer className="bg-slate-vip border-t border-gold-deep/15 py-6 mt-12 text-white" id="cabinet-briefing-footer">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-mono text-gray-400">
+          <div className="flex items-center gap-3">
+            <span className="font-serif font-extrabold text-gold-deep">Ministry of Energy & Infrastructure</span>
+            <span className="h-4 w-px bg-white/10 hidden md:block"></span>
+            <span>{isEn ? "Cabinet Support Node v4.1" : "موزع دعم اتخاذ القرار لمجلس الوزراء"}</span>
+          </div>
+          <div>
+            <p>{isEn ? "© 2026 MOEI UAE - SECURE INTRA-CABINET NETWORK." : "حقوق النشر محفوظة © 2026 وزارة الطاقة والبنية التحتية - دولة الإمارات العربية المتحدة"}</p>
+          </div>
+        </div>
+      </footer>
+
+      {/* Floating Chatbot Popup Window */}
+      {isChatOpen && activeCountry && (
+        <div 
+          className="fixed bottom-24 right-6 z-50 w-96 sm:w-[440px] max-w-[calc(100vw-3rem)] h-[580px] bg-white rounded-lg shadow-2xl border border-[#C5A059] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
+          style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+        >
+          <AiChatAssistant
+            language={language}
+            selectedCountryCode={selectedCountryCode}
+            selectedCountryNameEn={activeCountry.nameEn}
+            selectedCountryNameAr={activeCountry.nameAr}
+            onNewBriefGenerated={(newText) => {
+              setAiBriefingText(newText);
+              setActiveTab("briefing"); // Direct user straight to formatting preview to read update
+            }}
+            onClose={() => setIsChatOpen(false)}
+          />
+        </div>
+      )}
+
+    </div>
+  );
+}
