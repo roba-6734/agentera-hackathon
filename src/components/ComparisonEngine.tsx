@@ -649,18 +649,6 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center h-auto md:h-36 py-2">
                 {/* Left Side: Text and values */}
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-emerald-deep flex items-center justify-center text-white font-serif font-bold text-sm">
-                      1st
-                    </div>
-                    <div>
-                      <span className="text-xs text-slate-500 block">{isEn ? "Goal Horizon" : "الأفق المستهدف"}</span>
-                      <span className="text-xs font-bold text-emerald-deep font-sans">
-                        {isEn ? "Rank #1 Gold Medalist Center" : "المرتبة الأولى كمركز ريادي ذهبي"}
-                      </span>
-                    </div>
-                  </div>
-
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="p-3 bg-emerald-deep/5 rounded border border-emerald-deep/10">
                       <span className="text-gray-500 block text-[10px]">🇦🇪 {isEn ? "UAE Rank" : "الترتيب الفيدرالي"}</span>
@@ -705,14 +693,6 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
                     <span className="text-[9px] font-bold text-gray-500 mt-1">🇦🇪 UAE</span>
                   </div>
 
-                  {/* High Benchmark Line representation */}
-                  <div className="flex flex-col items-center w-24">
-                    <span className="text-xs font-bold text-gray-400 pb-1 font-mono">1</span>
-                    <div className="w-full bg-gold-bg/30 rounded-t-sm h-32 border-x border-t border-gold-deep/20 border-dashed flex items-center justify-center text-gold-deep font-sans font-bold text-[10px]">
-                      👑
-                    </div>
-                    <span className="text-[9px] font-bold text-gray-400 mt-1">{isEn ? "Global Top 1" : "الصدارة"}</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -767,4 +747,3 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
     </div>
   );
 }
-

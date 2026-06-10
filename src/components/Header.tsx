@@ -1,5 +1,6 @@
 import React from "react";
-import { Shield, Globe, Award, Calendar, Sparkles } from "lucide-react";
+import { Globe, Award, Calendar } from "lucide-react";
+import majlisLogo from "../../assets/images/majlis-ai-logo.png";
 
 interface HeaderProps {
   language: "en" | "ar";
@@ -25,33 +26,30 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
       <div className="max-w-[1700px] xl:max-w-[1850px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-5 relative z-10">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6" id="header-internal-container">
           
-          {/* UAE Logo Emblem & Official Ministry Brand */}
+          {/* Project Logo & Brand */}
           <div className="flex items-center gap-4" id="ministry-logo-section">
-            {/* Professional Polish stylized gold geometric emblem box */}
-            <div className="w-14 h-14 bg-gold-deep flex items-center justify-center rounded-sm shadow-md shrink-0 relative" id="ministry-emblem-wrapper">
-              <div className="w-9 h-9 border-2 border-white rotate-45 flex items-center justify-center">
-                <Shield className="-rotate-45 w-5 h-5 text-white" />
-              </div>
-              <div className="absolute -bottom-1 -right-1 bg-emerald-deep text-white text-[9px] px-1 rounded-sm border border-white font-bold font-mono">
-                UAE
-              </div>
-            </div>
+            <img
+              src={majlisLogo}
+              alt="Majlis AI logo"
+              className="h-20 w-16 rounded-sm shrink-0 object-contain"
+              id="ministry-emblem-wrapper"
+            />
 
             <div className="flex flex-col justify-center" id="ministry-text-brand">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-deep animate-pulse"></span>
                 <span className="text-[10px] uppercase font-mono tracking-widest text-[#C5A059] font-bold">
-                  {language === "en" ? "Cabinet Strategic Resource" : "المصادر الاستراتيجية للمجلس"}
+                  {language === "en" ? "Cabinet Strategic Resource" : "مورد استراتيجي للمجلس"}
                 </span>
                 <span className="text-[9px] px-1.5 py-0.5 bg-[#F0F0EE] text-slate-vip rounded border border-gold-border font-mono font-bold">
                   SECURE v2.5
                 </span>
               </div>
               <h1 className="text-xl font-bold tracking-tight font-sans text-emerald-deep flex items-center gap-1">
-                {language === "en" ? "Ministry of Energy & Infrastructure" : "وزارة الطاقة والبنية التحتية"}
+                {language === "en" ? "Majlis AI" : "مجلس AI"}
               </h1>
               <p className="text-xs text-gray-500 font-medium tracking-wide">
-                {language === "en" ? "AI-Powered Strategic Advisor for International Affairs" : "منصة الذكاء الاصطناعي للملفات الدولية والذكاء الاستراتيجي"}
+                {language === "en" ? "Decision-Ready Intelligence for UAE Leadership" : "استخبارات جاهزة للقرار لقيادة دولة الإمارات"}
               </p>
             </div>
           </div>
