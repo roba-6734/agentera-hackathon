@@ -13,7 +13,7 @@ import StrategicSignalsMonitor from "./components/StrategicSignalsMonitor";
 import StrategicMeetingDebrief from "./components/StrategicMeetingDebrief";
 import { apiFetch } from "./api";
 import { AppRole, AppSession, PrebuiltCountry, UaeIndicator, activeTabCode } from "./types";
-import { ShieldAlert, Globe, Layers, Award, Landmark, Eye, ArrowRight, HelpCircle, FileText, CheckCircle2, ChevronRight, Activity, Cpu, ChevronDown, Crown, Target, Sparkles, UsersRound, BrainCircuit } from "lucide-react";
+import { ShieldAlert, Layers, Award, Landmark, Eye, ArrowRight, FileText, CheckCircle2, Activity, Cpu, ChevronDown, Crown, Target, Sparkles, UsersRound, BrainCircuit } from "lucide-react";
 
 const SESSION_STORAGE_KEY = "majlis-ai-session";
 
@@ -77,9 +77,9 @@ function getExecutiveBriefingBlocks(aiBriefingText: string, fallbackBlocks: stri
 export default function App() {
   const [language, setLanguage] = useState<"en" | "ar">("en");
   const [session, setSession] = useState<AppSession | null>(() => readStoredAppSession());
-  const [selectedCountryCode, setSelectedCountryCode] = useState<string>("brazil");
+  const [selectedCountryCode, setSelectedCountryCode] = useState<string>("");
   const [activeTab, setActiveTab] = useState<activeTabCode>("passport");
-  const [currentStep, setCurrentStep] = useState<number>(3);
+  const [currentStep, setCurrentStep] = useState<number>(1);
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState<boolean>(false);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState<boolean>(false);
@@ -130,7 +130,7 @@ export default function App() {
   const [meetingObjective, setMeetingObjective] = useState("");
   const initialLoadStartedRef = useRef(false);
 
-  // Initialize and load default comparison values
+  // Initialize shared comparison values without loading a country briefing.
   useEffect(() => {
     if (!session || session.role === "developer") {
       return;
@@ -149,28 +149,6 @@ export default function App() {
           const combinedCountries = { ...data.countries };
           setCountriesIndex(combinedCountries);
           setUaeData(data.uae);
-          
-          // Load default country (brazil) on initial execution
-          setIsGenerating(true);
-          const briefResp = await apiFetch("/api/advisor/brief", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              country: "brazil",
-              language: language,
-              question: session.role === "executive"
-                ? "Draft a concise executive meeting briefing for Brazil. Keep it focused on decision points, meeting leadership, and no more than three priorities."
-                : undefined,
-            }),
-          });
-          const briefData = await briefResp.json();
-          if (briefData.success) {
-            setAiBriefingText(briefData.aiBriefing.rawText);
-            setBriefingSource(briefData.source || "openai-strategic-ai");
-            setActiveCountry(briefData.countryData || combinedCountries["brazil"]);
-          }
         }
       } catch (err) {
         console.error("Failed to load compare parameters from server:", err);
@@ -184,25 +162,32 @@ export default function App() {
   // Sync selected country dataset manually based on selection and meeting objective
   const triggerSyncSearch = async (
     targetCountry: string = selectedCountryCode,
-    targetLang: "en" | "ar" = language,
-    activeIndex: Record<string, PrebuiltCountry> = countriesIndex
+    targetLang: "en" | "ar" = language
   ) => {
+    const cleanTargetCountry = targetCountry.trim();
+    if (!cleanTargetCountry) {
+      setActiveCountry(null);
+      setAiBriefingText("");
+      setCurrentStep(1);
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const trimmedObjective = meetingObjective.trim();
-      const executivePrompt = `Draft a concise executive meeting briefing for ${targetCountry}. Keep it focused on decision points, meeting leadership, and no more than three priorities.`;
+      const executivePrompt = `Draft a concise executive meeting briefing for ${cleanTargetCountry}. Keep it focused on decision points, meeting leadership, and no more than three priorities.`;
       const resp = await apiFetch("/api/advisor/brief", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          country: targetCountry,
+          country: cleanTargetCountry,
           language: targetLang,
           question: trimmedObjective
             ? session?.role === "executive"
               ? `${executivePrompt} Center it around this objective: ${trimmedObjective}`
-              : `Draft briefing for ${targetCountry} centered around this objective: ${trimmedObjective}`
+              : `Draft briefing for ${cleanTargetCountry} centered around this objective: ${trimmedObjective}`
             : session?.role === "executive"
               ? executivePrompt
               : undefined,
@@ -233,7 +218,7 @@ export default function App() {
   // Synchronize language changes on demand
   useEffect(() => {
     if (activeCountry) {
-      triggerSyncSearch(selectedCountryCode, language, countriesIndex);
+      triggerSyncSearch(selectedCountryCode, language);
     }
   }, [language]);
 
@@ -246,7 +231,12 @@ export default function App() {
   }, [activeTab]);
 
   const handleCountryPicked = (code: string) => {
+    const isChangingCountry = code !== selectedCountryCode || activeCountry?.id !== code;
     setSelectedCountryCode(code);
+    if (isChangingCountry) {
+      setActiveCountry(null);
+      setAiBriefingText("");
+    }
     setCurrentStep(2); // Set workflow timeline stage to Step 2: Target country selected
   };
 
@@ -255,8 +245,11 @@ export default function App() {
     // Replace with verified auth tokens, server-issued role claims, and user records when real auth is connected.
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession));
     setSession(nextSession);
+    setSelectedCountryCode("");
+    setActiveCountry(null);
+    setAiBriefingText("");
     setActiveTab(nextSession.role === "executive" ? "briefing" : "passport");
-    setCurrentStep(nextSession.role === "executive" ? 8 : 3);
+    setCurrentStep(1);
     setIsChatOpen(false);
     setIsCalendarOpen(false);
   };
@@ -265,6 +258,7 @@ export default function App() {
     window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
     initialLoadStartedRef.current = false;
     setSession(null);
+    setSelectedCountryCode("");
     setActiveCountry(null);
     setAiBriefingText("");
     setBriefingSource("openai-strategic-ai");
@@ -295,8 +289,61 @@ export default function App() {
         nameAr: country.nameAr,
         flag: country.flag || "🌐",
       })),
-  ];
+  ].sort((firstCountry, secondCountry) =>
+    firstCountry.nameEn.localeCompare(secondCountry.nameEn, "en", { sensitivity: "base" }) ||
+    firstCountry.code.localeCompare(secondCountry.code, "en", { sensitivity: "base" })
+  );
   const selectedCountryOption = countryOptions.find((option) => option.code === selectedCountryCode);
+  const selectedCountryNameEn = activeCountry?.nameEn || selectedCountryOption?.nameEn || "Select country";
+  const selectedCountryNameAr = activeCountry?.nameAr || selectedCountryOption?.nameAr || "اختر الدولة";
+  const workspaceTabItems = [
+    {
+      code: "passport" as activeTabCode,
+      labelEn: "Country Intelligence",
+      labelAr: "الملف الذكي للدولة",
+      Icon: FileText,
+      step: 3,
+    },
+    {
+      code: "strategic" as activeTabCode,
+      labelEn: "Strategic Insights",
+      labelAr: "الدليل الاستراتيجي الثنائي",
+      Icon: Layers,
+      step: 4,
+    },
+    {
+      code: "briefing" as activeTabCode,
+      labelEn: "Briefings",
+      labelAr: "الإحاطات",
+      Icon: Award,
+      step: 8,
+      badge: "MEMO",
+    },
+    ...(session?.role === "staff"
+      ? [{
+          code: "debrief" as activeTabCode,
+          labelEn: "Meeting Debrief",
+          labelAr: "تحليل الاجتماع",
+          Icon: BrainCircuit,
+          step: 7,
+        }]
+      : []),
+    {
+      code: "compare" as activeTabCode,
+      labelEn: "Sovereign Comparison",
+      labelAr: "مقارنة المؤشرات",
+      Icon: Landmark,
+      step: 4,
+    },
+    {
+      code: "predictive" as activeTabCode,
+      labelEn: "Predictive Intelligence",
+      labelAr: "التنبؤات المستقبلية",
+      Icon: Eye,
+      step: 5,
+    },
+  ];
+  const showSignalsPanel = session?.role === "staff" && activeTab !== "debrief";
   const executiveBriefingBlocks = activeCountry
     ? getExecutiveBriefingBlocks(aiBriefingText, [
         isEn ? activeCountry.profile.overviewEn : activeCountry.profile.overviewAr,
@@ -360,8 +407,8 @@ export default function App() {
         <Header
           language={language}
           setLanguage={setLanguage}
-          selectedCountryNameEn={activeCountry?.nameEn || selectedCountryCode}
-          selectedCountryNameAr={activeCountry?.nameAr || selectedCountryCode}
+          selectedCountryNameEn={selectedCountryNameEn}
+          selectedCountryNameAr={selectedCountryNameAr}
           sessionDisplayName={session.displayName}
           sessionRole={session.role}
           onLogout={handleLogout}
@@ -397,7 +444,9 @@ export default function App() {
                     <span className="truncate max-w-[135px]">
                       {selectedCountryOption
                         ? isEn ? selectedCountryOption.nameEn : selectedCountryOption.nameAr
-                        : (isEn ? activeCountry?.nameEn : activeCountry?.nameAr) || selectedCountryCode}
+                        : activeCountry
+                          ? isEn ? activeCountry.nameEn : activeCountry.nameAr
+                          : isEn ? "Select country" : "اختر الدولة"}
                     </span>
                   </div>
                   <ChevronDown className="w-4 h-4 text-gold-deep shrink-0 transition-transform duration-200" style={{ transform: isCountryDropdownOpen ? "rotate(180deg)" : "none" }} />
@@ -418,7 +467,6 @@ export default function App() {
                             onClick={() => {
                               handleCountryPicked(option.code);
                               setIsCountryDropdownOpen(false);
-                              triggerSyncSearch(option.code);
                             }}
                             className={`w-full text-left px-4 py-2.5 text-xs flex items-center justify-between transition-colors cursor-pointer ${
                               selectedCountryCode === option.code
@@ -453,11 +501,17 @@ export default function App() {
                 />
                 <button
                   type="submit"
-                  disabled={isGenerating}
+                  disabled={isGenerating || !selectedCountryCode}
                   className="px-3.5 py-2 bg-slate-vip hover:bg-gold-deep hover:text-slate-vip text-white text-[10px] uppercase tracking-widest font-extrabold rounded-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all font-mono"
                   id="executive-refresh-brief-btn"
                 >
-                  <span>{isGenerating ? (isEn ? "Updating" : "تحديث") : (isEn ? "Refresh Brief" : "تحديث الإحاطة")}</span>
+                  <span>
+                    {isGenerating
+                      ? isEn ? "Updating" : "تحديث"
+                      : activeCountry
+                        ? isEn ? "Refresh Brief" : "تحديث الإحاطة"
+                        : isEn ? "Initialize Search" : "تحضير الإيجاز"}
+                  </span>
                   <ArrowRight className="w-3 h-3" />
                 </button>
               </form>
@@ -584,7 +638,7 @@ export default function App() {
             <div className="bg-white rounded-sm shadow-md border border-gold-border p-12 text-center" id="executive-no-country-fallback">
               <ShieldAlert className="w-12 h-12 text-gold-deep mx-auto mb-4" />
               <h3 className="text-lg font-serif font-bold text-slate-vip">
-                {isEn ? "Preparing executive briefing..." : "جارٍ تحضير الإحاطة القيادية..."}
+                {isEn ? "Select a country, then initialize search." : "اختر دولة، ثم ابدأ البحث."}
               </h3>
             </div>
           )}
@@ -607,8 +661,8 @@ export default function App() {
       <Header
         language={language}
         setLanguage={setLanguage}
-        selectedCountryNameEn={activeCountry?.nameEn || selectedCountryCode}
-        selectedCountryNameAr={activeCountry?.nameAr || selectedCountryCode}
+        selectedCountryNameEn={selectedCountryNameEn}
+        selectedCountryNameAr={selectedCountryNameAr}
         onOpenCalendar={() => setIsCalendarOpen(true)}
         sessionDisplayName={session.displayName}
         sessionRole={session.role}
@@ -645,22 +699,14 @@ export default function App() {
               >
                 <div className="flex items-center gap-2">
                   <span className="text-base leading-none">
-                    {(() => {
-                      const found = [...availableBilateralOptions, ...(Object.values(countriesIndex) as PrebuiltCountry[])
-                        .filter((c) => !availableBilateralOptions.some((b) => b.code === c.id))
-                        .map((c) => ({ code: c.id, nameEn: c.nameEn, nameAr: c.nameAr, flag: c.flag || "🌐" }))
-                      ].find(o => o.code === selectedCountryCode);
-                      return found?.flag || activeCountry?.flag || "🌐";
-                    })()}
+                    {selectedCountryOption?.flag || activeCountry?.flag || "🌐"}
                   </span>
                   <span className="truncate max-w-[130px]">
-                    {(() => {
-                      const found = [...availableBilateralOptions, ...(Object.values(countriesIndex) as PrebuiltCountry[])
-                        .filter((c) => !availableBilateralOptions.some((b) => b.code === c.id))
-                        .map((c) => ({ code: c.id, nameEn: c.nameEn, nameAr: c.nameAr, flag: c.flag || "🌐" }))
-                      ].find(o => o.code === selectedCountryCode);
-                      return found ? (isEn ? found.nameEn : found.nameAr) : (isEn ? activeCountry?.nameEn : activeCountry?.nameAr) || selectedCountryCode;
-                    })()}
+                    {selectedCountryOption
+                      ? isEn ? selectedCountryOption.nameEn : selectedCountryOption.nameAr
+                      : activeCountry
+                        ? isEn ? activeCountry.nameEn : activeCountry.nameAr
+                        : isEn ? "Select country" : "اختر الدولة"}
                   </span>
                 </div>
                 <ChevronDown className="w-4 h-4 text-gold-deep shrink-0 transition-transform duration-200" style={{ transform: isCountryDropdownOpen ? "rotate(180deg)" : "none" }} />
@@ -678,17 +724,7 @@ export default function App() {
                     id="country-spinner-options-panel"
                   >
                     <div className="py-1">
-                      {[
-                        ...availableBilateralOptions,
-                        ...(Object.values(countriesIndex) as PrebuiltCountry[])
-                          .filter((c) => !availableBilateralOptions.some((b) => b.code === c.id))
-                          .map((c) => ({
-                            code: c.id,
-                            nameEn: c.nameEn,
-                            nameAr: c.nameAr,
-                            flag: c.flag || "🌐",
-                          }))
-                      ].map((opt) => (
+                      {countryOptions.map((opt) => (
                         <button
                           key={opt.code}
                           type="button"
@@ -730,7 +766,7 @@ export default function App() {
               />
               <button
                 type="submit"
-                disabled={isGenerating}
+                disabled={isGenerating || !selectedCountryCode}
                 className="px-3.5 py-2 bg-slate-vip hover:bg-gold-deep hover:text-slate-vip text-white text-[10px] uppercase tracking-widest font-extrabold rounded-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all font-mono"
                 id="initialize-search-btn"
               >
@@ -743,158 +779,77 @@ export default function App() {
 
         {/* TOP LEVEL CABINET BILATERAL SUMMIT & MEETING SCHEDULER REMOVED FROM MAIN INLINE ROW GRID TO OVERLAY PORTAL TRIGGERED VIA HEADER */}
 
-        {/* CORE WORKSPACE BOARD */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8" id="primary-workspace-grid-layout">
-          
-          {/* LEFT PANELS: PRIMARY SECTOR WORKSPACE SELECTION TABS */}
-          <div className="lg:col-span-1 space-y-4" id="left-rail-selector">
-            <div className="bg-white rounded-sm shadow-md border border-gold-border overflow-hidden" id="left-rail-navigation-card">
-              <div className="bg-slate-vip p-4 border-b border-gold-deep/20 flex items-center gap-2" id="navigation-rail-brand">
-                <Cpu className="w-4 h-4 text-gold-deep" />
-                <span className="text-xs uppercase font-mono tracking-widest text-gray-200 font-extrabold">
+        <section className="bg-white rounded-sm shadow-md border border-gold-border overflow-hidden" id="intelligence-hub-strip">
+          <div className="bg-slate-vip px-4 py-3 flex flex-col xl:flex-row xl:items-center gap-3">
+            <div className="flex items-center gap-2 shrink-0 min-w-[210px]">
+              <Cpu className="w-4 h-4 text-gold-deep" />
+              <div>
+                <p className="text-xs uppercase font-mono tracking-widest text-gray-100 font-extrabold">
                   {isEn ? "Intelligence Hub" : "قنوات البحث الفني"}
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-1 p-2 gap-1" id="navigation-rail-buttons">
-                {/* Tab 1: Country Background */}
-                <button
-                  onClick={() => setActiveTab("passport")}
-                  className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
-                    activeTab === "passport"
-                      ? "bg-gold-bg text-emerald-deep font-extrabold border-l-4 border-emerald-deep"
-                      : "hover:bg-gray-50 text-gray-700"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="opacity-90">📋</span>
-                    <span>{isEn ? "Country Intelligence" : "الملف الذكي للدولة"}</span>
-                  </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-gold-deep" style={{ transform: language === "ar" ? "rotate(180deg)" : "none" }} />
-                </button>
-
-                {/* Tab 2: Strategic Insights */}
-                <button
-                  onClick={() => setActiveTab("strategic")}
-                  className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
-                    activeTab === "strategic"
-                      ? "bg-gold-bg text-emerald-deep font-extrabold border-l-4 border-emerald-deep"
-                      : "hover:bg-gray-50 text-gray-700"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="opacity-90">🤝</span>
-                    <span>{isEn ? "Strategic Insights" : "الدليل الاستراتيجي الثنائي"}</span>
-                  </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-gold-deep" style={{ transform: language === "ar" ? "rotate(180deg)" : "none" }} />
-                </button>
-
-                {/* Tab 3: Briefing Generator */}
-                <button
-                  onClick={() => {
-                    setActiveTab("briefing");
-                    setCurrentStep(8); // Elevate workflow on navigation
-                  }}
-                  className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
-                    activeTab === "briefing"
-                      ? "bg-gold-bg text-emerald-deep font-extrabold border-l-4 border-emerald-deep"
-                      : "hover:bg-gray-50 text-gray-700"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="opacity-90">✨</span>
-                    <span>{isEn ? "Briefings & Presentation" : "مولد الإحاطات والشرائح"}</span>
-                  </div>
-                  <span className="text-[9px] bg-red-600 text-white font-mono px-1.5 py-0.5 rounded font-extrabold">MEMO</span>
-                </button>
-
-                {session.role === "staff" && (
-                  <button
-                    onClick={() => {
-                      setActiveTab("debrief");
-                      setCurrentStep(7);
-                    }}
-                    className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
-                      activeTab === "debrief"
-                        ? "bg-gold-bg text-emerald-deep font-extrabold border-l-4 border-emerald-deep"
-                        : "hover:bg-gray-50 text-gray-700"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <BrainCircuit className="w-4 h-4 text-gold-deep" />
-                      <span>{isEn ? "Strategic Meeting Debrief" : "تحليل ما بعد الاجتماع"}</span>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-gold-deep" style={{ transform: language === "ar" ? "rotate(180deg)" : "none" }} />
-                  </button>
-                )}
-
-                {/* Tab 4: Comparison Engine */}
-                <button
-                  onClick={() => {
-                    setActiveTab("compare");
-                    setCurrentStep(4);
-                  }}
-                  className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
-                    activeTab === "compare"
-                      ? "bg-gold-bg text-emerald-deep font-extrabold border-l-4 border-emerald-deep"
-                      : "hover:bg-gray-50 text-gray-700"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="opacity-90">⚖️</span>
-                    <span>{isEn ? "Sovereign Comparison" : "مقارنة المؤشرات السيادية"}</span>
-                  </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-gold-deep" style={{ transform: language === "ar" ? "rotate(180deg)" : "none" }} />
-                </button>
-
-                {/* Tab 5: Predictive Analytics */}
-                <button
-                  onClick={() => {
-                    setActiveTab("predictive");
-                    setCurrentStep(5);
-                  }}
-                  className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
-                    activeTab === "predictive"
-                      ? "bg-gold-bg text-emerald-deep font-extrabold border-l-4 border-emerald-deep"
-                      : "hover:bg-gray-50 text-gray-700"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="opacity-90">🔮</span>
-                    <span>{isEn ? "Predictive Intelligence" : "التنبؤات المستقبلية والمخاطر"}</span>
-                  </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-gold-deep" style={{ transform: language === "ar" ? "rotate(180deg)" : "none" }} />
-                </button>
-
-                {/* Tab 6: Dialogue Center */}
-                <button
-                  onClick={() => setIsChatOpen(!isChatOpen)}
-                  className="fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#C5A059] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm"
-                  style={{ direction: language === "ar" ? "rtl" : "ltr" }}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="opacity-90">🗣️</span>
-                    <span>{isEn ? "AI Policy Advisor Chat" : "المستشار الرقمي الفوري"}</span>
-                  </div>
-                  {!isChatOpen && (
-                    <span className="h-2 w-2 rounded-full bg-emerald-light animate-pulse ml-2 shrink-0 block"></span>
-                  )}
-                  {isChatOpen && (
-                    <span className="text-gold-deep text-xs font-bold ml-2">✕</span>
-                  )}
-                </button>
-
+                </p>
+                <p className="text-[10px] text-gray-400">
+                  {isEn ? "Workspace modules" : "وحدات مساحة العمل"}
+                </p>
               </div>
             </div>
 
-            {session.role === "staff" && (
-              <StrategicSignalsMonitor language={language} />
-            )}
-
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 flex-1" id="navigation-rail-buttons">
+              {workspaceTabItems.map((item) => {
+                const TabIcon = item.Icon;
+                const isActiveTab = activeTab === item.code;
+                return (
+                  <button
+                    key={item.code}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(item.code);
+                      setCurrentStep(item.step);
+                    }}
+                    className={`min-h-12 px-3 py-2 rounded-sm border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                      isActiveTab
+                        ? "bg-gold-bg text-emerald-deep border-gold-deep shadow-sm"
+                        : "bg-white/5 text-gray-100 border-white/10 hover:bg-white/10"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <TabIcon className={`w-3.5 h-3.5 shrink-0 ${isActiveTab ? "text-emerald-deep" : "text-gold-deep"}`} />
+                      <span className="text-[11px] font-mono font-black uppercase tracking-wide truncate">
+                        {isEn ? item.labelEn : item.labelAr}
+                      </span>
+                    </span>
+                    {item.badge && (
+                      <span className="text-[8px] bg-red-600 text-white font-mono px-1.5 py-0.5 rounded font-extrabold shrink-0">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+        </section>
 
+        <button
+          onClick={() => setIsChatOpen(!isChatOpen)}
+          className="fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#C5A059] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm"
+          style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="opacity-90">🗣️</span>
+            <span>{isEn ? "AI Policy Advisor Chat" : "المستشار الرقمي الفوري"}</span>
+          </div>
+          {!isChatOpen && (
+            <span className="h-2 w-2 rounded-full bg-emerald-light animate-pulse ml-2 shrink-0 block"></span>
+          )}
+          {isChatOpen && (
+            <span className="text-gold-deep text-xs font-bold ml-2">✕</span>
+          )}
+        </button>
+
+        {/* CORE WORKSPACE BOARD */}
+        <div className={`grid grid-cols-1 ${showSignalsPanel ? "xl:grid-cols-12" : ""} gap-6`} id="primary-workspace-grid-layout">
           {/* MAIN COLUMN PANELS: DISPLAY CHOSEN CATEGORY WORKSPACE COMPONENTS */}
-          <div className="lg:col-span-3 space-y-6" id="right-workspace-panel" style={{ direction: language === "ar" ? "rtl" : "ltr" }}>
+          <div className={`${showSignalsPanel ? "xl:col-span-8" : "xl:col-span-12"} space-y-6`} id="right-workspace-panel" style={{ direction: language === "ar" ? "rtl" : "ltr" }}>
             {activeTab === "debrief" && session.role === "staff" ? (
               <StrategicMeetingDebrief
                 language={language}
@@ -941,11 +896,17 @@ export default function App() {
               <div className="bg-white rounded-sm shadow-md border border-gold-border p-12 text-center" id="no-country-fallback">
                 <ShieldAlert className="w-12 h-12 text-gold-deep mx-auto mb-4" />
                 <h3 className="text-lg font-serif font-bold text-slate-vip">
-                  {isEn ? "Synchronizing Bilateral Repositories..." : "جارٍ سحب ومعالجة قواعد البيانات الثنائية..."}
+                  {isEn ? "Select a country, then click Initialize Search." : "اختر دولة، ثم اضغط تحضير الإيجاز."}
                 </h3>
               </div>
             )}
           </div>
+
+          {showSignalsPanel && (
+            <aside className="xl:col-span-4 xl:sticky xl:top-6 xl:self-start" id="strategic-signals-side-panel">
+              <StrategicSignalsMonitor language={language} compact />
+            </aside>
+          )}
 
         </div>
 

@@ -9,6 +9,7 @@ import {
 
 interface StrategicSignalsMonitorProps {
   language: "en" | "ar";
+  compact?: boolean;
 }
 
 const defaultFilters: StrategicSignalCategory[] = ["energy", "infrastructure", "trade-investment", "diplomacy"];
@@ -48,13 +49,13 @@ function formatSignalDate(publishedAt: string, language: "en" | "ar") {
   }).format(new Date(publishedAt));
 }
 
-export default function StrategicSignalsMonitor({ language }: StrategicSignalsMonitorProps) {
+export default function StrategicSignalsMonitor({ language, compact = false }: StrategicSignalsMonitorProps) {
   const isEn = language === "en";
   const [selectedFilters, setSelectedFilters] = useState<StrategicSignalCategory[]>(defaultFilters);
   const [signals, setSignals] = useState<StrategicSignal[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isFiltersOpen, setIsFiltersOpen] = useState(true);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(!compact);
   const [shareStatusMessage, setShareStatusMessage] = useState<string | null>(null);
   const shareStatusTimeoutRef = useRef<number | null>(null);
 
@@ -232,18 +233,22 @@ export default function StrategicSignalsMonitor({ language }: StrategicSignalsMo
     );
   };
 
+  const signalsToRender = compact ? signals.slice(0, 4) : signals;
+
   return (
     <section
-      className="bg-white rounded-sm shadow-md border border-gold-border overflow-hidden"
+      className={`bg-white rounded-sm shadow-md border border-gold-border overflow-hidden ${compact ? "h-full" : ""}`}
       id="staff-strategic-signals-monitor"
       style={{ direction: language === "ar" ? "rtl" : "ltr" }}
     >
-      <div className="bg-slate-vip p-4 border-b border-gold-deep/20 flex items-center justify-between gap-3">
+      <div className={`bg-slate-vip border-b border-gold-deep/20 flex items-center justify-between gap-3 ${compact ? "p-3" : "p-4"}`}>
         <div className="flex items-center gap-2 min-w-0">
           <RadioTower className="w-4 h-4 text-gold-deep shrink-0" />
           <div className="min-w-0">
             <h3 className="text-xs uppercase font-mono tracking-widest text-gray-100 font-extrabold truncate">
-              {isEn ? "Strategic Signals Monitor" : "مراقب المؤشرات الاستراتيجية"}
+              {compact
+                ? isEn ? "Strategic Signals" : "المؤشرات الاستراتيجية"
+                : isEn ? "Strategic Signals Monitor" : "مراقب المؤشرات الاستراتيجية"}
             </h3>
             <p className="text-[10px] text-gray-400 mt-1">
               {isEn ? "News & trends for staff review" : "أخبار واتجاهات لمراجعة فريق العمل"}
@@ -354,7 +359,7 @@ export default function StrategicSignalsMonitor({ language }: StrategicSignalsMo
 
         {isLoading && (
           <div className="space-y-2" id="strategic-signals-loading-state">
-            {[0, 1, 2].map((item) => (
+            {(compact ? [0, 1] : [0, 1, 2]).map((item) => (
               <div key={item} className="border border-gold-border rounded-sm p-3 animate-pulse">
                 <div className="h-3 bg-gray-200 rounded w-3/4"></div>
                 <div className="h-2 bg-gray-100 rounded w-full mt-3"></div>
@@ -377,9 +382,9 @@ export default function StrategicSignalsMonitor({ language }: StrategicSignalsMo
         )}
 
         {!isLoading && !errorMessage && signals.length > 0 && (
-          <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1" id="strategic-signals-top-five-list">
-            {signals.map((signal) => (
-              <article key={signal.id} className="border border-gold-border rounded-sm p-3 bg-[#FDFDFC] hover:bg-gold-bg/50 transition-colors">
+          <div className={`space-y-2 overflow-y-auto pr-1 ${compact ? "max-h-[390px]" : "max-h-[560px]"}`} id="strategic-signals-top-five-list">
+            {signalsToRender.map((signal) => (
+              <article key={signal.id} className={`border border-gold-border rounded-sm bg-[#FDFDFC] hover:bg-gold-bg/50 transition-colors ${compact ? "p-2.5" : "p-3"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-[9px] uppercase tracking-widest font-mono font-black text-emerald-deep bg-emerald-deep/10 border border-emerald-deep/10 px-1.5 py-0.5 rounded-sm">
                     {categoryLabelById[signal.category]}
@@ -400,10 +405,10 @@ export default function StrategicSignalsMonitor({ language }: StrategicSignalsMo
                   </div>
                 </div>
 
-                <h4 className="text-xs font-serif font-bold text-slate-vip leading-5 mt-2">
+                <h4 className="text-xs font-serif font-bold text-slate-vip leading-5 mt-2 line-clamp-2">
                   {signal.title}
                 </h4>
-                <p className="text-[11px] text-gray-600 leading-5 mt-1">
+                <p className={`text-[11px] text-gray-600 leading-5 mt-1 ${compact ? "line-clamp-2" : ""}`}>
                   {signal.summary}
                 </p>
 
@@ -412,12 +417,19 @@ export default function StrategicSignalsMonitor({ language }: StrategicSignalsMo
                     <Newspaper className="w-3 h-3 text-gold-deep shrink-0" />
                     <span className="truncate">{signal.sourceName}</span>
                   </div>
-                  <p className="text-[10px] leading-4 text-emerald-deep font-semibold">
+                  <p className={`text-[10px] leading-4 text-emerald-deep font-semibold ${compact ? "line-clamp-2" : ""}`}>
                     {signal.relevanceNote}
                   </p>
                 </div>
               </article>
             ))}
+            {compact && signals.length > signalsToRender.length && (
+              <p className="text-[10px] text-gray-400 font-mono text-center pt-1">
+                {isEn
+                  ? `Showing ${signalsToRender.length} of ${signals.length} signals`
+                  : `عرض ${signalsToRender.length} من ${signals.length} مؤشرات`}
+              </p>
+            )}
           </div>
         )}
       </div>
