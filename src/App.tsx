@@ -1004,7 +1004,7 @@ export default function App() {
             id="chat-outside-dismiss-backdrop"
           />
           <div 
-            className="fixed bottom-28 right-6 z-50 w-96 sm:w-[440px] max-w-[calc(100vw-3rem)] h-[580px] bg-white rounded-lg shadow-2xl border border-[#C5A059] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
+            className="fixed bottom-28 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[560px] lg:w-[640px] max-w-[calc(100vw-2rem)] h-[min(720px,calc(100vh-9rem))] bg-white rounded-lg shadow-2xl border border-[#C5A059] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
             style={{ direction: language === "ar" ? "rtl" : "ltr" }}
           >
           <AiChatAssistant

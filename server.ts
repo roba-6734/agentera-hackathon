@@ -751,6 +751,39 @@ type VectorContextRecord = {
   score?: number;
 };
 
+type AdvisorConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+  timestamp?: string;
+};
+
+type AdvisorGroundingContext = {
+  normalizedCountry: string;
+  source: string;
+  countryData: any;
+  vectorContext: VectorContextRecord[];
+  meetingMemory: MeetingRecord[];
+  dataSources: {
+    standardDatabase: string;
+    vectorDatabase: {
+      collection: string;
+      matches: number;
+    };
+    meetingMemory: {
+      collection: string;
+      matches: number;
+    };
+    translation: TranslationMetadata;
+  };
+  renderedBriefing: string;
+};
+
+type N8NAdvisorWorkflowResult = {
+  rawText: string;
+  threadId?: string;
+  structured?: any;
+};
+
 let firestoreConfigCache: FirestoreConfig | null | undefined;
 
 function normalizeCountryId(value: string): string {
@@ -1685,6 +1718,330 @@ The country is governed under the ${countryData.profile.governmentEn} Led active
 * **Proposed UAE Initiative:** ${countryData.predictive.proposalsEn}${question ? `\n\n**Question Focus:** ${question}` : ""}`;
 }
 
+function compactAdvisorText(value: unknown, fallback = "", maxLength = 320): string {
+  const normalized = normalizeShortText(value, fallback, maxLength + 80);
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength - 3).trim()}...`;
+}
+
+function renderChatAdvisorAnswer(
+  countryData: any,
+  vectorContext: VectorContextRecord[],
+  meetingMemory: MeetingRecord[],
+  language: "en" | "ar",
+  question?: string
+): string {
+  const vectorSignal = vectorContext[0];
+  const recentMeeting = meetingMemory[0];
+
+  if (language === "ar") {
+    const countryName = countryData.nameAr || countryData.nameEn;
+    return `### رد المستشار حول ${countryName}
+
+**الإجابة المباشرة**
+${question ? `بالنسبة إلى "${question}"، ` : ""}ينبغي التعامل مع ملف ${countryName} كفرصة تعاون انتقائية في الطاقة والبنية التحتية، مع ربط أي مبادرة بمسار تنفيذي واضح ومتابعة مؤسسية.
+
+**السياق الأهم**
+- **الطاقة:** ${compactAdvisorText(countryData.sectors?.energyAr || countryData.sectors?.energyEn)}
+- **البنية التحتية:** ${compactAdvisorText(countryData.sectors?.infrastructureAr || countryData.sectors?.infrastructureEn)}
+- **الشراكة:** ${compactAdvisorText(countryData.strategicInsights?.partnershipsAr || countryData.strategicInsights?.partnershipsEn)}
+${vectorSignal ? `- **إشارة داعمة:** ${compactAdvisorText(vectorSignal.textAr || vectorSignal.textEn, "", 240)}` : ""}
+${recentMeeting ? `- **ذاكرة الاجتماعات:** ${compactAdvisorText(recentMeeting.debrief.executiveSummary, "", 240)}` : ""}
+
+**الخطوة المقترحة**
+- تحويل السؤال إلى مذكرة تنفيذية من صفحة الإحاطة، ثم تثبيت مالك متابعة واحد من فريق الطاقة أو البنية التحتية.`;
+  }
+
+  return `### Advisor Response for ${countryData.nameEn}
+
+**Direct answer**
+${question ? `For "${question}", ` : ""}${countryData.nameEn} should be treated as a selective cooperation opportunity across energy and infrastructure, but any proposal should be tied to a clear delivery channel and accountable follow-up.
+
+**Most relevant context**
+- **Energy:** ${compactAdvisorText(countryData.sectors?.energyEn)}
+- **Infrastructure:** ${compactAdvisorText(countryData.sectors?.infrastructureEn)}
+- **Partnership angle:** ${compactAdvisorText(countryData.strategicInsights?.partnershipsEn)}
+${vectorSignal ? `- **Supporting signal:** ${compactAdvisorText(vectorSignal.textEn || vectorSignal.textAr, "", 240)}` : ""}
+${recentMeeting ? `- **Meeting memory:** ${compactAdvisorText(recentMeeting.debrief.executiveSummary, "", 240)}` : ""}
+
+**Recommended next step**
+- Turn this question into a short executive memo in the briefing workspace, then assign one owner for energy or infrastructure follow-up.`;
+}
+
+function parseJsonValueFromText(text: string): any {
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  if (!cleaned) return {};
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    return text;
+  }
+}
+
+function normalizeAdvisorThreadId(value: unknown, fallbackCountryId: string): string {
+  const normalized = normalizeShortText(value, "", 180)
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 180);
+
+  return normalized || `thread-${fallbackCountryId || "country"}-${Date.now()}`;
+}
+
+function normalizeAdvisorConversationHistory(value: unknown, question: string): AdvisorConversationMessage[] {
+  const sourceMessages = Array.isArray(value) ? value : [];
+  const normalizedMessages = sourceMessages
+    .map((message) => {
+      const source = message && typeof message === "object" ? message as any : {};
+      const sender = source.role || source.sender;
+      const role = sender === "assistant" || sender === "advisor" ? "assistant" : sender === "user" ? "user" : "";
+      const content = normalizeShortText(source.content || source.text || source.message, "", 4000);
+      const timestamp = normalizeShortText(source.timestamp || source.createdAt, "", 80) || undefined;
+
+      return role && content ? { role, content, timestamp } as AdvisorConversationMessage : null;
+    })
+    .filter((message): message is AdvisorConversationMessage => Boolean(message));
+
+  const currentQuestion = question.trim();
+  const lastMessage = normalizedMessages[normalizedMessages.length - 1];
+  if (currentQuestion && (!lastMessage || lastMessage.role !== "user" || lastMessage.content !== currentQuestion)) {
+    normalizedMessages.push({
+      role: "user",
+      content: currentQuestion,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  const historyLimit = Math.min(getPositiveNumberEnv("N8N_CHAT_HISTORY_LIMIT", 16), 40);
+  return normalizedMessages.slice(-historyLimit);
+}
+
+function sanitizeVectorContextForWorkflow(vectorContext: VectorContextRecord[]): any[] {
+  return vectorContext.map((record) => ({
+    id: record.id,
+    countryId: record.countryId,
+    section: record.section,
+    titleEn: record.titleEn,
+    titleAr: record.titleAr,
+    textEn: normalizeShortText(record.textEn, "", 2500),
+    textAr: normalizeShortText(record.textAr, "", 2500),
+    tags: record.tags || [],
+    sourceUrl: record.sourceUrl,
+    score: record.score,
+  }));
+}
+
+function sanitizeMeetingMemoryForWorkflow(meetingMemory: MeetingRecord[]): any[] {
+  return meetingMemory.map((record) => ({
+    id: record.id,
+    metadata: record.metadata,
+    transcriptPreview: normalizeShortText(record.transcriptText, "", 2000),
+    uploadedFileName: record.uploadedFileName,
+    debrief: {
+      executiveSummary: record.debrief.executiveSummary,
+      keyDiscussionPoints: record.debrief.keyDiscussionPoints.slice(0, 8),
+      decisionsOrAgreements: record.debrief.decisionsOrAgreements.slice(0, 8),
+      openQuestions: record.debrief.openQuestions.slice(0, 8),
+      risksAndConcerns: record.debrief.risksAndConcerns.slice(0, 8),
+      opportunitiesForUaeMoei: record.debrief.opportunitiesForUaeMoei.slice(0, 8),
+      actionItems: record.debrief.actionItems.slice(0, 10),
+      relationshipImpactAnalysis: record.debrief.relationshipImpactAnalysis,
+      strategicTags: record.debrief.strategicTags.slice(0, 14),
+    },
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  }));
+}
+
+async function buildAdvisorGroundingContext(
+  country: string | undefined,
+  question: string,
+  language: "en" | "ar"
+): Promise<AdvisorGroundingContext> {
+  const normalizedCountry = normalizeCountryId(country || "brazil");
+  const { countryData, source } = await loadCountryProfile(normalizedCountry, country || normalizedCountry);
+  const vectorContext = await loadCountryVectorContext(countryData, question, language);
+  const meetingMemory = await loadRecentMeetingMemoryForCountry(normalizedCountry, question);
+  const localized = await translateCountryDataForLanguage(countryData, vectorContext, language);
+
+  return {
+    normalizedCountry,
+    source,
+    countryData: localized.countryData,
+    vectorContext: localized.vectorContext,
+    meetingMemory,
+    dataSources: {
+      standardDatabase: source,
+      vectorDatabase: {
+        collection: process.env.VECTOR_CONTEXT_COLLECTION || "countryVectors",
+        matches: vectorContext.length,
+      },
+      meetingMemory: {
+        collection: "meeting_records",
+        matches: meetingMemory.length,
+      },
+      translation: localized.translation,
+    },
+    renderedBriefing: renderDatabaseBriefing(localized.countryData, localized.vectorContext, meetingMemory, language, question),
+  };
+}
+
+async function buildAdvisorChatFallbackContext(
+  country: string | undefined,
+  question: string,
+  language: "en" | "ar"
+): Promise<AdvisorGroundingContext> {
+  const normalizedCountry = normalizeCountryId(country || "brazil");
+  const fallbackData = prebuiltCountries[normalizedCountry] || buildGenericCountryData(country || normalizedCountry, normalizedCountry);
+  const localizedFallback = await translateCountryDataForLanguage(fallbackData, [], language);
+
+  return {
+    normalizedCountry,
+    source: "local-standby-database",
+    countryData: localizedFallback.countryData,
+    vectorContext: [],
+    meetingMemory: [],
+    dataSources: {
+      standardDatabase: "local-standby-database",
+      vectorDatabase: {
+        collection: process.env.VECTOR_CONTEXT_COLLECTION || "countryVectors",
+        matches: 0,
+      },
+      meetingMemory: {
+        collection: "meeting_records",
+        matches: 0,
+      },
+      translation: localizedFallback.translation,
+    },
+    renderedBriefing: renderDatabaseBriefing(localizedFallback.countryData, [], [], language, question),
+  };
+}
+
+function extractStringFromN8NResponse(value: any): string {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => extractStringFromN8NResponse(item))
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
+  }
+
+  const candidates = [
+    value.aiBriefing?.rawText,
+    value.rawText,
+    value.answer,
+    value.response,
+    value.reply,
+    value.text,
+    value.output,
+    value.content,
+    value.message?.content,
+    value.message?.text,
+    value.data?.answer,
+    value.data?.response,
+    value.data?.reply,
+    value.data?.text,
+    value.data?.output,
+    value.json?.answer,
+    value.json?.response,
+    value.json?.reply,
+    value.json?.text,
+    value.json?.output,
+  ];
+
+  for (const candidate of candidates) {
+    const extracted = extractStringFromN8NResponse(candidate);
+    if (extracted) return extracted;
+  }
+
+  return "";
+}
+
+function extractThreadIdFromN8NResponse(value: any): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  if (Array.isArray(value)) {
+    return value.map(extractThreadIdFromN8NResponse).find(Boolean);
+  }
+
+  const candidates = [
+    value.threadId,
+    value.thread_id,
+    value.sessionId,
+    value.session_id,
+    value.conversationId,
+    value.conversation_id,
+    value.data?.threadId,
+    value.data?.thread_id,
+    value.json?.threadId,
+    value.json?.thread_id,
+  ];
+
+  return candidates
+    .map((candidate) => normalizeShortText(candidate, "", 180))
+    .find(Boolean);
+}
+
+function extractStructuredFromN8NResponse(value: any): any | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  if (Array.isArray(value)) {
+    return value.map(extractStructuredFromN8NResponse).find(Boolean);
+  }
+
+  return value.structured || value.data?.structured || value.json?.structured || value.aiBriefing?.structured;
+}
+
+async function callN8NAdvisorWorkflow(payload: any): Promise<N8NAdvisorWorkflowResult | null> {
+  const webhookUrl = process.env.N8N_CHAT_WEBHOOK_URL?.trim();
+  if (!webhookUrl || webhookUrl === "MY_N8N_CHAT_WEBHOOK_URL") {
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), getPositiveNumberEnv("N8N_CHAT_TIMEOUT_MS", 45000));
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const secret = process.env.N8N_CHAT_WEBHOOK_SECRET?.trim();
+  if (secret) {
+    headers.Authorization = secret.toLowerCase().startsWith("bearer ") ? secret : `Bearer ${secret}`;
+    headers["X-Majlis-Webhook-Secret"] = secret;
+  }
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      throw new Error(`n8n workflow returned ${response.status}: ${responseText.slice(0, 400)}`);
+    }
+
+    const parsedResponse = parseJsonValueFromText(responseText);
+    const rawText = extractStringFromN8NResponse(parsedResponse);
+    if (!rawText) {
+      throw new Error("n8n workflow response did not include a supported answer field.");
+    }
+
+    return {
+      rawText,
+      threadId: extractThreadIdFromN8NResponse(parsedResponse),
+      structured: extractStructuredFromN8NResponse(parsedResponse),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Robust retry and fallback generator for OpenAI API content generation
 async function callOpenAIWithRetryAndFallback(
   oClient: OpenAI,
@@ -1910,6 +2267,128 @@ app.get("/api/meetings", async (req, res) => {
     console.error("[Meeting Memory] History query failed.", error);
     return res.status(500).json({ success: false, error: error?.message || "Failed to load meeting history." });
   }
+});
+
+// Chat advisor workflow bridge. Sends grounded context to n8n when configured, with a local response fallback.
+app.post("/api/advisor/chat", async (req, res) => {
+  const { country, question, language, threadId, conversationHistory } = req.body;
+  const currentLang: "en" | "ar" = language === "ar" ? "ar" : "en";
+  const cleanQuestion = normalizeShortText(question, "", 4000);
+  const normalizedCountry = normalizeCountryId(country || "brazil");
+  const cleanThreadId = normalizeAdvisorThreadId(threadId, normalizedCountry);
+
+  if (!cleanQuestion) {
+    return res.status(400).json({
+      success: false,
+      error: currentLang === "ar" ? "يرجى إدخال سؤال للمستشار." : "Please enter a question for the advisor.",
+    });
+  }
+
+  let groundingContext: AdvisorGroundingContext;
+  let groundingStatus = "live-context";
+  try {
+    groundingContext = await buildAdvisorGroundingContext(country, cleanQuestion, currentLang);
+  } catch (error: any) {
+    groundingStatus = "local-fallback-context";
+    console.log("Cabinet data system notice: chat grounding unavailable. Using local standby context.", error?.message || error);
+    groundingContext = await buildAdvisorChatFallbackContext(country, cleanQuestion, currentLang);
+  }
+
+  const messages = normalizeAdvisorConversationHistory(conversationHistory, cleanQuestion);
+  const payload = {
+    event: "advisor.chat.message",
+    version: "2026-06-10",
+    threadId: cleanThreadId,
+    language: currentLang,
+    question: cleanQuestion,
+    conversation: {
+      threadId: cleanThreadId,
+      messages,
+    },
+    country: {
+      requested: country || normalizedCountry,
+      normalizedId: groundingContext.normalizedCountry,
+      nameEn: groundingContext.countryData.nameEn,
+      nameAr: groundingContext.countryData.nameAr,
+    },
+    context: {
+      countryProfile: groundingContext.countryData,
+      vectorContext: sanitizeVectorContextForWorkflow(groundingContext.vectorContext),
+      meetingMemory: sanitizeMeetingMemoryForWorkflow(groundingContext.meetingMemory),
+      renderedGroundingBrief: groundingContext.renderedBriefing,
+      dataSources: groundingContext.dataSources,
+    },
+    responseContract: {
+      preferredFormat: "markdown",
+      expectedFields: ["answer", "threadId"],
+      guidance: "Return a concise chat answer, not a full briefing document. Use one short heading, a direct-answer paragraph, 3-5 bullets, and one recommended next step.",
+    },
+    requestMeta: {
+      createdAt: new Date().toISOString(),
+      app: "majlis-ai",
+      channel: "chatbot",
+    },
+  };
+
+  try {
+    const workflowResult = await callN8NAdvisorWorkflow(payload);
+    if (workflowResult) {
+      const responseThreadId = workflowResult.threadId
+        ? normalizeAdvisorThreadId(workflowResult.threadId, groundingContext.normalizedCountry)
+        : cleanThreadId;
+
+      return res.json({
+        success: true,
+        source: [
+          "n8n-workflow",
+          groundingContext.source,
+          groundingContext.vectorContext.length > 0 ? "vector-database" : "",
+          groundingContext.meetingMemory.length > 0 ? "meeting-memory" : "",
+        ].filter(Boolean).join("+"),
+        workflow: {
+          status: "n8n",
+          groundingStatus,
+        },
+        threadId: responseThreadId,
+        dataSources: groundingContext.dataSources,
+        country: groundingContext.countryData.nameEn,
+        countryData: groundingContext.countryData,
+        aiBriefing: {
+          rawText: workflowResult.rawText,
+          structured: workflowResult.structured,
+        },
+      });
+    }
+  } catch (error: any) {
+    console.warn("[n8n Advisor Chat] Workflow unavailable. Returning local grounded response.", error?.message || error);
+  }
+
+  return res.json({
+    success: true,
+    source: [
+      "local-grounded-response",
+      groundingContext.source,
+      groundingContext.vectorContext.length > 0 ? "vector-database" : "",
+      groundingContext.meetingMemory.length > 0 ? "meeting-memory" : "",
+    ].filter(Boolean).join("+"),
+    workflow: {
+      status: "local-fallback",
+      groundingStatus,
+    },
+    threadId: cleanThreadId,
+    dataSources: groundingContext.dataSources,
+    country: groundingContext.countryData.nameEn,
+    countryData: groundingContext.countryData,
+    aiBriefing: {
+      rawText: renderChatAdvisorAnswer(
+        groundingContext.countryData,
+        groundingContext.vectorContext,
+        groundingContext.meetingMemory,
+        currentLang,
+        cleanQuestion
+      ),
+    },
+  });
 });
 
 // Strategic Advisory generator using standard database + vector database context
