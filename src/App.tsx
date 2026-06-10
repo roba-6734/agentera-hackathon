@@ -110,7 +110,7 @@ export default function App() {
   // Strategic AI briefing state loaded back and forth from server
   const [aiBriefingText, setAiBriefingText] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [briefingSource, setBriefingSource] = useState<string>("gemini-strategic-ai");
+  const [briefingSource, setBriefingSource] = useState<string>("openai-strategic-ai");
 
   // Country listing options (pre-seeded with high fidelity research)
   const availableBilateralOptions = [
@@ -184,7 +184,7 @@ export default function App() {
           const briefData = await briefResp.json();
           if (briefData.success) {
             setAiBriefingText(briefData.aiBriefing.rawText);
-            setBriefingSource(briefData.source || "gemini-strategic-ai");
+            setBriefingSource(briefData.source || "openai-strategic-ai");
             setActiveCountry(briefData.countryData || combinedCountries["brazil"]);
           }
         }
@@ -227,7 +227,7 @@ export default function App() {
       const data = await resp.json();
       if (data.success) {
         setAiBriefingText(data.aiBriefing.rawText);
-        setBriefingSource(data.source || "gemini-strategic-ai");
+        setBriefingSource(data.source || "openai-strategic-ai");
         if (data.countryData) {
           setActiveCountry(data.countryData);
         }
@@ -283,7 +283,7 @@ export default function App() {
     setSession(null);
     setActiveCountry(null);
     setAiBriefingText("");
-    setBriefingSource("gemini-strategic-ai");
+    setBriefingSource("openai-strategic-ai");
     setIsChatOpen(false);
     setIsCalendarOpen(false);
   };

@@ -1336,7 +1336,7 @@ export default function BriefingGenerator({
               </div>
             </div>
 
-            {!isGenerating && briefingSource && briefingSource !== "gemini-strategic-ai" && (
+            {!isGenerating && briefingSource && briefingSource !== "openai-strategic-ai" && (
               <div className="bg-[#FAF7F0] border-l-4 border-[#C5A059] p-4 rounded-sm flex items-start gap-3 text-xs md:text-sm text-slate-700 animate-fade-in" id="dignitary-intelligence-source-indicator">
                 <HelpCircle className="w-5 h-5 text-[#C5A059] shrink-0 mt-0.5" />
                 <div className="space-y-1">

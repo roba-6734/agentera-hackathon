@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 import { createHash } from "crypto";
 
 dotenv.config();
@@ -13,21 +13,20 @@ const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json());
 
-// Initialize Gemini SDK with telemetry header as required in SKILL.md
-let aiClient: GoogleGenAI | null = null;
+let aiClient: OpenAI | null = null;
 
-type GeminiGenerationResult = { text: string; modelUsed: string };
+type OpenAIGenerationResult = { text: string; modelUsed: string };
 type TranslationMetadata = {
   provider: "deepl" | "none";
   targetLanguage: string;
   translatedFields: number;
 };
 
-const DEFAULT_GEMINI_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
-const geminiResponseCache = new Map<string, { result: GeminiGenerationResult; expiresAt: number }>();
-const pendingGeminiRequests = new Map<string, Promise<GeminiGenerationResult>>();
+const DEFAULT_OPENAI_MODELS = ["gpt-5.5", "gpt-5.4-mini", "gpt-4.1-mini"];
+const openAIResponseCache = new Map<string, { result: OpenAIGenerationResult; expiresAt: number }>();
+const pendingOpenAIRequests = new Map<string, Promise<OpenAIGenerationResult>>();
 const deeplTranslationCache = new Map<string, { text: string; expiresAt: number }>();
-let geminiQuotaCooldownUntil = 0;
+let openAIRateLimitCooldownUntil = 0;
 
 function getPositiveNumberEnv(name: string, fallback: number): number {
   const rawValue = process.env[name];
@@ -37,11 +36,11 @@ function getPositiveNumberEnv(name: string, fallback: number): number {
   return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
 }
 
-function getConfiguredGeminiModels(): string[] {
+function getConfiguredOpenAIModels(): string[] {
   const configuredModels = [
-    process.env.GEMINI_MODEL,
-    ...(process.env.GEMINI_FALLBACK_MODELS || "").split(","),
-    ...DEFAULT_GEMINI_MODELS,
+    process.env.OPENAI_MODEL,
+    ...(process.env.OPENAI_FALLBACK_MODELS || "").split(","),
+    ...DEFAULT_OPENAI_MODELS,
   ];
 
   return Array.from(
@@ -53,63 +52,58 @@ function getConfiguredGeminiModels(): string[] {
   );
 }
 
-function buildGeminiCacheKey(systemInstruction: string, prompt: string, models: string[]): string {
+function buildOpenAICacheKey(systemInstruction: string, prompt: string, models: string[]): string {
   return createHash("sha256")
     .update(JSON.stringify({ models, systemInstruction, prompt }))
     .digest("hex");
 }
 
-function getGeminiErrorStatusCode(err: any): number | undefined {
+function getOpenAIErrorStatusCode(err: any): number | undefined {
   const statusCode = err?.statusCode || err?.status || err?.code;
   if (typeof statusCode === "number") return statusCode;
   if (typeof statusCode === "string" && /^\d+$/.test(statusCode)) return Number(statusCode);
   return undefined;
 }
 
-function isGeminiQuotaError(err: any): boolean {
+function isOpenAIRateLimitError(err: any): boolean {
   const errMsg = (err?.message || `${err}`).toLowerCase();
   return (
-    getGeminiErrorStatusCode(err) === 429 ||
-    err?.status === "RESOURCE_EXHAUSTED" ||
-    errMsg.includes("resource_exhausted") ||
+    getOpenAIErrorStatusCode(err) === 429 ||
     errMsg.includes("quota") ||
     errMsg.includes("rate limit") ||
-    errMsg.includes("exhausted")
+    errMsg.includes("rate_limit") ||
+    errMsg.includes("insufficient_quota")
   );
 }
 
-function isGeminiRetriableError(err: any): boolean {
+function isOpenAIRetriableError(err: any): boolean {
+  const statusCode = getOpenAIErrorStatusCode(err);
   const errMsg = (err?.message || `${err}`).toLowerCase();
   return (
-    getGeminiErrorStatusCode(err) === 503 ||
-    err?.status === "UNAVAILABLE" ||
+    statusCode === 408 ||
+    statusCode === 409 ||
+    (typeof statusCode === "number" && statusCode >= 500) ||
     errMsg.includes("temporary") ||
-    errMsg.includes("demand")
+    errMsg.includes("timeout") ||
+    errMsg.includes("overloaded")
   );
 }
 
-function createQuotaCooldownError(): Error {
-  const remainingMs = Math.max(0, geminiQuotaCooldownUntil - Date.now());
-  const error = new Error(`Gemini quota cooldown active for ${Math.ceil(remainingMs / 1000)}s.`);
+function createRateLimitCooldownError(): Error {
+  const remainingMs = Math.max(0, openAIRateLimitCooldownUntil - Date.now());
+  const error = new Error(`OpenAI rate-limit cooldown active for ${Math.ceil(remainingMs / 1000)}s.`);
   (error as any).statusCode = 429;
-  (error as any).status = "RESOURCE_EXHAUSTED";
+  (error as any).status = "rate_limited";
   return error;
 }
 
-function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+function getOpenAIClient(): OpenAI | null {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || apiKey === "MY_OPENAI_API_KEY") {
     return null;
   }
   if (!aiClient) {
-    aiClient = new GoogleGenAI({
-      apiKey: apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
-    });
+    aiClient = new OpenAI({ apiKey });
   }
   return aiClient;
 }
@@ -1249,72 +1243,69 @@ The country is governed under the ${countryData.profile.governmentEn} Led active
 * **Proposed UAE Initiative:** ${countryData.predictive.proposalsEn}${question ? `\n\n**Question Focus:** ${question}` : ""}`;
 }
 
-// Robust retry and fallback generator for Gemini API content generation
-async function callGeminiWithRetryAndFallback(
-  gClient: any,
+// Robust retry and fallback generator for OpenAI API content generation
+async function callOpenAIWithRetryAndFallback(
+  oClient: OpenAI,
   systemInstruction: string,
   prompt: string,
   options: { cacheTtlMs?: number; maxOutputTokens?: number } = {}
-): Promise<GeminiGenerationResult> {
-  const modelsToTry = getConfiguredGeminiModels();
+): Promise<OpenAIGenerationResult> {
+  const modelsToTry = getConfiguredOpenAIModels();
   const maxRetriesPerModel = 2;
-  const cacheTtlMs = options.cacheTtlMs ?? getPositiveNumberEnv("GEMINI_CACHE_TTL_MS", 5 * 60 * 1000);
-  const cacheKey = buildGeminiCacheKey(systemInstruction, prompt, modelsToTry);
-  const cachedResult = geminiResponseCache.get(cacheKey);
+  const cacheTtlMs = options.cacheTtlMs ?? getPositiveNumberEnv("OPENAI_CACHE_TTL_MS", 5 * 60 * 1000);
+  const cacheKey = buildOpenAICacheKey(systemInstruction, prompt, modelsToTry);
+  const cachedResult = openAIResponseCache.get(cacheKey);
 
   if (cachedResult && cachedResult.expiresAt > Date.now()) {
-    console.log("[Gemini API] Serving cached generation for repeated prompt.");
+    console.log("[OpenAI API] Serving cached generation for repeated prompt.");
     return cachedResult.result;
   }
 
-  if (pendingGeminiRequests.has(cacheKey)) {
-    console.log("[Gemini API] Reusing in-flight generation for repeated prompt.");
-    return pendingGeminiRequests.get(cacheKey)!;
+  if (pendingOpenAIRequests.has(cacheKey)) {
+    console.log("[OpenAI API] Reusing in-flight generation for repeated prompt.");
+    return pendingOpenAIRequests.get(cacheKey)!;
   }
 
-  if (geminiQuotaCooldownUntil > Date.now()) {
-    console.log("[Gemini API] Quota cooldown active. Returning local fallback without another live call.");
-    throw createQuotaCooldownError();
+  if (openAIRateLimitCooldownUntil > Date.now()) {
+    console.log("[OpenAI API] Rate-limit cooldown active. Returning local fallback without another live call.");
+    throw createRateLimitCooldownError();
   }
 
-  const generationPromise = (async (): Promise<GeminiGenerationResult> => {
+  const generationPromise = (async (): Promise<OpenAIGenerationResult> => {
     let lastError: any = null;
 
     for (const model of modelsToTry) {
       for (let tryIndex = 0; tryIndex < maxRetriesPerModel; tryIndex++) {
         try {
-          console.log(`[Gemini API] Attempting generation with model ${model} (try ${tryIndex + 1}/${maxRetriesPerModel})...`);
-          const response = await gClient.models.generateContent({
+          console.log(`[OpenAI API] Attempting generation with model ${model} (try ${tryIndex + 1}/${maxRetriesPerModel})...`);
+          const response = await oClient.responses.create({
             model,
-            contents: prompt,
-            config: {
-              systemInstruction,
-              temperature: 0.3,
-              ...(options.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
-            }
+            instructions: systemInstruction,
+            input: prompt,
+            ...(options.maxOutputTokens ? { max_output_tokens: options.maxOutputTokens } : {}),
           });
 
-          if (response && response.text) {
-            const result = { text: response.text, modelUsed: model };
-            console.log(`[Gemini API] Successfully generated content using model: ${model}`);
-            geminiResponseCache.set(cacheKey, { result, expiresAt: Date.now() + cacheTtlMs });
+          if (response?.output_text) {
+            const result = { text: response.output_text, modelUsed: model };
+            console.log(`[OpenAI API] Successfully generated content using model: ${model}`);
+            openAIResponseCache.set(cacheKey, { result, expiresAt: Date.now() + cacheTtlMs });
             return result;
           }
         } catch (err: any) {
           lastError = err;
 
-          if (isGeminiQuotaError(err)) {
-            const cooldownMs = getPositiveNumberEnv("GEMINI_QUOTA_COOLDOWN_MS", 60 * 1000);
-            geminiQuotaCooldownUntil = Date.now() + cooldownMs;
-            console.log(`[Gemini API] Quota limit reached (429 / RESOURCE_EXHAUSTED). Cooling down live Gemini calls for ${Math.ceil(cooldownMs / 1000)}s.`);
+          if (isOpenAIRateLimitError(err)) {
+            const cooldownMs = getPositiveNumberEnv("OPENAI_RATE_LIMIT_COOLDOWN_MS", 60 * 1000);
+            openAIRateLimitCooldownUntil = Date.now() + cooldownMs;
+            console.log(`[OpenAI API] Rate limit reached. Cooling down live OpenAI calls for ${Math.ceil(cooldownMs / 1000)}s.`);
             throw err;
           }
 
-          console.log(`[Gemini API] Note: Managed transition using model ${model} on try ${tryIndex + 1}: ${err?.message || err}`);
+          console.log(`[OpenAI API] Note: Managed transition using model ${model} on try ${tryIndex + 1}: ${err?.message || err}`);
 
-          if (isGeminiRetriableError(err) && tryIndex < maxRetriesPerModel - 1) {
+          if (isOpenAIRetriableError(err) && tryIndex < maxRetriesPerModel - 1) {
             const delay = (tryIndex + 1) * 800;
-            console.log(`[Gemini API] Transient retriable error. Waiting ${delay}ms before next retry...`);
+            console.log(`[OpenAI API] Transient retriable error. Waiting ${delay}ms before next retry...`);
             await new Promise((resolve) => setTimeout(resolve, delay));
           } else {
             // Fail fast out of this model and try the next configured fallback model.
@@ -1324,15 +1315,15 @@ async function callGeminiWithRetryAndFallback(
       }
     }
 
-    throw lastError || new Error("All configured Gemini models failed.");
+    throw lastError || new Error("All configured OpenAI models failed.");
   })();
 
-  pendingGeminiRequests.set(cacheKey, generationPromise);
+  pendingOpenAIRequests.set(cacheKey, generationPromise);
 
   try {
     return await generationPromise;
   } finally {
-    pendingGeminiRequests.delete(cacheKey);
+    pendingOpenAIRequests.delete(cacheKey);
   }
 }
 
@@ -1393,9 +1384,9 @@ app.post("/api/advisor/brief", async (req, res) => {
 app.post("/api/advisor/migrate-data", async (req, res) => {
   const { connectionString, dataType, rawData } = req.body;
 
-  const gClient = getGeminiClient();
-  if (!gClient) {
-    // Return sample transformed fallback records if Gemini is not configured
+  const oClient = getOpenAIClient();
+  if (!oClient) {
+    // Return sample transformed fallback records if OpenAI is not configured
     return res.json({
       success: true,
       data: {
@@ -1609,7 +1600,7 @@ ${rawData}`;
 
     let data;
     try {
-      const { text: rawTextResponse } = await callGeminiWithRetryAndFallback(gClient, systemInstruction, prompt);
+      const { text: rawTextResponse } = await callOpenAIWithRetryAndFallback(oClient, systemInstruction, prompt);
       
       // Sanitize output manually and extract the JSON construct robustly
       let cleanedJson = rawTextResponse.trim();
@@ -1626,7 +1617,7 @@ ${rawData}`;
 
       data = JSON.parse(cleanedJson);
     } catch (parseOrGenError: any) {
-      console.log("[Migration Engine Warning] Gemini model returned invalid JSON or API failed, using fail-safe structured fallback dataset:", parseOrGenError);
+      console.log("[Migration Engine Warning] OpenAI model returned invalid JSON or API failed, using fail-safe structured fallback dataset:", parseOrGenError);
       
       // Standby parsed recovery data
       data = {

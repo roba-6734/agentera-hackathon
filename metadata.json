@@ -2,5 +2,5 @@
   "name": "Strategic Advisor for UAE Leadership",
   "description": "An AI-powered digital strategic advisor for UAE Ministry of Energy and Infrastructure leadership to prepare for international meetings, bilateral sessions, and strategic decisions.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

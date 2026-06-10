@@ -130,7 +130,7 @@ export default function AiChatAssistant({
               {isEn ? "Dignitary Direct Policy Advisor" : "المستشار الفيدرالي لصناعة وحوكمة القرار"}
             </h4>
             <span className="text-[9px] uppercase font-mono tracking-widest text-emerald-light font-bold">
-              {isEn ? "Gemini Strategic Grounding Enabled" : "منظومة جيمني للاستنباط الدبلوماسي نشطة"}
+              {isEn ? "OpenAI Strategic Grounding Enabled" : "منظومة أوبن إيه آي للاستنباط الدبلوماسي نشطة"}
             </span>
           </div>
         </div>

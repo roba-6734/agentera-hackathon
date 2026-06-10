@@ -574,7 +574,7 @@ export default function DeveloperDashboard({ language, countriesCount, onRefresh
                   <div>
                     <h4 className="font-bold mb-0.5">{isEn ? "ReadOnly Simulation Mode Action" : "نمط المحاكاة المحلي للقراءة فقط"}</h4>
                     <p>{isEn 
-                      ? "System detects guest authentication. Paste SQL scripts to compile with Gemini-3.5 core engine and view structure map locally. Authenticate with Google to execute transaction writes." 
+                      ? "System detects guest authentication. Paste SQL scripts to compile with the OpenAI migration engine and view structure map locally. Authenticate with Google to execute transaction writes." 
                       : "يرجى التفويض عبر جوجل لكتابة وتصدير النتائج إلى المستوعبات السحابية الفعلية."}</p>
                   </div>
                 </div>
@@ -1013,7 +1013,7 @@ singapore,Singapore,سنغافورة,🇸🇬`);
                   
                   <div className="space-y-2">
                     <p className="flex justify-between">
-                      <span>GEMINI_API_KEY:</span>
+                      <span>OPENAI_API_KEY:</span>
                       <span className="text-emerald-accent font-bold">RESOLVED (SERVER_PROXY)</span>
                     </p>
                     <p className="flex justify-between">
