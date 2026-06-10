@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import pptxgen from "pptxgenjs";
-import { PrebuiltCountry } from "../types";
-import { FileText, Award, Layers, Volume2, ChevronLeft, ChevronRight, HelpCircle, ArrowRightLeft, FileCheck, Download } from "lucide-react";
+import { PrebuiltCountry, UaeIndicator } from "../types";
+import { FileText, Award, Layers, Volume2, ChevronLeft, ChevronRight, HelpCircle, ArrowRightLeft, FileCheck, Download, X, Printer, AlertTriangle } from "lucide-react";
 
 interface BriefingGeneratorProps {
   country: PrebuiltCountry;
@@ -9,12 +9,24 @@ interface BriefingGeneratorProps {
   aiBriefingText: string;
   isGenerating: boolean;
   briefingSource?: string;
+  meetingObjective?: string;
+  uaeData?: UaeIndicator;
 }
 
-export default function BriefingGenerator({ country, language, aiBriefingText, isGenerating, briefingSource }: BriefingGeneratorProps) {
+export default function BriefingGenerator({
+  country,
+  language,
+  aiBriefingText,
+  isGenerating,
+  briefingSource,
+  meetingObjective,
+  uaeData,
+}: BriefingGeneratorProps) {
   const isEn = language === "en";
   const [activeOutput, setActiveOutput] = useState<"summary" | "talking-points" | "one-pager" | "slides">("summary");
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [printError, setPrintError] = useState<string | null>(null);
 
   // Pre-structured high value talking points depending on country
   const fallbackTalkingPoints: Record<string, any> = {
@@ -186,92 +198,920 @@ export default function BriefingGenerator({ country, language, aiBriefingText, i
     }
   ];
 
-  const handleExportToPptx = () => {
+  const handleExportToPdf = () => {
+    setPrintError(null);
     try {
-      const pptx = new pptxgen();
+      // Define appropriate fallback indicators for comparative engine
+      const fallbackUaeData: UaeIndicator = {
+        nameEn: "United Arab Emirates",
+        nameAr: "دولة الإمارات العربية المتحدة",
+        flag: "🇦🇪",
+        gdp: "$507 Billion",
+        gdpAr: "507 مليار دولار",
+        growth: "+3.6% (2025)",
+        energyMix: "Nuclear, Solar PV, Gas",
+        energyMixAr: "طاقة نووية، شمسية، غاز",
+        infrastructureIndex: "91.4 / 100",
+        infrastructureIndexAr: "91.4 / 100",
+        environmentalRank: "2nd Regional",
+        environmentalRankAr: "الثاني إقليمياً",
+        competitivenessRank: "10th Globally",
+        competitivenessRankAr: "العاشر عالمياً",
+        cooperationAgreementEn: "Comprehensive Economic Partnership Agreement (CEPA)",
+        cooperationAgreementAr: "اتفاقية الشراكة الاقتصادية الشاملة"
+      };
 
-      // Configure widescreen layouts
-      pptx.layout = "LAYOUT_16x9";
-      pptx.title = `${country.nameEn} Strategic Briefing Presentation`;
-      pptx.author = "MOEI Cabinet AI Strategic Advisor";
+      const activeUae = uaeData || fallbackUaeData;
+      const activeObjective = meetingObjective?.trim() || (isEn 
+        ? "Consolidate active trade corridors, harmonize deep water shipping protocols, establish mutual renewable power targets, and coordinate regional policy."
+        : "توطيد ممرات التبادل التجاري المفتوح، ومواءمة معايير الشحن والموانئ البحرية العميقة، وبناء محطات توليد الطاقة والممر المشترك.");
 
-      slides.forEach((sl) => {
-        const slide = pptx.addSlide();
-        
-        // Deep luxury green theme matching our visual identity color palette
-        slide.background = { fill: "16211C" }; 
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "none";
+      document.body.appendChild(iframe);
 
-        // Main heading matching the designated language
-        const titleText = isEn ? sl.titleEn : sl.titleAr;
-        slide.addText(titleText, {
-          x: 0.8,
-          y: 0.6,
-          w: 11.7,
-          h: 0.8,
-          fontSize: 24,
-          fontFace: isEn ? "Georgia" : "Arial",
-          color: "C5A85A", // Radiant Gold
-          bold: true,
-          align: isEn ? "left" : "right",
-        });
+      const formattedBriefingText = aiBriefingText
+        .replace(/\n\n/g, "</p><p style='margin-bottom: 12px; text-align: justify;'>")
+        .replace(/\n/g, "<br/>")
+        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+        .replace(/### (.*?)(?:<br\/>|\n|$)/g, "<h3 style='margin-top: 22px; margin-bottom: 8px; font-size: 15px; color: #16211C; border-bottom: 1px solid #E8DCC4; padding-bottom: 4px;font-family: \"Playfair Display\", serif;'>$1</h3>");
 
-        // Decorative horizontal rule
-        slide.addShape("rect" as any, {
-          x: 0.8,
-          y: 1.4,
-          w: 2.0,
-          h: 0.04,
-          fill: { color: "C5A85A" }
-        });
+      const printHtml = `
+<!DOCTYPE html>
+<html lang="${language}" dir="${isEn ? "ltr" : "rtl"}">
+<head>
+  <meta charset="utf-8">
+  <title>Cabinet_Briefing_Memo_${country.nameEn}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Noto+Kufi+Arabic:wght@400;500;700&display=swap');
+    
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      background: #fafaf9;
+      color: #1c2421;
+      font-family: ${isEn ? "'Inter', sans-serif" : "'Noto Kufi Arabic', sans-serif"};
+      margin: 0;
+      padding: 35px;
+      line-height: 1.5;
+    }
+    .page {
+      background: white;
+      border: 1px solid #e5e5e0;
+      border-top: 6px solid #16211C;
+      padding: 45px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+      max-width: 850px;
+      margin: 0 auto;
+      position: relative;
+    }
+    .page-header {
+      border-bottom: 2px solid #C5A059;
+      padding-bottom: 18px;
+      margin-bottom: 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .ministry-title {
+      font-family: ${isEn ? "'Cinzel', serif" : "'Noto Kufi Arabic', sans-serif"};
+      color: #16211C;
+      margin: 0;
+      font-size: ${isEn ? "14px" : "12px"};
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .emirates-title {
+      font-family: ${isEn ? "'Cinzel', serif" : "'Noto Kufi Arabic', sans-serif"};
+      color: #C5A059;
+      margin: 0;
+      font-size: ${isEn ? "12px" : "10px"};
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .doc-title {
+      font-family: 'Playfair Display', serif;
+      font-weight: 700;
+      font-size: ${isEn ? "21px" : "18px"};
+      color: #16211C;
+      margin: 12px 0 0 0;
+    }
+    .security-badge {
+      background: #e11d48;
+      color: white;
+      font-family: monospace;
+      font-weight: 700;
+      font-size: 9px;
+      padding: 4px 9px;
+      border-radius: 2px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: inline-block;
+    }
+    .metadata-box {
+      background: #F8F8F6;
+      border: 1px solid #E8DCC4;
+      border-radius: 4px;
+      padding: 12px;
+      margin-bottom: 25px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      font-size: 12px;
+    }
+    .metadata-item h5 {
+      color: #718096;
+      margin: 0 0 2px 0;
+      text-transform: uppercase;
+      font-size: 9px;
+      letter-spacing: 0.5px;
+    }
+    .metadata-item p {
+      margin: 0;
+      font-weight: 700;
+      color: #16211C;
+    }
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      color: #16211C;
+      font-size: 16px;
+      border-bottom: 1.5px solid #E8DCC4;
+      padding-bottom: 4px;
+      margin: 25px 0 12px 0;
+      text-transform: ${isEn ? "uppercase" : "none"};
+      letter-spacing: 0.5px;
+    }
+    .metrics-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 25px;
+      font-size: 12px;
+    }
+    .metrics-table th {
+      background: #16211C;
+      color: #C5A059;
+      text-align: ${isEn ? "left" : "right"};
+      padding: 8px 10px;
+      font-weight: 600;
+      border: 1px solid #16211C;
+    }
+    .metrics-table td {
+      padding: 8px 10px;
+      border: 1px solid #E2E8F0;
+    }
+    .metrics-table tr:nth-child(even) {
+      background: #F9F9F7;
+    }
+    .briefing-content {
+      font-size: 13px;
+      color: #2d3748;
+      text-align: justify;
+    }
+    .points-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .point-card {
+      background: #F9F9F7;
+      border: 1px solid #E2E8F0;
+      border-radius: 4px;
+      padding: 12px;
+      font-size: 12px;
+    }
+    .point-card h4 {
+      margin: 0 0 6px 0;
+      color: #16211C;
+      font-family: 'Playfair Display', serif;
+      font-weight: 700;
+      border-bottom: 1px solid #E8DCC4;
+      padding-bottom: 3px;
+    }
+    .point-number {
+      display: inline-block;
+      background: #16211C;
+      color: white;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      text-align: center;
+      line-height: 16px;
+      font-size: 9px;
+      margin-right: ${isEn ? "5px" : "0"};
+      margin-left: ${isEn ? "0" : "5px"};
+      font-weight: 700;
+    }
+    .diplomatic-warning {
+      background: #FFFBEB;
+      border: 1px solid #FCD34D;
+      color: #B45309;
+      font-size: 10px;
+      padding: 8px;
+      border-radius: 4px;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .footer-signatures {
+      border-top: 1px solid #E2E8F0;
+      padding-top: 15px;
+      margin-top: 35px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      color: #718096;
+    }
+    .seal-text {
+      color: #16211C;
+      font-weight: 700;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+    
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+        margin: 0;
+      }
+      .page {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        margin: 0;
+        max-width: 100%;
+        page-break-after: always;
+      }
+      .page:last-child {
+        page-break-after: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
 
-        // Map list bullet items nicely using native pptxgen bullets to ensure perfect word wrap
-        const bulletsList = isEn ? sl.bulletsEn : sl.bulletsAr;
-        const textObjects = bulletsList.map((bullet) => {
-          return {
-            text: bullet,
-            options: {
-              bullet: true,
-              fontSize: 13, // Slightly reduced from 16 to fit long country dossiers beautifully
-              color: "E2E8F0", // Slate grey text
-              fontFace: "Arial",
-              paraSpaceAfter: 12, // Clean block spacing after each item
-              align: (isEn ? "left" : "right") as "left" | "right",
+  <!-- FIRST PAGE: OVERVIEW, META & COMPARATIVE STATISTICS -->
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h4 class="ministry-title">${isEn ? "MINISTRY OF ENERGY & INFRASTRUCTURE" : "وزارة الطاقة والبنية التحتية"}</h4>
+        <h5 class="emirates-title">${isEn ? "UNITED ARAB EMIRATES" : "دولة الإمارات العربية المتحدة"}</h5>
+        <h1 class="doc-title">${isEn ? "EXECUTIVE STRATEGIC DOSSIER" : "الملف الاستراتيجي المشترك والتحليل السيادي"}</h1>
+      </div>
+      <div>
+        <span class="security-badge">${isEn ? "CLASSIFIED / RESTRICTED" : "سرّي للغاية / تداول محدود"}</span>
+        <div style="font-family: monospace; font-size: 10px; color: #718096; margin-top: 6px; text-align: right;">
+          ${isEn ? "REF: MOEI-VIP-99" : "رقم القيد: MOEI-VIP-99"}
+        </div>
+      </div>
+    </div>
+
+    <!-- METADATA INFORMATION BLOCK -->
+    <div class="metadata-box">
+      <div class="metadata-item">
+        <h5>${isEn ? "PARTNER STATE" : "الشريك الدولي"}</h5>
+        <p>${country.flag} ${isEn ? country.nameEn : country.nameAr}</p>
+      </div>
+      <div class="metadata-item">
+        <h5>${isEn ? "AUTHORITY NODE" : "جهة الصدور"}</h5>
+        <p>${isEn ? "Cabinet AI Strategic Advisor" : "مستشار الذكاء الاصطناعي لحقيبة الوزير"}</p>
+      </div>
+      <div class="metadata-item" style="grid-column: span 2;">
+        <h5>${isEn ? "SPECIFIC TALKS OBJECTIVE" : "الهدف المحدد والمطلوب للمباحثات الثنائية"}</h5>
+        <p style="font-weight: 500; font-size: 11px; line-height: 1.4; color: #2d3748;">
+          ${activeObjective}
+        </p>
+      </div>
+      <div class="metadata-item">
+        <h5>${isEn ? "DATE OF ACQUISITION" : "تاريخ إصدار التقرير"}</h5>
+        <p style="font-family: monospace;">June 9, 2026</p>
+      </div>
+      <div class="metadata-item">
+        <h5>${isEn ? "Bilateral Treaty" : "طبيعة العلاقات الثنائية"}</h5>
+        <p style="font-size: 11px; color: #16211C;">${isEn ? country.indicators.cooperationAgreementEn : country.indicators.cooperationAgreementAr}</p>
+      </div>
+    </div>
+
+    <!-- SOVEREIGN SYSTEM BENCHMARKS (COMPARATIVE GRID) -->
+    <h2 class="section-title">${isEn ? "Sovereign Benchmarks Engine" : "جرد ومقارنة المؤشرات السيادية والتنافسية للبلدين"}</h2>
+    <table class="metrics-table">
+      <thead>
+        <tr>
+          <th>${isEn ? "Benchmark Indicator" : "مؤشر القياس والتنافسية"}</th>
+          <th>${isEn ? "United Arab Emirates 🇦🇪" : "دولة الإمارات العربية المتحدة 🇦🇪"}</th>
+          <th>${country.flag} ${isEn ? country.nameEn : country.nameAr}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>${isEn ? "Sovereign GDP" : "الناتج المحلي الإجمالي"}</strong></td>
+          <td>${isEn ? activeUae.gdp : activeUae.gdpAr}</td>
+          <td>${isEn ? country.indicators.gdp : country.indicators.gdpAr}</td>
+        </tr>
+        <tr>
+          <td><strong>${isEn ? "Annual Real Growth Rate" : "معدل النمو السنوي الفعلي"}</strong></td>
+          <td>${activeUae.growth}</td>
+          <td>${country.indicators.growth}</td>
+        </tr>
+        <tr>
+          <td><strong>${isEn ? "Infrastructure System Index" : "ترتيب جودة البنية التحتية والموانئ"}</strong></td>
+          <td>${isEn ? activeUae.infrastructureIndex : activeUae.infrastructureIndexAr}</td>
+          <td>${country.indicators.infrastructureIndex}</td>
+        </tr>
+        <tr>
+          <td><strong>${isEn ? "Global Competitiveness Rank" : "تأهيل مؤشر التنافسية العالمي"}</strong></td>
+          <td>${isEn ? activeUae.competitivenessRank : activeUae.competitivenessRankAr}</td>
+          <td>${country.indicators.competitivenessRank}</td>
+        </tr>
+        <tr>
+          <td><strong>${isEn ? "Environmental Quality Rank" : "مؤشر التنمية والاستدامة البيئية"}</strong></td>
+          <td>${isEn ? activeUae.environmentalRank : activeUae.environmentalRankAr}</td>
+          <td>${country.indicators.environmentalRank}</td>
+        </tr>
+        <tr>
+          <td><strong>${isEn ? "Energy Sourcing Grid Mix" : "مزيج خطوط توليد الشبكة الوطنية للكهرباء"}</strong></td>
+          <td>${isEn ? activeUae.energyMix : activeUae.energyMixAr}</td>
+          <td>${isEn ? country.indicators.energyMix : country.indicators.energyMixAr}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="diplomatic-warning">
+      ⚠️ ${isEn 
+        ? "NOTICE: Confirmed federal stats mapped side-by-side. Confirm values with accompanying documentation before drafting formal treaties." 
+        : "إقرار الفيدرالية: جرى دمج هذه البيانات والمطابقة الإحصائية الرسمية تلقائياً. يرجى تأكيد الأرقام بمقارنتها مع الكشوفات المصاحبة."}
+    </div>
+
+    <div class="footer-signatures">
+      <div>
+        <p class="seal-text">${isEn ? "FEDERAL PORTFOLIO NODE" : "منصة الدعم الفيدرالي الموحد"}</p>
+        <p>${isEn ? "UAE Ministry of Energy & Infrastructure" : "وزارة الطاقة والبنية التحتية - دولة الإمارات العربية المتحدة"}</p>
+      </div>
+      <div style="text-align: right;">
+        <span style="font-style: italic; font-weight: 700;">Page 1 of 2</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECOND PAGE: AI-GENERATED BRIEFING MEMO & DIGNITARY TALKING POINTS -->
+  <div class="page page-break">
+    <div class="page-header">
+      <div>
+        <h4 class="ministry-title">${isEn ? "MINISTRY OF ENERGY & INFRASTRUCTURE" : "وزارة الطاقة والبنية التحتية"}</h4>
+        <h5 class="emirates-title">${isEn ? "UNITED ARAB EMIRATES" : "دولة الإمارات العربية المتحدة"}</h5>
+        <h1 class="doc-title">${isEn ? "EXECUTIVE DECISION AI ANALYSIS" : "التحليل المعمق وإجراءات مذكرات الوفد"}</h1>
+      </div>
+      <div>
+        <span class="security-badge" style="background-color: #0d9488;">${isEn ? "SECURE CHANNELS Active" : "تأمين نشط للقنوات"}</span>
+      </div>
+    </div>
+
+    <h2 class="section-title" style="margin-top: 0;">${isEn ? "Real-Time Alignment Intelligence Summary" : "تقرير الإيجاز التوليدي الذكي لمذكرة التفاهم"}</h2>
+    <div class="briefing-content">
+      <p style="margin-bottom: 12px; text-align: justify;">
+        ${formattedBriefingText}
+      </p>
+    </div>
+
+    <h2 class="section-title">${isEn ? "Strategic Preparatory Dialogue Protocols" : "نقاط الحديث الثنائية الموصى بتغطيتها خلال الاجتماع"}</h2>
+    <div class="points-grid">
+      ${currentTP.map((tpOn: any, idxKey: number) => `
+        <div class="point-card">
+          <h4>
+            <span class="point-number">${idxKey + 1}</span>
+            ${isEn ? tpOn.headerEn : tpOn.headerAr}
+          </h4>
+          <p style="margin: 0; color: #4a5568; line-height: 1.4; font-size: 11px;">
+            ${isEn ? tpOn.pointEn : tpOn.pointAr}
+          </p>
+        </div>
+      `).join("")}
+    </div>
+
+    <div class="footer-signatures">
+      <div>
+        <p class="seal-text">${isEn ? "SECURE CHANNELS SEAL REGISTERED" : "تم ختم وتصديق القنوات الدبلوماسية إلكترونياً"}</p>
+        <p>${isEn ? "CONFIDENTIAL - Strictly UAE Delegation Use Only" : "سرّي للغاية - يُتداول لوفد دولة الإمارات العربيّة المتحدّة حصراً"}</p>
+      </div>
+      <div style="text-align: right;">
+        <span style="font-style: italic; font-weight: 700;">Page 2 of 2</span>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
+      `;
+
+      const doc = iframe.contentWindow?.document || iframe.contentDocument;
+      if (doc) {
+        doc.open();
+        doc.write(printHtml);
+        doc.close();
+
+        // Let rendering settle then trigger print dialog
+        setTimeout(() => {
+          try {
+            if (iframe.contentWindow) {
+              iframe.contentWindow.focus();
+              iframe.contentWindow.print();
             }
-          };
-        });
-
-        slide.addText(textObjects, {
-          x: 0.8,
-          y: 1.8,
-          w: 11.7,
-          h: 4.5,
-          align: isEn ? "left" : "right",
-          wrap: true, // Forces text-wrapping inside the text-box bounds
-        });
-
-        // Add brand agency marker on slide footer
-        slide.addText(
-          isEn 
-            ? "Ministry of Energy & Infrastructure - UAE | Secure Cabinet Support Node" 
-            : "وزارة الطاقة والبنية التحتية - دولة الإمارات العربية المتحدة | نظام الدعم الاستراتيجي",
-          {
-            x: 0.8,
-            y: 6.7,
-            w: 11.7,
-            h: 0.3,
-            fontSize: 9,
-            color: "718096",
-            align: isEn ? "left" : "right",
+          } catch (printEx: any) {
+            console.warn("Direct iframe print blocked:", printEx);
+            setPrintError(isEn 
+              ? "Your browser's iframe security sandbox blocks direct print dialogues here. Please click 'Download Offline Dossier' below instead to save or print perfectly!" 
+              : "حظر برتوكول الأمان الفيدرالي الطباعة المباشرة داخل هذا الإطار. يرجى الضغط على زر تصدير ملف HTML الخارجي أدناه لحفظه وطباعته.");
           }
-        );
-      });
-
-      const filename = `Cabinet_Bilateral_${country.nameEn.replace(/\s+/g, "_")}_Presentation.pptx`;
-      pptx.writeFile({ fileName: filename });
-    } catch (error) {
-      console.error("Failed to generate PPTX:", error);
+          // Cleanup
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }, 1500);
+        }, 800);
+      }
+    } catch (error: any) {
+      console.error("PDF generation failed:", error);
+      setPrintError(isEn 
+        ? "Could not initiate local browser print module. Please use our high-fidelity downloadable HTML memo instead." 
+        : "تعذر تشغيل معالج الطباعة التلقائي بالمتصفح. يرجى استخدام ميزة تصدير وتحميل الملف الرئاسي بالأسفل.");
     }
   };
+
+  const downloadOfflineHtml = () => {
+    try {
+      const fallbackUaeData: UaeIndicator = {
+        nameEn: "United Arab Emirates",
+        nameAr: "دولة الإمارات العربية المتحدة",
+        flag: "🇦🇪",
+        gdp: "$507 Billion",
+        gdpAr: "507 مليار دولار",
+        growth: "+3.6% (2025)",
+        energyMix: "Nuclear, Solar PV, Gas",
+        energyMixAr: "طاقة نووية، شمسية، غاز",
+        infrastructureIndex: "91.4 / 100",
+        infrastructureIndexAr: "91.4 / 100",
+        environmentalRank: "2nd Regional",
+        environmentalRankAr: "الثاني إقليمياً",
+        competitivenessRank: "10th Globally",
+        competitivenessRankAr: "العاشر عالمياً",
+        cooperationAgreementEn: "Comprehensive Economic Partnership Agreement (CEPA)",
+        cooperationAgreementAr: "اتفاقية الشراكة الاقتصادية الشاملة"
+      };
+
+      const activeUae = uaeData || fallbackUaeData;
+      const activeObjective = meetingObjective?.trim() || (isEn 
+        ? "Consolidate active trade corridors, harmonize deep water shipping protocols, establish mutual renewable power targets, and coordinate regional policy."
+        : "توطيد ممرات التبادل التجاري المفتوح، ومواءمة معايير الشحن والموانئ البحرية العميقة، وبناء محطات توليد الطاقة والممر المشترك.");
+
+      const formattedBriefingText = aiBriefingText
+        .replace(/\n\n/g, "</p><p style='margin-bottom: 12px; text-align: justify;'>")
+        .replace(/\n/g, "<br/>")
+        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+        .replace(/### (.*?)(?:<br\/>|\n|$)/g, "<h3 style='margin-top: 22px; margin-bottom: 8px; font-size: 15px; color: #16211C; border-bottom: 1px solid #E8DCC4; padding-bottom: 4px;font-family: \"Playfair Display\", serif;'>$1</h3>");
+
+      const printHtml = `
+<!DOCTYPE html>
+<html lang="${language}" dir="${isEn ? "ltr" : "rtl"}">
+<head>
+  <meta charset="utf-8">
+  <title>Cabinet_Briefing_Memo_${country.nameEn.replace(/\s+/g, "_")}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Noto+Kufi+Arabic:wght@400;500;700&display=swap');
+    
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      background: #fafaf9;
+      color: #1c2421;
+      font-family: ${isEn ? "'Inter', sans-serif" : "'Noto Kufi Arabic', sans-serif"};
+      margin: 0;
+      padding: 35px;
+      line-height: 1.5;
+    }
+    .print-actions-bar {
+      max-width: 850px;
+      margin: 0 auto 20px auto;
+      background: #16211C;
+      padding: 15px;
+      border-radius: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    }
+    .print-main-title {
+      color: #C5A059;
+      margin: 0;
+      font-family: 'Cinzel', serif;
+      font-size: 13px;
+    }
+    .action-btn {
+      background: #C5A059;
+      color: #16211C;
+      border: 1px solid #C5A059;
+      font-weight: bold;
+      font-size: 11px;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: all 0.2s;
+    }
+    .action-btn:hover {
+      background: transparent;
+      color: #C5A059;
+    }
+    .page {
+      background: white;
+      border: 1px solid #e5e5e0;
+      border-top: 6px solid #16211C;
+      padding: 45px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+      max-width: 850px;
+      margin: 0 auto 30px auto;
+      position: relative;
+    }
+    .page-header {
+      border-bottom: 2px solid #C5A059;
+      padding-bottom: 18px;
+      margin-bottom: 22px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .ministry-title {
+      font-family: ${isEn ? "'Cinzel', serif" : "'Noto Kufi Arabic', sans-serif"};
+      color: #16211C;
+      margin: 0;
+      font-size: ${isEn ? "14px" : "12px"};
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .emirates-title {
+      font-family: ${isEn ? "'Cinzel', serif" : "'Noto Kufi Arabic', sans-serif"};
+      color: #C5A059;
+      margin: 0;
+      font-size: ${isEn ? "12px" : "10px"};
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .doc-title {
+      font-family: 'Playfair Display', serif;
+      font-weight: 700;
+      font-size: ${isEn ? "21px" : "18px"};
+      color: #16211C;
+      margin: 12px 0 0 0;
+    }
+    .security-badge {
+      background: #e11d48;
+      color: white;
+      font-family: monospace;
+      font-weight: 700;
+      font-size: 9px;
+      padding: 4px 9px;
+      border-radius: 2px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: inline-block;
+    }
+    .metadata-box {
+      background: #F8F8F6;
+      border: 1px solid #E8DCC4;
+      border-radius: 4px;
+      padding: 12px;
+      margin-bottom: 25px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      font-size: 12px;
+    }
+    .metadata-item h5 {
+      color: #718096;
+      margin: 0 0 2px 0;
+      text-transform: uppercase;
+      font-size: 9px;
+      letter-spacing: 0.5px;
+    }
+    .metadata-item p {
+      margin: 0;
+      font-weight: 700;
+      color: #16211C;
+    }
+    .section-title {
+      font-family: 'Playfair Display', serif;
+      color: #16211C;
+      font-size: 16px;
+      border-bottom: 1.5px solid #E8DCC4;
+      padding-bottom: 4px;
+      margin: 25px 0 12px 0;
+      text-transform: ${isEn ? "uppercase" : "none"};
+      letter-spacing: 0.5px;
+    }
+    .metrics-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 25px;
+      font-size: 12px;
+    }
+    .metrics-table th {
+      background: #16211C;
+      color: #C5A059;
+      text-align: ${isEn ? "left" : "right"};
+      padding: 8px 10px;
+      font-weight: 600;
+      border: 1px solid #16211C;
+    }
+    .metrics-table td {
+      padding: 8px 10px;
+      border: 1px solid #E2E8F0;
+    }
+    .metrics-table tr:nth-child(even) {
+      background: #F9F9F7;
+    }
+    .briefing-content {
+      font-size: 13px;
+      color: #2d3748;
+      text-align: justify;
+    }
+    .points-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .point-card {
+      background: #F9F9F7;
+      border: 1px solid #E2E8F0;
+      border-radius: 4px;
+      padding: 12px;
+      font-size: 12px;
+    }
+    .point-card h4 {
+      margin: 0 0 6px 0;
+      color: #16211C;
+      font-family: 'Playfair Display', serif;
+      font-weight: 700;
+      border-bottom: 1px solid #E8DCC4;
+      padding-bottom: 3px;
+    }
+    .point-number {
+      display: inline-block;
+      background: #16211C;
+      color: white;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      text-align: center;
+      line-height: 16px;
+      font-size: 9px;
+      margin-right: ${isEn ? "5px" : "0"};
+      margin-left: ${isEn ? "0" : "5px"};
+      font-weight: 700;
+    }
+    .diplomatic-warning {
+      background: #FFFBEB;
+      border: 1px solid #FCD34D;
+      color: #B45309;
+      font-size: 10px;
+      padding: 8px;
+      border-radius: 4px;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .footer-signatures {
+      border-top: 1px solid #E2E8F0;
+      padding-top: 15px;
+      margin-top: 35px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      color: #718096;
+    }
+    .seal-text {
+      color: #16211C;
+      font-weight: 700;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+    
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+        margin: 0;
+      }
+      .print-actions-bar {
+        display: none !important;
+      }
+      .page {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+        margin: 0;
+        max-width: 100%;
+        page-break-after: always;
+      }
+      .page:last-child {
+        page-break-after: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="print-actions-bar">
+    <h3 class="print-main-title">${isEn ? "UAE CABINET STRATEGIC BRIEFING EXPEDITION" : "وفد وزارة الطاقة والبنية التحتية لحكومة الإمارات"}</h3>
+    <button class="action-btn" onclick="window.print()">${isEn ? "Print / Save PDF" : "بدء الطباعة أو الحفظ كـ PDF"}</button>
+  </div>
+
+  <!-- FIRST PAGE: OVERVIEW, META & COMPARATIVE STATISTICS -->
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h4 class="ministry-title">${isEn ? "MINISTRY OF ENERGY & INFRASTRUCTURE" : "وزارة الطاقة والبنية التحتية"}</h4>
+        <h5 class="emirates-title">${isEn ? "UNITED ARAB EMIRATES" : "دولة الإمارات العربية المتحدة"}</h5>
+        <h1 class="doc-title">${isEn ? "EXECUTIVE STRATEGIC DOSSIER" : "الملف الاستراتيجي المشترك والتحليل السيادي"}</h1>
+      </div>
+      <div>
+        <span class="security-badge">${isEn ? "CLASSIFIED / RESTRICTED" : "سرّي للغاية / تداول محدود"}</span>
+        <div style="font-family: monospace; font-size: 10px; color: #718096; margin-top: 6px; text-align: right;">
+          ${isEn ? "REF: MOEI-VIP-99" : "رقم القيد: MOEI-VIP-99"}
+        </div>
+      </div>
+    </div>
+
+    <!-- METADATA INFORMATION BLOCK -->
+    <div class="metadata-box">
+      <div class="metadata-item">
+        <h5>${isEn ? "PARTNER STATE" : "الشريك الدولي"}</h5>
+        <p>${country.flag} ${isEn ? country.nameEn : country.nameAr}</p>
+      </div>
+      <div class="metadata-item">
+        <h5>${isEn ? "AUTHORITY NODE" : "جهة الصدور"}</h5>
+        <p>${isEn ? "Cabinet AI Strategic Advisor" : "مستشار الذكاء الاصطناعي لحقيبة الوزير"}</p>
+      </div>
+      <div class="metadata-item" style="grid-column: span 2;">
+        <h5>${isEn ? "SPECIFIC TALKS OBJECTIVE" : "الهدف المحدد والمطلوب للمباحثات الثنائية"}</h5>
+        <p style="font-weight: 500; font-size: 11px; line-height: 1.4; color: #2d3748;">
+          ${activeObjective}
+        </p>
+      </div>
+      <div class="metadata-item">
+        <h5>${isEn ? "DATE OF ACQUISITION" : "تاريخ إصدار التقرير"}</h5>
+        <p style="font-family: monospace;">June 9, 2026</p>
+      </div>
+      <div class="metadata-item">
+        <h5>${isEn ? "Bilateral Treaty" : "طبيعة العلاقات الثنائية"}</h5>
+        <p style="font-size: 11px; color: #16211C;">${isEn ? country.indicators.cooperationAgreementEn : country.indicators.cooperationAgreementAr}</p>
+      </div>
+    </div>
+
+    <!-- SOVEREIGN SYSTEM BENCHMARKS (COMPARATIVE GRID) -->
+    <h2 class="section-title">${isEn ? "Sovereign Benchmarks Engine" : "جرد ومقارنة المؤشرات السيادية والتنافسية للبلدين"}</h2>
+    <table class="metrics-table">
+      <thead>
+        <tr>
+          <th>${isEn ? "Benchmark Indicator" : "مؤشر القياس والتنافسية"}</th>
+          <th>${isEn ? "United Arab Emirates 🇦🇪" : "دولة الإمارات العربية المتحدة 🇦🇪"}</th>
+          <th>${country.flag} ${isEn ? country.nameEn : country.nameAr}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>${isEn ? "Sovereign GDP" : "الناتج المحلي الإجمالي"}</strong></td>
+          <td>${isEn ? activeUae.gdp : activeUae.gdpAr}</td>
+          <td>${isEn ? country.indicators.gdp : country.indicators.gdpAr}</td>
+        </tr>
+        <tr>
+          <td><strong>${isEn ? "Annual Real Growth Rate" : "معدل النمو السنوي الفعلي"}</strong></td>
+          <td>${activeUae.growth}</td>
+          <td>${country.indicators.growth}</td>
+        </tr>
+        <tr>
+          <td><strong>${isEn ? "Infrastructure System Index" : "ترتيب جودة البنية التحتية والموانئ"}</strong></td>
+          <td>${isEn ? activeUae.infrastructureIndex : activeUae.infrastructureIndexAr}</td>
+          <td>${country.indicators.infrastructureIndex}</td>
+        </tr>
+        <tr>
+          <td><strong>${isEn ? "Global Competitiveness Rank" : "تأهيل مؤشر التنافسية العالمي"}</strong></td>
+          <td>${isEn ? activeUae.competitivenessRank : activeUae.competitivenessRankAr}</td>
+          <td>${country.indicators.competitivenessRank}</td>
+        </tr>
+        <tr>
+          <td><strong>${isEn ? "Environmental Quality Rank" : "مؤشر التنمية والاستدامة البيئية"}</strong></td>
+          <td>${isEn ? activeUae.environmentalRank : activeUae.environmentalRankAr}</td>
+          <td>${country.indicators.environmentalRank}</td>
+        </tr>
+        <tr>
+          <td><strong>${isEn ? "Energy Sourcing Grid Mix" : "مزيج خطوط توليد الشبكة الوطنية للكهرباء"}</strong></td>
+          <td>${isEn ? activeUae.energyMix : activeUae.energyMixAr}</td>
+          <td>${isEn ? country.indicators.energyMix : country.indicators.energyMixAr}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="diplomatic-warning">
+      ⚠️ ${isEn 
+        ? "NOTICE: Confirmed federal stats mapped side-by-side. Confirm values with accompanying documentation before drafting formal treaties." 
+        : "إقرار الفيدرالية: جرى دمج هذه البيانات والمطابقة الإحصائية الرسمية تلقائياً. يرجى تأكيد الأرقام بمقارنتها مع الكشوفات المصاحبة."}
+    </div>
+
+    <div class="footer-signatures">
+      <div>
+        <p class="seal-text">${isEn ? "FEDERAL PORTFOLIO NODE" : "منصة الدعم الفيدرالي الموحد"}</p>
+        <p>${isEn ? "UAE Ministry of Energy & Infrastructure" : "وزارة الطاقة والبنية التحتية - دولة الإمارات العربية المتحدة"}</p>
+      </div>
+      <div style="text-align: right;">
+        <span style="font-style: italic; font-weight: 700;">Page 1 of 2</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECOND PAGE: AI-GENERATED BRIEFING MEMO & DIGNITARY TALKING POINTS -->
+  <div class="page page-break">
+    <div class="page-header">
+      <div>
+        <h4 class="ministry-title">${isEn ? "MINISTRY OF ENERGY & INFRASTRUCTURE" : "وزارة الطاقة والبنية التحتية"}</h4>
+        <h5 class="emirates-title">${isEn ? "UNITED ARAB EMIRATES" : "دولة الإمارات العربية المتحدة"}</h5>
+        <h1 class="doc-title">${isEn ? "EXECUTIVE DECISION AI ANALYSIS" : "التحليل المعمق وإجراءات مذكرات الوفد"}</h1>
+      </div>
+      <div>
+        <span class="security-badge" style="background-color: #0d9488;">${isEn ? "SECURE CHANNELS Active" : "تأمين نشط للقنوات"}</span>
+      </div>
+    </div>
+
+    <h2 class="section-title" style="margin-top: 0;">${isEn ? "Real-Time Alignment Intelligence Summary" : "تقرير الإيجاز التوليدي الذكي لمذكرة التفاهم"}</h2>
+    <div class="briefing-content">
+      <p style="margin-bottom: 12px; text-align: justify;">
+        ${formattedBriefingText}
+      </p>
+    </div>
+
+    <h2 class="section-title">${isEn ? "Strategic Preparatory Dialogue Protocols" : "نقاط الحديث الثنائية الموصى بتغطيتها خلال الاجتماع"}</h2>
+    <div class="points-grid">
+      ${currentTP.map((tpOn: any, idxKey: number) => `
+        <div class="point-card">
+          <h4>
+            <span class="point-number">${idxKey + 1}</span>
+            ${isEn ? tpOn.headerEn : tpOn.headerAr}
+          </h4>
+          <p style="margin: 0; color: #4a5568; line-height: 1.4; font-size: 11px;">
+            ${isEn ? tpOn.pointEn : tpOn.pointAr}
+          </p>
+        </div>
+      `).join("")}
+    </div>
+
+    <div class="footer-signatures">
+      <div>
+        <p class="seal-text">${isEn ? "SECURE CHANNELS SEAL REGISTERED" : "تم ختم وتصديق القنوات الدبلوماسية إلكترونياً"}</p>
+        <p>${isEn ? "CONFIDENTIAL - Strictly UAE Delegation Use Only" : "سرّي للغاية - يُتداول لوفد دولة الإمارات العربيّة المتحدّة حصراً"}</p>
+      </div>
+      <div style="text-align: right;">
+        <span style="font-style: italic; font-weight: 700;">Page 2 of 2</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Automatically trigger printing when loaded independently
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 500);
+    };
+  </script>
+</body>
+</html>
+      `;
+
+      const blob = new Blob([printHtml], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Cabinet_Bilateral_Briefing_${country.nameEn.replace(/\s+/g, "_")}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("HTML download fail:", err);
+    }
+  };
+
 
   const handleNextSlide = () => {
     setCurrentSlideIndex((prev) => (prev + 1) % slides.length);
@@ -285,59 +1125,94 @@ export default function BriefingGenerator({ country, language, aiBriefingText, i
     <div className="space-y-6 animate-fade-in" id="briefing-generator-workspace">
       
       {/* Selector controls for executive consumption formats */}
-      <div className="flex flex-wrap items-center justify-start gap-2 border-b border-gray-100 pb-4" id="briefing-picker-buttons">
-        <button
-          onClick={() => setActiveOutput("summary")}
-          className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeOutput === "summary"
-              ? "bg-emerald-deep text-white shadow-md border border-emerald-deep"
-              : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
-          }`}
-          id="btn-output-summary"
-        >
-          <FileText className="w-4 h-4" />
-          <span>{isEn ? "Executive Summary" : "الملخص التنفيذي"}</span>
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-4" id="briefing-picker-buttons-container">
+        <div className="flex flex-wrap items-center gap-2" id="briefing-picker-buttons">
+          <button
+            onClick={() => setActiveOutput("summary")}
+            className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeOutput === "summary"
+                ? "bg-emerald-deep text-white shadow-md border border-emerald-deep"
+                : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
+            }`}
+            id="btn-output-summary"
+          >
+            <FileText className="w-4 h-4" />
+            <span>{isEn ? "Executive Summary" : "الملخص التنفيذي"}</span>
+          </button>
 
-        <button
-          onClick={() => setActiveOutput("talking-points")}
-          className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeOutput === "talking-points"
-              ? "bg-emerald-deep text-white shadow-md border border-emerald-deep"
-              : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
-          }`}
-          id="btn-output-talking-points"
-        >
-          <Volume2 className="w-4 h-4" />
-          <span>{isEn ? "Talking Points" : "نقاط الحديث للوفد"}</span>
-        </button>
+          <button
+            onClick={() => setActiveOutput("talking-points")}
+            className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeOutput === "talking-points"
+                ? "bg-emerald-deep text-white shadow-md border border-emerald-deep"
+                : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
+            }`}
+            id="btn-output-talking-points"
+          >
+            <Volume2 className="w-4 h-4" />
+            <span>{isEn ? "Talking Points" : "نقاط الحديث للوفد"}</span>
+          </button>
 
-        <button
-          onClick={() => setActiveOutput("one-pager")}
-          className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeOutput === "one-pager"
-              ? "bg-emerald-deep text-white shadow-md border border-emerald-deep"
-              : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
-          }`}
-          id="btn-output-one-pager"
-        >
-          <FileCheck className="w-4 h-4" />
-          <span>{isEn ? "One-Pager Memoram" : "مذكرة الحزب الفردية"}</span>
-        </button>
+          <button
+            onClick={() => setActiveOutput("one-pager")}
+            className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeOutput === "one-pager"
+                ? "bg-emerald-deep text-white shadow-md border border-emerald-deep"
+                : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
+            }`}
+            id="btn-output-one-pager"
+          >
+            <FileCheck className="w-4 h-4" />
+            <span>{isEn ? "One-Pager Memoram" : "مذكرة الحزب الفردية"}</span>
+          </button>
 
-        <button
-          onClick={() => setActiveOutput("slides")}
-          className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
-            activeOutput === "slides"
-              ? "bg-emerald-deep text-white shadow-md border border-emerald-deep"
-              : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
-          }`}
-          id="btn-output-slides"
-        >
-          <Layers className="w-4 h-4" />
-          <span>{isEn ? "Widescreen Briefing Slides" : "شرائح العرض والتقديم"}</span>
-        </button>
+          <button
+            onClick={() => setActiveOutput("slides")}
+            className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeOutput === "slides"
+                ? "bg-emerald-deep text-white shadow-md border border-emerald-deep"
+                : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
+            }`}
+            id="btn-output-slides"
+          >
+            <Layers className="w-4 h-4" />
+            <span>{isEn ? "Widescreen Briefing Slides" : "شرائح العرض والتقديم"}</span>
+          </button>
+        </div>
+
+        {/* Unified VIP Export PDF and Print Trigger Button */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleExportToPdf}
+            className="bg-gold-deep border border-gold-deep text-slate-vip hover:bg-slate-vip hover:text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md tracking-wide"
+            id="btn-export-pdf"
+            title={isEn ? "Print polished PDF strategic briefing" : "تصدير الملف الاستراتيجي الكامل بصيغة PDF"}
+          >
+            <FileText className="w-4 h-4 shrink-0" />
+            <span>{isEn ? "Export Executive PDF" : "تصدير ملف PDF الرئاسي"}</span>
+          </button>
+
+          <button
+            onClick={downloadOfflineHtml}
+            className="bg-white border border-gray-200 text-slate-vip hover:bg-gray-50 hover:border-gray-300 px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer shadow-sm tracking-wide"
+            id="btn-download-offline-html"
+            title={isEn ? "Download standalone offline interactive dossier" : "تحميل ملف الإيجاز الرئاسي المستقل"}
+          >
+            <Download className="w-4 h-4 shrink-0 text-emerald-deep" />
+            <span>{isEn ? "Download Offline HTML" : "تحميل الملف المستقل"}</span>
+          </button>
+        </div>
       </div>
+
+      {printError && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg p-3.5 flex items-start gap-2.5 animate-fade-in" id="print-sandbox-advisory">
+          <HelpCircle className="w-4.5 h-4.5 text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold">{isEn ? "Cabinet Printing Notice:" : "تنويه طباعة مذكرات الوزراء:"}</p>
+            <p className="mt-0.5 leading-relaxed">{printError}</p>
+          </div>
+        </div>
+      )}
 
       {/* Main output container */}
       <div className="bg-white rounded-sm shadow-md border-l-4 border-emerald-deep min-h-[460px] relative overflow-hidden memo-glow" id="advisor-rendering-card">

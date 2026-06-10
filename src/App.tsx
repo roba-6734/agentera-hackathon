@@ -532,6 +532,8 @@ export default function App() {
                     aiBriefingText={aiBriefingText}
                     isGenerating={isGenerating}
                     briefingSource={briefingSource}
+                    meetingObjective={meetingObjective}
+                    uaeData={uaeData}
                   />
                 )}
 
@@ -577,10 +579,17 @@ export default function App() {
 
       {/* Floating Chatbot Popup Window */}
       {isChatOpen && activeCountry && (
-        <div 
-          className="fixed bottom-28 right-6 z-50 w-96 sm:w-[440px] max-w-[calc(100vw-3rem)] h-[580px] bg-white rounded-lg shadow-2xl border border-[#C5A059] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
-          style={{ direction: language === "ar" ? "rtl" : "ltr" }}
-        >
+        <>
+          {/* Backdrop overlay to catch clicks outside of chat assistant */}
+          <div 
+            className="fixed inset-0 z-40 bg-transparent" 
+            onClick={() => setIsChatOpen(false)}
+            id="chat-outside-dismiss-backdrop"
+          />
+          <div 
+            className="fixed bottom-28 right-6 z-50 w-96 sm:w-[440px] max-w-[calc(100vw-3rem)] h-[580px] bg-white rounded-lg shadow-2xl border border-[#C5A059] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
+            style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+          >
           <AiChatAssistant
             language={language}
             selectedCountryCode={selectedCountryCode}
@@ -593,6 +602,7 @@ export default function App() {
             onClose={() => setIsChatOpen(false)}
           />
         </div>
+      </>
       )}
 
       {/* Portfolio Schedule Calendar Modal */}
