@@ -1275,6 +1275,29 @@ function parseUsdAmount(value: unknown): number | null {
   return parsed;
 }
 
+function scaleUsdAmountByUnit(amount: number, unit: string): number {
+  const normalizedUnit = unit.toLowerCase();
+  if (normalizedUnit.includes("trillion")) return amount * 1_000_000_000_000;
+  if (normalizedUnit.includes("billion")) return amount * 1_000_000_000;
+  if (normalizedUnit.includes("million")) return amount * 1_000_000;
+  return amount;
+}
+
+function formatUsdGdpAmount(gdpUsd: number, year: string | undefined, language: "en" | "ar"): string {
+  const absoluteGdp = Math.abs(gdpUsd);
+  const useTrillion = absoluteGdp >= 1_000_000_000_000;
+  const scaledValue = useTrillion ? gdpUsd / 1_000_000_000_000 : gdpUsd / 1_000_000_000;
+  const formattedValue = scaledValue.toLocaleString("en-US", {
+    maximumFractionDigits: Math.abs(scaledValue) >= 100 ? 1 : 2,
+  });
+
+  if (language === "ar") {
+    return `${formattedValue} ${useTrillion ? "تريليون" : "مليار"} دولار أمريكي${year ? ` (${year})` : ""}`;
+  }
+
+  return `$${formattedValue} ${useTrillion ? "Trillion" : "Billion"} USD${year ? ` (${year})` : ""}`;
+}
+
 function formatUsdGdpFromMacroEconomics(macroEconomics: Record<string, any>, language: "en" | "ar" = "en"): string | undefined {
   const rawGdp = getFlexibleObjectValue(macroEconomics, "gdp")
     ?? getFlexibleObjectValue(macroEconomics, "nominalGdp")
@@ -1287,19 +1310,40 @@ function formatUsdGdpFromMacroEconomics(macroEconomics: Record<string, any>, lan
     return compactJsonValue(rawGdp, 180);
   }
 
-  const absoluteGdp = Math.abs(gdpUsd);
-  const useTrillion = absoluteGdp >= 1_000_000_000_000;
-  const scaledValue = useTrillion ? gdpUsd / 1_000_000_000_000 : gdpUsd / 1_000_000_000;
   const year = normalizeShortText(getFlexibleObjectValue(macroEconomics, "year"), "", 24);
-  const formattedValue = scaledValue.toLocaleString("en-US", {
-    maximumFractionDigits: Math.abs(scaledValue) >= 100 ? 1 : 2,
-  });
+  return formatUsdGdpAmount(gdpUsd, year, language);
+}
 
-  if (language === "ar") {
-    return `${formattedValue} ${useTrillion ? "تريليون" : "مليار"} دولار أمريكي${year ? ` (${year})` : ""}`;
+function formatUsdGdpFromTextSources(sources: unknown[], language: "en" | "ar" = "en"): string | undefined {
+  for (const source of sources) {
+    const text = compactJsonValue(source, 5000);
+    if (!text) continue;
+
+    const normalized = text.replace(/,/g, " ");
+    const patterns = [
+      /\b(?:(20\d{2})\b[^.]{0,40})?(?:gdp|gross domestic product)\b[^.]{0,120}?(\d+(?:\.\d+)?)\s*(trillion|billion|million)\s*(?:usd|us dollars?|u\.s\. dollars?|dollars?)/i,
+      /(\d+(?:\.\d+)?)\s*(trillion|billion|million)\s*(?:usd|us dollars?|u\.s\. dollars?|dollars?)[^.]{0,80}?\b(?:gdp|gross domestic product)\b/i,
+      /\b(?:gdp|gross domestic product)\b[^.]{0,80}?\$?\s*(\d+(?:\.\d+)?)\s*(trillion|billion|million)\b/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = normalized.match(pattern);
+      if (!match) continue;
+
+      const hasLeadingYear = pattern === patterns[0];
+      const amountText = hasLeadingYear ? match[2] : match[1];
+      const unitText = hasLeadingYear ? match[3] : match[2];
+      const amount = Number(amountText);
+      if (!Number.isFinite(amount)) continue;
+
+      const year = hasLeadingYear && match[1]
+        ? match[1]
+        : normalizeShortText(normalized.match(/\b(20\d{2})\b/)?.[1], "", 24);
+      return formatUsdGdpAmount(scaleUsdAmountByUnit(amount, unitText), year || undefined, language);
+    }
   }
 
-  return `$${formattedValue} ${useTrillion ? "Trillion" : "Billion"} USD${year ? ` (${year})` : ""}`;
+  return undefined;
 }
 
 function buildNeonIntelligenceSections(row: NeonCountryIntelligenceRow): Record<string, Record<string, any>> {
@@ -1395,6 +1439,14 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
   ];
   const opportunitySources = [sections.keyOpportunities, profileJson, sections.economicContext];
   const riskSources = [sections.keyRisks, profileJson];
+  const gdpTextSources = [
+    getFlexibleNestedValue(profileJson, ["country_file", "executive_country_summary"]),
+    getFlexibleNestedValue(profileJson, ["rag_chunks"]),
+    profileJson,
+    sections.economicContext,
+    sections.ragSummary,
+    sections.executiveSummary,
+  ];
 
   return pruneUndefinedDeep({
     id: countryId,
@@ -1467,7 +1519,8 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
       ], 700),
     },
     indicators: {
-      gdp: formatUsdGdpFromMacroEconomics(sections.macroEconomics) || pickFirstJsonTextFromSources(macroSources, [
+      gdp: formatUsdGdpFromMacroEconomics(sections.macroEconomics)
+        || pickFirstJsonTextFromSources(macroSources, [
         ["indicators", "gdp"],
         ["gdp"],
         ["nominalGdp"],
@@ -1476,9 +1529,11 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
         ["gdp_usd"],
         ["grossDomesticProduct"],
         ["gross_domestic_product"],
-      ], 180),
+      ], 180)
+        || formatUsdGdpFromTextSources(gdpTextSources),
       gdpAr: formatUsdGdpFromMacroEconomics(sections.macroEconomics, "ar")
-        || pickFirstJsonTextFromSources(macroSources, [["indicators", "gdpAr"], ["gdpAr"], ["gdp_ar"], ["nominalGdpAr"], ["nominal_gdp_ar"]], 180),
+        || pickFirstJsonTextFromSources(macroSources, [["indicators", "gdpAr"], ["gdpAr"], ["gdp_ar"], ["nominalGdpAr"], ["nominal_gdp_ar"]], 180)
+        || formatUsdGdpFromTextSources(gdpTextSources, "ar"),
       growth: pickFirstJsonTextFromSources(macroSources, [
         ["indicators", "growth"],
         ["growth"],
@@ -2703,6 +2758,26 @@ function parseJsonValueFromText(text: string): any {
   try {
     return JSON.parse(cleaned);
   } catch {
+    const objectStart = cleaned.indexOf("{");
+    const objectEnd = cleaned.lastIndexOf("}");
+    if (objectStart >= 0 && objectEnd > objectStart) {
+      try {
+        return JSON.parse(cleaned.slice(objectStart, objectEnd + 1));
+      } catch {
+        // Keep falling through to the raw text response.
+      }
+    }
+
+    const arrayStart = cleaned.indexOf("[");
+    const arrayEnd = cleaned.lastIndexOf("]");
+    if (arrayStart >= 0 && arrayEnd > arrayStart) {
+      try {
+        return JSON.parse(cleaned.slice(arrayStart, arrayEnd + 1));
+      } catch {
+        // Keep falling through to the raw text response.
+      }
+    }
+
     return text;
   }
 }
@@ -2845,53 +2920,178 @@ async function buildAdvisorChatFallbackContext(
   };
 }
 
-function extractStringFromN8NResponse(value: any): string {
-  if (typeof value === "string") return value.trim();
+const N8N_TEXT_FIELD_KEYS = [
+  "answer",
+  "rawText",
+  "raw_text",
+  "finalAnswer",
+  "final_answer",
+  "response",
+  "reply",
+  "text",
+  "output",
+  "content",
+];
+
+const N8N_CONTAINER_FIELD_KEYS = [
+  "aiBriefing",
+  "data",
+  "json",
+  "body",
+  "payload",
+  "result",
+  "results",
+  "item",
+  "items",
+  "message",
+];
+
+const N8N_MAX_RESPONSE_DEPTH = 120;
+
+function parseJsonLikeString(value: string): any | undefined {
+  const parsed = parseJsonValueFromText(value);
+  return typeof parsed === "string" ? undefined : parsed;
+}
+
+function hasOwnRecordKey(value: Record<string, any>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function extractStringFromN8NResponse(value: any, depth = 0): string {
+  if (depth > N8N_MAX_RESPONSE_DEPTH) return "";
+
+  if (typeof value === "string") {
+    const parsed = parseJsonLikeString(value);
+    if (parsed !== undefined) {
+      const extracted = extractStringFromN8NResponse(parsed, depth + 1);
+      if (extracted) return extracted;
+    }
+    return value.trim();
+  }
+
   if (!value || typeof value !== "object") return "";
 
   if (Array.isArray(value)) {
     return value
-      .map((item) => extractStringFromN8NResponse(item))
+      .map((item) => extractStringFromN8NResponse(item, depth + 1))
       .filter(Boolean)
       .join("\n\n")
       .trim();
   }
 
-  const candidates = [
-    value.aiBriefing?.rawText,
-    value.rawText,
-    value.answer,
-    value.response,
-    value.reply,
-    value.text,
-    value.output,
-    value.content,
-    value.message?.content,
-    value.message?.text,
-    value.data?.answer,
-    value.data?.response,
-    value.data?.reply,
-    value.data?.text,
-    value.data?.output,
-    value.json?.answer,
-    value.json?.response,
-    value.json?.reply,
-    value.json?.text,
-    value.json?.output,
-  ];
+  for (const key of N8N_TEXT_FIELD_KEYS) {
+    if (!hasOwnRecordKey(value, key)) continue;
+    const extracted = extractStringFromN8NResponse(value[key], depth + 1);
+    if (extracted) return extracted;
+  }
 
-  for (const candidate of candidates) {
-    const extracted = extractStringFromN8NResponse(candidate);
+  for (const key of N8N_CONTAINER_FIELD_KEYS) {
+    if (!hasOwnRecordKey(value, key)) continue;
+    const extracted = extractStringFromN8NResponse(value[key], depth + 1);
+    if (extracted) return extracted;
+  }
+
+  for (const [key, candidate] of Object.entries(value)) {
+    if (!/(answer|response|reply|output|content|message|text)/i.test(key)) continue;
+    const extracted = extractStringFromN8NResponse(candidate, depth + 1);
     if (extracted) return extracted;
   }
 
   return "";
 }
 
-function extractThreadIdFromN8NResponse(value: any): string | undefined {
+function findN8NAnswerRecord(value: any, depth = 0): Record<string, any> | undefined {
+  if (depth > N8N_MAX_RESPONSE_DEPTH || !value || typeof value !== "object") return undefined;
+
+  if (Array.isArray(value)) {
+    return value.map((item) => findN8NAnswerRecord(item, depth + 1)).find(Boolean);
+  }
+
+  if (extractStringFromN8NResponse(value.answer, depth + 1)) {
+    return value;
+  }
+
+  for (const key of N8N_CONTAINER_FIELD_KEYS) {
+    if (!hasOwnRecordKey(value, key)) continue;
+    const found = findN8NAnswerRecord(value[key], depth + 1);
+    if (found) return found;
+  }
+
+  for (const [key, candidate] of Object.entries(value)) {
+    if (!/(answer|response|result|output|body|payload|json|data)/i.test(key)) continue;
+    const found = findN8NAnswerRecord(candidate, depth + 1);
+    if (found) return found;
+  }
+
+  for (const candidate of Object.values(value)) {
+    const found = findN8NAnswerRecord(candidate, depth + 1);
+    if (found) return found;
+  }
+
+  return undefined;
+}
+
+function normalizeN8NMarkdownList(value: any, maxItems: number, maxLength = 360): string[] {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/\r?\n/).map((line) => line.replace(/^\s*[-*]\s*/, ""))
+      : [];
+
+  return items
+    .map((item) => normalizeShortText(
+      typeof item === "string"
+        ? item
+        : item?.question || item?.note || item?.title || item?.name || compactJsonValue(item, maxLength),
+      "",
+      maxLength
+    ))
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function appendN8NMarkdownList(sections: string[], title: string, items: string[]) {
+  if (!items.length) return;
+  sections.push(`**${title}**\n${items.map((item) => `- ${item}`).join("\n")}`);
+}
+
+function renderN8NAdvisorText(parsedResponse: any): string {
+  const answerRecord = findN8NAnswerRecord(parsedResponse);
+  const answer = answerRecord
+    ? extractStringFromN8NResponse(answerRecord.answer)
+    : extractStringFromN8NResponse(parsedResponse);
+
+  if (!answer) return "";
+
+  const sections = [answer];
+  if (answerRecord) {
+    appendN8NMarkdownList(sections, "Key points", normalizeN8NMarkdownList(answerRecord.key_points || answerRecord.keyPoints, 6));
+    appendN8NMarkdownList(sections, "Source notes", normalizeN8NMarkdownList(answerRecord.source_notes || answerRecord.sourceNotes, 5));
+    appendN8NMarkdownList(sections, "Missing data", normalizeN8NMarkdownList(answerRecord.missing_data || answerRecord.missingData, 4));
+    appendN8NMarkdownList(
+      sections,
+      "Recommended follow-up questions",
+      normalizeN8NMarkdownList(answerRecord.recommended_follow_up_questions || answerRecord.recommendedFollowUpQuestions, 4)
+    );
+
+    const confidence = normalizeShortText(answerRecord.confidence, "", 80);
+    if (confidence) {
+      sections.push(`**Confidence:** ${confidence}`);
+    }
+  }
+
+  return sections.join("\n\n");
+}
+
+function extractThreadIdFromN8NResponse(value: any, depth = 0): string | undefined {
+  if (depth > N8N_MAX_RESPONSE_DEPTH) return undefined;
+  if (typeof value === "string") {
+    const parsed = parseJsonLikeString(value);
+    return parsed === undefined ? undefined : extractThreadIdFromN8NResponse(parsed, depth + 1);
+  }
   if (!value || typeof value !== "object") return undefined;
   if (Array.isArray(value)) {
-    return value.map(extractThreadIdFromN8NResponse).find(Boolean);
+    return value.map((item) => extractThreadIdFromN8NResponse(item, depth + 1)).find(Boolean);
   }
 
   const candidates = [
@@ -2907,18 +3107,43 @@ function extractThreadIdFromN8NResponse(value: any): string | undefined {
     value.json?.thread_id,
   ];
 
-  return candidates
+  const directMatch = candidates
     .map((candidate) => normalizeShortText(candidate, "", 180))
     .find(Boolean);
-}
+  if (directMatch) return directMatch;
 
-function extractStructuredFromN8NResponse(value: any): any | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  if (Array.isArray(value)) {
-    return value.map(extractStructuredFromN8NResponse).find(Boolean);
+  for (const key of N8N_CONTAINER_FIELD_KEYS) {
+    if (!hasOwnRecordKey(value, key)) continue;
+    const found = extractThreadIdFromN8NResponse(value[key], depth + 1);
+    if (found) return found;
   }
 
-  return value.structured || value.data?.structured || value.json?.structured || value.aiBriefing?.structured;
+  return undefined;
+}
+
+function extractStructuredFromN8NResponse(value: any, depth = 0): any | undefined {
+  if (depth > N8N_MAX_RESPONSE_DEPTH) return undefined;
+  if (typeof value === "string") {
+    const parsed = parseJsonLikeString(value);
+    return parsed === undefined ? undefined : extractStructuredFromN8NResponse(parsed, depth + 1);
+  }
+  if (!value || typeof value !== "object") return undefined;
+  if (Array.isArray(value)) {
+    return value.map((item) => extractStructuredFromN8NResponse(item, depth + 1)).find(Boolean);
+  }
+
+  if (value.structured) return value.structured;
+  if (value.aiBriefing?.structured) return value.aiBriefing.structured;
+  if (value.data?.structured) return value.data.structured;
+  if (value.json?.structured) return value.json.structured;
+
+  for (const key of N8N_CONTAINER_FIELD_KEYS) {
+    if (!hasOwnRecordKey(value, key)) continue;
+    const found = extractStructuredFromN8NResponse(value[key], depth + 1);
+    if (found) return found;
+  }
+
+  return undefined;
 }
 
 async function callN8NAdvisorWorkflow(payload: any): Promise<N8NAdvisorWorkflowResult | null> {
@@ -2950,7 +3175,7 @@ async function callN8NAdvisorWorkflow(payload: any): Promise<N8NAdvisorWorkflowR
     }
 
     const parsedResponse = parseJsonValueFromText(responseText);
-    const rawText = extractStringFromN8NResponse(parsedResponse);
+    const rawText = renderN8NAdvisorText(parsedResponse);
     if (!rawText) {
       throw new Error("n8n workflow response did not include a supported answer field.");
     }
@@ -2958,7 +3183,7 @@ async function callN8NAdvisorWorkflow(payload: any): Promise<N8NAdvisorWorkflowR
     return {
       rawText,
       threadId: extractThreadIdFromN8NResponse(parsedResponse),
-      structured: extractStructuredFromN8NResponse(parsedResponse),
+      structured: extractStructuredFromN8NResponse(parsedResponse) || findN8NAnswerRecord(parsedResponse),
     };
   } finally {
     clearTimeout(timeout);

@@ -22,8 +22,18 @@ interface ComparisonEngineProps {
 }
 
 // Robust parsing utilities to convert string indices to reliable numbers for calculation
-function extractGdpValue(gdpStr: string): number {
-  if (!gdpStr) return 100;
+function isPlaceholderGdpValue(gdpStr: string): boolean {
+  const normalized = (gdpStr || "").toLowerCase();
+  return (
+    !normalized.trim() ||
+    normalized.includes("dynamic evaluation") ||
+    normalized.includes("under review") ||
+    normalized.includes("قيد التقييم")
+  );
+}
+
+function extractGdpValue(gdpStr: string): number | null {
+  if (!gdpStr || isPlaceholderGdpValue(gdpStr)) return null;
   // Clean comma, brackets and currency symbols
   const cleaned = gdpStr.replace(/,/g, "").replace(/\([^)]*\)/g, "");
   // Look for decimals or integers
@@ -36,7 +46,21 @@ function extractGdpValue(gdpStr: string): number {
     }
     return numeric;
   }
-  return 100;
+  return null;
+}
+
+function formatParsedGdpValue(gdpValue: number | null, fallbackLabel: string, isEn: boolean): string {
+  if (!isPlaceholderGdpValue(fallbackLabel)) {
+    return fallbackLabel;
+  }
+
+  if (gdpValue === null) {
+    return isEn ? "GDP data unavailable" : "بيانات الناتج المحلي غير متوفرة";
+  }
+
+  return `$${gdpValue.toLocaleString("en-US", {
+    maximumFractionDigits: gdpValue >= 100 ? 1 : 2,
+  })} Billion USD`;
 }
 
 function extractGrowthValue(growthStr: string): number {
@@ -160,7 +184,11 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
   // Parsing values dynamically for high fidelity chart scaling
   const uaeGdp = extractGdpValue(uaeData.gdp);
   const targetGdp = extractGdpValue(country.indicators.gdp);
-  const maxGdpValue = Math.max(uaeGdp, targetGdp, 100);
+  const maxGdpValue = Math.max(uaeGdp || 0, targetGdp || 0, 100);
+  const uaeGdpBarPercent = uaeGdp === null ? 0 : Math.max(12, (uaeGdp / maxGdpValue) * 100);
+  const targetGdpBarPercent = targetGdp === null ? 0 : Math.max(12, (targetGdp / maxGdpValue) * 100);
+  const uaeGdpLabel = formatParsedGdpValue(uaeGdp, isEn ? uaeData.gdp : uaeData.gdpAr, isEn);
+  const targetGdpLabel = formatParsedGdpValue(targetGdp, isEn ? country.indicators.gdp : country.indicators.gdpAr, isEn);
 
   const uaeGrowth = extractGrowthValue(uaeData.growth);
   const targetGrowth = extractGrowthValue(country.indicators.growth);
@@ -334,15 +362,15 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
                 <div>
                   <div className="flex justify-between text-xs mb-1.5 font-semibold text-slate-700">
                     <span className="flex items-center gap-1">🇦🇪 {isEn ? "UAE" : "الإمارات"}</span>
-                    <span className="font-mono text-emerald-deep font-extrabold">{uaeData.gdp}</span>
+                    <span className="font-mono text-emerald-deep font-extrabold">{uaeGdpLabel}</span>
                   </div>
                   <div className="w-full bg-gray-100 h-6 rounded-md overflow-hidden p-0.5 border border-gray-200">
                     <div 
                       className="bg-gradient-to-r from-emerald-deep to-emerald-light h-full rounded transition-all duration-1000 ease-out flex items-center justify-end px-2"
-                      style={{ width: `${Math.max(12, (uaeGdp / maxGdpValue) * 100)}%` }}
+                      style={{ width: `${uaeGdpBarPercent}%` }}
                     >
                       <span className="text-[10px] font-mono font-bold text-white text-[9px]">
-                        {Math.round((uaeGdp / maxGdpValue) * 100)}%
+                        {uaeGdp === null ? "N/A" : `${Math.round((uaeGdp / maxGdpValue) * 100)}%`}
                       </span>
                     </div>
                   </div>
@@ -352,15 +380,15 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
                 <div>
                   <div className="flex justify-between text-xs mb-1.5 font-semibold text-slate-700">
                     <span className="flex items-center gap-1">{country.flag} {isEn ? country.nameEn : country.nameAr}</span>
-                    <span className="font-mono text-slate-800 font-extrabold">{country.indicators.gdp}</span>
+                    <span className="font-mono text-slate-800 font-extrabold">{targetGdpLabel}</span>
                   </div>
                   <div className="w-full bg-gray-100 h-6 rounded-md overflow-hidden p-0.5 border border-gray-200">
                     <div 
                       className="bg-gradient-to-r from-slate-vip to-slate-800 h-full rounded transition-all duration-1000 ease-out flex items-center justify-end px-2"
-                      style={{ width: `${Math.max(12, (targetGdp / maxGdpValue) * 100)}%` }}
+                      style={{ width: `${targetGdpBarPercent}%` }}
                     >
                       <span className="text-[10px] font-mono font-bold text-[#E5C179] text-[9px]">
-                        {Math.round((targetGdp / maxGdpValue) * 100)}%
+                        {targetGdp === null ? "N/A" : `${Math.round((targetGdp / maxGdpValue) * 100)}%`}
                       </span>
                     </div>
                   </div>
@@ -370,7 +398,11 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
 
             <p className="text-[11px] text-gray-500 mt-2 border-t border-gray-100 pt-3 flex items-center gap-1 bg-gold-bg/10 p-2 rounded">
               <span className="font-bold text-[#C5A059]">ℹ️ Ratio:</span> 
-              {uaeGdp > targetGdp 
+              {uaeGdp === null || targetGdp === null
+                ? (isEn
+                  ? "A verified peer GDP figure is not available in the current country profile."
+                  : "لا تتوفر قيمة موثقة للناتج المحلي في ملف الدولة الحالي.")
+                : uaeGdp > targetGdp 
                 ? (isEn 
                   ? `UAE GDP is ${((uaeGdp / (targetGdp || 1))).toFixed(1)}x larger than the peer national index.`
                   : `الناتج المحلي لدولة الإمارات أكبر بمقدار ${((uaeGdp / (targetGdp || 1))).toFixed(1)} أضعاف الناتج النظير.`)
