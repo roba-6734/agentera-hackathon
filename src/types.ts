@@ -79,7 +79,7 @@ export interface UaeIndicator {
   cooperationAgreementAr: string;
 }
 
-export type activeTabCode = "passport" | "strategic" | "briefing" | "compare" | "chat" | "predictive" | "database";
+export type activeTabCode = "passport" | "strategic" | "briefing" | "compare" | "chat" | "predictive" | "database" | "debrief";
 
 export type AppRole = "developer" | "staff" | "executive";
 
@@ -89,6 +89,56 @@ export interface AppSession {
   email: string;
   authMode: "signin" | "signup";
   issuedAt: string;
+}
+
+export type MeetingActionPriority = "Critical" | "High" | "Medium" | "Low";
+export type MeetingActionStatus = "Pending" | "In Progress" | "Completed" | "Deferred";
+
+export interface MeetingMetadata {
+  title: string;
+  country: string;
+  countryId: string;
+  meetingDate: string;
+  sector: string;
+  meetingType: string;
+  attendees: string;
+  confidentialityLevel: string;
+}
+
+export interface MeetingActionItem {
+  id?: string;
+  description: string;
+  suggestedOwner: string;
+  priority: MeetingActionPriority;
+  deadline?: string;
+  status: MeetingActionStatus;
+}
+
+export interface MeetingDebriefAnalysis {
+  executiveSummary: string;
+  keyDiscussionPoints: string[];
+  decisionsOrAgreements: string[];
+  openQuestions: string[];
+  risksAndConcerns: string[];
+  opportunitiesForUaeMoei: string[];
+  actionItems: MeetingActionItem[];
+  relationshipImpactAnalysis: string;
+  strategicTags: string[];
+}
+
+export interface MeetingRecord {
+  id: string;
+  metadata: MeetingMetadata;
+  transcriptText: string;
+  uploadedFileName?: string;
+  debrief: MeetingDebriefAnalysis;
+  createdBy: {
+    displayName: string;
+    email: string;
+    role: AppRole;
+  };
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface UserJourneyStep {

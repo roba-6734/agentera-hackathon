@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ChevronDown, Newspaper, RefreshCw, RadioTower, Search } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, Check, ChevronDown, Copy, Mail, Newspaper, RefreshCw, RadioTower, Search } from "lucide-react";
 import {
   fetchStrategicSignals,
   STRATEGIC_SIGNAL_CATEGORIES,
@@ -55,6 +55,8 @@ export default function StrategicSignalsMonitor({ language }: StrategicSignalsMo
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isFiltersOpen, setIsFiltersOpen] = useState(true);
+  const [shareStatusMessage, setShareStatusMessage] = useState<string | null>(null);
+  const shareStatusTimeoutRef = useRef<number | null>(null);
 
   const categoryLabelById = useMemo(
     () =>
@@ -101,6 +103,14 @@ export default function StrategicSignalsMonitor({ language }: StrategicSignalsMo
     };
   }, [selectedFilters, isEn]);
 
+  useEffect(() => {
+    return () => {
+      if (shareStatusTimeoutRef.current) {
+        window.clearTimeout(shareStatusTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const toggleFilter = (category: StrategicSignalCategory) => {
     setSelectedFilters((currentFilters) =>
       currentFilters.includes(category)
@@ -133,6 +143,95 @@ export default function StrategicSignalsMonitor({ language }: StrategicSignalsMo
     }
   };
 
+  const showShareStatus = (message: string) => {
+    setShareStatusMessage(message);
+    if (shareStatusTimeoutRef.current) {
+      window.clearTimeout(shareStatusTimeoutRef.current);
+    }
+    shareStatusTimeoutRef.current = window.setTimeout(() => {
+      setShareStatusMessage(null);
+      shareStatusTimeoutRef.current = null;
+    }, 2600);
+  };
+
+  const formatSignalForShare = (signal: StrategicSignal, index?: number) => {
+    const prefix = typeof index === "number" ? `${index + 1}. ` : "";
+    const categoryLabel = categoryLabelById[signal.category];
+    const publishedLabel = formatSignalDate(signal.publishedAt, language);
+
+    if (isEn) {
+      return [
+        `${prefix}${signal.title}`,
+        `Category: ${categoryLabel}`,
+        `Source: ${signal.sourceName} | ${publishedLabel}`,
+        `Summary: ${signal.summary}`,
+        `Why it matters: ${signal.relevanceNote}`,
+      ].join("\n");
+    }
+
+    return [
+      `${prefix}${signal.title}`,
+      `الفئة: ${categoryLabel}`,
+      `المصدر: ${signal.sourceName} | ${publishedLabel}`,
+      `الملخص: ${signal.summary}`,
+      `الأهمية: ${signal.relevanceNote}`,
+    ].join("\n");
+  };
+
+  const openEmailDraft = (subject: string, body: string) => {
+    const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = mailtoUrl;
+    showShareStatus(isEn ? "Email draft opened." : "تم فتح مسودة البريد.");
+  };
+
+  const copyShareText = async (text: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      showShareStatus(isEn ? "Digest copied to clipboard." : "تم نسخ الموجز.");
+    } catch (error) {
+      console.error("Failed to copy strategic signals digest.", error);
+      showShareStatus(isEn ? "Copy failed. Please try again." : "تعذر النسخ. يرجى المحاولة مرة أخرى.");
+    }
+  };
+
+  const handleEmailSignal = (signal: StrategicSignal) => {
+    openEmailDraft(
+      isEn ? `Strategic signal: ${signal.title}` : `مؤشر استراتيجي: ${signal.title}`,
+      `${formatSignalForShare(signal)}\n\n${isEn ? "Shared from Majlis AI Strategic Signals Monitor." : "تمت المشاركة من مراقب المؤشرات الاستراتيجية في مجلس AI."}`
+    );
+  };
+
+  const buildDigestText = () => [
+    isEn ? "Strategic Signals Digest" : "موجز المؤشرات الاستراتيجية",
+    new Intl.DateTimeFormat(isEn ? "en-US" : "ar-AE", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date()),
+    "",
+    ...signals.map((signal, index) => formatSignalForShare(signal, index)),
+    "",
+    isEn ? "Shared from Majlis AI Strategic Signals Monitor." : "تمت المشاركة من مراقب المؤشرات الاستراتيجية في مجلس AI.",
+  ].join("\n\n");
+
+  const handleEmailDigest = () => {
+    openEmailDraft(
+      isEn ? "Strategic Signals Digest" : "موجز المؤشرات الاستراتيجية",
+      buildDigestText()
+    );
+  };
+
   return (
     <section
       className="bg-white rounded-sm shadow-md border border-gold-border overflow-hidden"
@@ -152,15 +251,28 @@ export default function StrategicSignalsMonitor({ language }: StrategicSignalsMo
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={refreshSignals}
-          disabled={isLoading}
-          className="h-8 w-8 rounded-sm border border-gold-deep/30 bg-white/5 text-gold-deep hover:bg-gold-deep hover:text-slate-vip disabled:opacity-50 transition-colors flex items-center justify-center cursor-pointer"
-          title={isEn ? "Refresh signals" : "تحديث المؤشرات"}
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={handleEmailDigest}
+            disabled={isLoading || signals.length === 0}
+            className="h-8 w-8 rounded-sm border border-gold-deep/30 bg-white/5 text-gold-deep hover:bg-gold-deep hover:text-slate-vip disabled:opacity-40 disabled:hover:bg-white/5 disabled:hover:text-gold-deep transition-colors flex items-center justify-center cursor-pointer disabled:cursor-not-allowed"
+            title={isEn ? "Email digest" : "إرسال الموجز بالبريد"}
+            aria-label={isEn ? "Email strategic signals digest" : "إرسال موجز المؤشرات الاستراتيجية بالبريد"}
+          >
+            <Mail className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={refreshSignals}
+            disabled={isLoading}
+            className="h-8 w-8 rounded-sm border border-gold-deep/30 bg-white/5 text-gold-deep hover:bg-gold-deep hover:text-slate-vip disabled:opacity-50 transition-colors flex items-center justify-center cursor-pointer"
+            title={isEn ? "Refresh signals" : "تحديث المؤشرات"}
+            aria-label={isEn ? "Refresh strategic signals" : "تحديث المؤشرات الاستراتيجية"}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+          </button>
+        </div>
       </div>
 
       <div className="p-3 space-y-3">
@@ -205,14 +317,33 @@ export default function StrategicSignalsMonitor({ language }: StrategicSignalsMo
               ? `${selectedFilters.length} filters active`
               : `${selectedFilters.length} مرشحات نشطة`}
           </span>
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="text-emerald-deep hover:text-gold-deep font-black uppercase tracking-widest cursor-pointer"
-          >
-            {isEn ? "Reset" : "إعادة ضبط"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => copyShareText(buildDigestText())}
+              disabled={signals.length === 0}
+              className="text-emerald-deep hover:text-gold-deep disabled:text-gray-300 font-black uppercase tracking-widest cursor-pointer disabled:cursor-not-allowed inline-flex items-center gap-1"
+              title={isEn ? "Copy digest" : "نسخ الموجز"}
+            >
+              <Copy className="w-3 h-3" />
+              <span>{isEn ? "Copy" : "نسخ"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="text-emerald-deep hover:text-gold-deep font-black uppercase tracking-widest cursor-pointer"
+            >
+              {isEn ? "Reset" : "إعادة ضبط"}
+            </button>
+          </div>
         </div>
+
+        {shareStatusMessage && (
+          <div className="bg-emerald-deep/10 border border-emerald-deep/15 text-emerald-deep rounded-sm px-3 py-2 flex items-center gap-2">
+            <Check className="w-3.5 h-3.5 shrink-0" />
+            <p className="text-[10px] leading-4 font-semibold">{shareStatusMessage}</p>
+          </div>
+        )}
 
         {errorMessage && (
           <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-sm p-3 flex items-start gap-2">
@@ -253,9 +384,20 @@ export default function StrategicSignalsMonitor({ language }: StrategicSignalsMo
                   <span className="text-[9px] uppercase tracking-widest font-mono font-black text-emerald-deep bg-emerald-deep/10 border border-emerald-deep/10 px-1.5 py-0.5 rounded-sm">
                     {categoryLabelById[signal.category]}
                   </span>
-                  <span className="text-[9px] text-gray-400 font-mono shrink-0">
-                    {formatSignalDate(signal.publishedAt, language)}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[9px] text-gray-400 font-mono">
+                      {formatSignalDate(signal.publishedAt, language)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleEmailSignal(signal)}
+                      className="h-6 w-6 rounded-sm border border-gold-border bg-white text-gold-deep hover:bg-gold-deep hover:text-slate-vip transition-colors flex items-center justify-center cursor-pointer"
+                      title={isEn ? "Email this signal" : "إرسال هذا المؤشر بالبريد"}
+                      aria-label={isEn ? `Email signal: ${signal.title}` : `إرسال المؤشر بالبريد: ${signal.title}`}
+                    >
+                      <Mail className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
 
                 <h4 className="text-xs font-serif font-bold text-slate-vip leading-5 mt-2">

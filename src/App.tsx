@@ -10,10 +10,11 @@ import BilateralCalendar from "./components/BilateralCalendar";
 import DeveloperDashboard from "./components/DeveloperDashboard";
 import AuthPortal from "./components/AuthPortal";
 import StrategicSignalsMonitor from "./components/StrategicSignalsMonitor";
+import StrategicMeetingDebrief from "./components/StrategicMeetingDebrief";
 import { db, OperationType, handleFirestoreError } from "./firebase";
 import { collection, getDocs } from "firebase/firestore";
 import { AppRole, AppSession, PrebuiltCountry, UaeIndicator, activeTabCode } from "./types";
-import { ShieldAlert, Globe, Layers, Award, Landmark, Eye, ArrowRight, HelpCircle, FileText, CheckCircle2, ChevronRight, Activity, Cpu, ChevronDown, Crown, Target, Sparkles, UsersRound } from "lucide-react";
+import { ShieldAlert, Globe, Layers, Award, Landmark, Eye, ArrowRight, HelpCircle, FileText, CheckCircle2, ChevronRight, Activity, Cpu, ChevronDown, Crown, Target, Sparkles, UsersRound, BrainCircuit } from "lucide-react";
 
 const SESSION_STORAGE_KEY = "majlis-ai-session";
 
@@ -836,6 +837,26 @@ export default function App() {
                   <span className="text-[9px] bg-red-600 text-white font-mono px-1.5 py-0.5 rounded font-extrabold">MEMO</span>
                 </button>
 
+                {session.role === "staff" && (
+                  <button
+                    onClick={() => {
+                      setActiveTab("debrief");
+                      setCurrentStep(7);
+                    }}
+                    className={`w-full text-left font-serif px-4 py-3 rounded-sm text-xs sm:text-sm font-bold transition-all flex items-center justify-between cursor-pointer ${
+                      activeTab === "debrief"
+                        ? "bg-gold-bg text-emerald-deep font-extrabold border-l-4 border-emerald-deep"
+                        : "hover:bg-gray-50 text-gray-700"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <BrainCircuit className="w-4 h-4 text-gold-deep" />
+                      <span>{isEn ? "Strategic Meeting Debrief" : "تحليل ما بعد الاجتماع"}</span>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-gold-deep" style={{ transform: language === "ar" ? "rotate(180deg)" : "none" }} />
+                  </button>
+                )}
+
                 {/* Tab 4: Comparison Engine */}
                 <button
                   onClick={() => {
@@ -903,7 +924,14 @@ export default function App() {
 
           {/* MAIN COLUMN PANELS: DISPLAY CHOSEN CATEGORY WORKSPACE COMPONENTS */}
           <div className="lg:col-span-3 space-y-6" id="right-workspace-panel" style={{ direction: language === "ar" ? "rtl" : "ltr" }}>
-            {activeCountry ? (
+            {activeTab === "debrief" && session.role === "staff" ? (
+              <StrategicMeetingDebrief
+                language={language}
+                countryOptions={countryOptions}
+                defaultCountryCode={selectedCountryCode}
+                session={session}
+              />
+            ) : activeCountry ? (
               <>
                 {/* 1. Country Intelligence Background */}
                 {activeTab === "passport" && (

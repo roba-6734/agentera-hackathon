@@ -5,13 +5,22 @@ import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import OpenAI from "openai";
 import { createHash } from "crypto";
+import type {
+  AppRole,
+  MeetingActionItem,
+  MeetingActionPriority,
+  MeetingActionStatus,
+  MeetingDebriefAnalysis,
+  MeetingMetadata,
+  MeetingRecord,
+} from "./src/types";
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
-app.use(express.json());
+app.use(express.json({ limit: "4mb" }));
 
 let aiClient: OpenAI | null = null;
 
@@ -21,8 +30,23 @@ type TranslationMetadata = {
   targetLanguage: string;
   translatedFields: number;
 };
+type MeetingMemoryActionRecord = MeetingActionItem & {
+  id: string;
+  meetingRecordId: string;
+  countryId: string;
+  meetingTitle: string;
+  meetingDate: string;
+  createdAt: string;
+  updatedAt: string;
+};
+type MeetingMemoryDatabase = {
+  meeting_records: MeetingRecord[];
+  meeting_action_items: MeetingMemoryActionRecord[];
+};
 
 const DEFAULT_OPENAI_MODELS = ["gpt-5.5", "gpt-5.4-mini", "gpt-4.1-mini"];
+const MEETING_MEMORY_DIR = process.env.MEETING_MEMORY_DIR || path.join(process.cwd(), "data");
+const MEETING_MEMORY_PATH = process.env.MEETING_MEMORY_PATH || path.join(MEETING_MEMORY_DIR, "meeting-memory.json");
 const openAIResponseCache = new Map<string, { result: OpenAIGenerationResult; expiresAt: number }>();
 const pendingOpenAIRequests = new Map<string, Promise<OpenAIGenerationResult>>();
 const deeplTranslationCache = new Map<string, { text: string; expiresAt: number }>();
@@ -738,6 +762,423 @@ function normalizeCountryId(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+function createEmptyMeetingMemoryDatabase(): MeetingMemoryDatabase {
+  return {
+    meeting_records: [],
+    meeting_action_items: [],
+  };
+}
+
+function normalizeShortText(value: unknown, fallback = "", maxLength = 4000): string {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!normalized) return fallback;
+  return normalized.length > maxLength ? normalized.slice(0, maxLength).trim() : normalized;
+}
+
+function normalizeStringArray(value: unknown, fallback: string[] = [], maxItems = 10): string[] {
+  const rawItems = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/\n|;/)
+      : [];
+
+  const items = rawItems
+    .map((item) => normalizeShortText(item, "", 1000))
+    .filter(Boolean)
+    .slice(0, maxItems);
+
+  return items.length > 0 ? items : fallback;
+}
+
+function normalizeActionPriority(value: unknown): MeetingActionPriority {
+  if (value === "Critical" || value === "High" || value === "Medium" || value === "Low") {
+    return value;
+  }
+  return "Medium";
+}
+
+function normalizeActionStatus(value: unknown): MeetingActionStatus {
+  if (value === "Pending" || value === "In Progress" || value === "Completed" || value === "Deferred") {
+    return value;
+  }
+  return "Pending";
+}
+
+function normalizeMeetingActionItems(value: unknown): MeetingActionItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      const source = item && typeof item === "object" ? item as any : {};
+      return {
+        id: normalizeShortText(source.id, "", 120) || undefined,
+        description: normalizeShortText(source.description || source.action || source.task, "", 700),
+        suggestedOwner: normalizeShortText(source.suggestedOwner || source.owner, "MOEI Strategy Team", 160),
+        priority: normalizeActionPriority(source.priority),
+        deadline: normalizeShortText(source.deadline, "", 80) || undefined,
+        status: normalizeActionStatus(source.status),
+      };
+    })
+    .filter((item) => item.description)
+    .slice(0, 12);
+}
+
+function normalizeMeetingMetadata(value: unknown): MeetingMetadata {
+  const source = value && typeof value === "object" ? value as any : {};
+  const country = normalizeShortText(source.country, "Brazil", 128);
+  const countryId = normalizeCountryId(source.countryId || country) || "brazil";
+
+  return {
+    title: normalizeShortText(source.title, "Untitled strategic meeting", 200),
+    country,
+    countryId,
+    meetingDate: normalizeShortText(source.meetingDate || source.date, new Date().toISOString().slice(0, 10), 32),
+    sector: normalizeShortText(source.sector, "Energy and Infrastructure", 120),
+    meetingType: normalizeShortText(source.meetingType, "Bilateral meeting", 120),
+    attendees: normalizeShortText(source.attendees, "Not specified", 1500),
+    confidentialityLevel: normalizeShortText(source.confidentialityLevel, "Internal", 80),
+  };
+}
+
+function createMeetingRecordId(metadata: MeetingMetadata): string {
+  const hash = createHash("sha1")
+    .update(JSON.stringify({ title: metadata.title, countryId: metadata.countryId, date: metadata.meetingDate, now: Date.now() }))
+    .digest("hex")
+    .slice(0, 10);
+
+  return `${metadata.countryId || "meeting"}-${metadata.meetingDate || "undated"}-${hash}`
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .slice(0, 128);
+}
+
+function createMeetingActionId(meetingRecordId: string, index: number): string {
+  return `${meetingRecordId}-action-${index + 1}`.slice(0, 128);
+}
+
+function extractTranscriptSentences(transcriptText: string, maxItems = 6): string[] {
+  const sentences = transcriptText
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 35)
+    .slice(0, maxItems);
+
+  if (sentences.length > 0) {
+    return sentences.map((sentence) => sentence.length > 240 ? `${sentence.slice(0, 237)}...` : sentence);
+  }
+
+  const fallback = transcriptText.trim();
+  return fallback ? [fallback.slice(0, 240)] : [];
+}
+
+function inferTranscriptTags(metadata: MeetingMetadata, transcriptText: string): string[] {
+  const lower = `${metadata.title} ${metadata.sector} ${metadata.meetingType} ${transcriptText}`.toLowerCase();
+  const tagMap: Array<[string, string]> = [
+    ["hydrogen", "hydrogen"],
+    ["renewable", "renewables"],
+    ["solar", "solar"],
+    ["wind", "wind"],
+    ["port", "ports"],
+    ["shipping", "shipping"],
+    ["corridor", "corridors"],
+    ["infrastructure", "infrastructure"],
+    ["investment", "investment"],
+    ["finance", "finance"],
+    ["trade", "trade"],
+    ["climate", "climate"],
+    ["cop", "climate-diplomacy"],
+    ["supply", "supply-chain"],
+    ["regulation", "regulatory-alignment"],
+    ["standard", "standards"],
+    ["digital", "digital-transformation"],
+  ];
+
+  const inferred = tagMap
+    .filter(([needle]) => lower.includes(needle))
+    .map(([, tag]) => tag);
+
+  return Array.from(new Set([metadata.countryId, metadata.sector.toLowerCase().replace(/[^a-z0-9]+/g, "-"), ...inferred]))
+    .filter(Boolean)
+    .slice(0, 10);
+}
+
+function buildMockMeetingDebrief(metadata: MeetingMetadata, transcriptText: string): MeetingDebriefAnalysis {
+  const highlights = extractTranscriptSentences(transcriptText, 5);
+  const tags = inferTranscriptTags(metadata, transcriptText);
+  const firstHighlight = highlights[0] || "The discussion established a basis for follow-up between the UAE/MOEI and the counterpart delegation.";
+  const lower = transcriptText.toLowerCase();
+  const hasRiskSignal = /\brisk|delay|constraint|concern|challenge|barrier|regulat|funding|timeline\b/.test(lower);
+  const hasAgreementSignal = /\bagree|agreement|commit|approve|endorse|align|support|moU|memorandum\b/i.test(transcriptText);
+
+  return {
+    executiveSummary: `${metadata.title} with ${metadata.country} focused on ${metadata.sector}. ${firstHighlight} The meeting should be retained as institutional memory for future country briefings and follow-up tracking.`,
+    keyDiscussionPoints: highlights.length > 0
+      ? highlights
+      : [
+          `Reviewed ${metadata.sector} cooperation priorities with ${metadata.country}.`,
+          "Discussed areas where UAE execution capacity can support bilateral delivery.",
+        ],
+    decisionsOrAgreements: hasAgreementSignal
+      ? [
+          "Counterpart alignment or commitment was indicated in the transcript and should be validated in the official meeting note.",
+          "Maintain the bilateral channel for technical follow-up and next-step confirmation.",
+        ]
+      : [
+          "No explicit final agreement was detected. Staff should confirm whether any commitments were made outside the transcript.",
+        ],
+    openQuestions: [
+      "Which counterpart entity owns the next formal response?",
+      "What timeline should be used for technical-level follow-up?",
+      "Are legal, procurement, or protocol approvals required before the next engagement?",
+    ],
+    risksAndConcerns: hasRiskSignal
+      ? [
+          "Transcript language indicates possible delivery, regulatory, funding, or timeline constraints.",
+          "Follow-up should distinguish diplomatic alignment from executable commitments.",
+        ]
+      : [
+          "No major explicit risk was detected, but staff should validate regulatory, budget, and timeline assumptions.",
+        ],
+    opportunitiesForUaeMoei: [
+      `Position UAE/MOEI as a delivery-focused partner for ${metadata.country} in ${metadata.sector}.`,
+      "Use the meeting record to shape next briefing recommendations, speaking points, and pending action tracking.",
+    ],
+    actionItems: [
+      {
+        description: "Prepare an official follow-up note summarizing commitments, open questions, and proposed next steps.",
+        suggestedOwner: "MOEI International Cooperation Team",
+        priority: hasAgreementSignal ? "High" : "Medium",
+        deadline: "",
+        status: "Pending",
+      },
+      {
+        description: `Add the debrief to ${metadata.country} country intelligence memory for future leadership briefings.`,
+        suggestedOwner: "Staff Intelligence Desk",
+        priority: "Medium",
+        deadline: "",
+        status: "Pending",
+      },
+    ],
+    relationshipImpactAnalysis: `The meeting appears to reinforce the UAE's relationship with ${metadata.country} through ${metadata.sector} cooperation. Its main institutional value is preserving counterpart priorities, unresolved questions, and follow-up obligations for future engagements.`,
+    strategicTags: tags.length > 0 ? tags : [metadata.countryId, "meeting-memory", "follow-up"],
+  };
+}
+
+function parseJsonObjectFromText(text: string): any | null {
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start === -1 || end === -1 || end <= start) return null;
+
+    try {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    } catch {
+      return null;
+    }
+  }
+}
+
+function coerceMeetingDebriefAnalysis(value: unknown, metadata: MeetingMetadata, transcriptText: string): MeetingDebriefAnalysis {
+  const fallback = buildMockMeetingDebrief(metadata, transcriptText);
+  const source = value && typeof value === "object" ? value as any : {};
+  const actionItems = normalizeMeetingActionItems(source.actionItems || source.action_items);
+
+  return {
+    executiveSummary: normalizeShortText(source.executiveSummary || source.executive_summary, fallback.executiveSummary, 2500),
+    keyDiscussionPoints: normalizeStringArray(source.keyDiscussionPoints || source.key_discussion_points, fallback.keyDiscussionPoints, 12),
+    decisionsOrAgreements: normalizeStringArray(source.decisionsOrAgreements || source.decisions_or_agreements || source.decisions, fallback.decisionsOrAgreements, 12),
+    openQuestions: normalizeStringArray(source.openQuestions || source.open_questions, fallback.openQuestions, 12),
+    risksAndConcerns: normalizeStringArray(source.risksAndConcerns || source.risks_and_concerns || source.risks, fallback.risksAndConcerns, 12),
+    opportunitiesForUaeMoei: normalizeStringArray(source.opportunitiesForUaeMoei || source.opportunities_for_uae_moei || source.opportunities, fallback.opportunitiesForUaeMoei, 12),
+    actionItems: actionItems.length > 0 ? actionItems : fallback.actionItems,
+    relationshipImpactAnalysis: normalizeShortText(source.relationshipImpactAnalysis || source.relationship_impact_analysis, fallback.relationshipImpactAnalysis, 2500),
+    strategicTags: normalizeStringArray(source.strategicTags || source.strategic_tags || source.tags, fallback.strategicTags, 14),
+  };
+}
+
+async function readMeetingMemoryDatabase(): Promise<MeetingMemoryDatabase> {
+  try {
+    const raw = await fs.promises.readFile(MEETING_MEMORY_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      meeting_records: Array.isArray(parsed.meeting_records) ? parsed.meeting_records : [],
+      meeting_action_items: Array.isArray(parsed.meeting_action_items) ? parsed.meeting_action_items : [],
+    };
+  } catch (error: any) {
+    if (error?.code === "ENOENT") {
+      return createEmptyMeetingMemoryDatabase();
+    }
+    console.warn("[Meeting Memory] Could not read local meeting memory database. Using empty fallback.", error);
+    return createEmptyMeetingMemoryDatabase();
+  }
+}
+
+async function writeMeetingMemoryDatabase(database: MeetingMemoryDatabase): Promise<void> {
+  await fs.promises.mkdir(MEETING_MEMORY_DIR, { recursive: true });
+  const temporaryPath = `${MEETING_MEMORY_PATH}.tmp`;
+  await fs.promises.writeFile(temporaryPath, `${JSON.stringify(database, null, 2)}\n`, "utf8");
+  await fs.promises.rename(temporaryPath, MEETING_MEMORY_PATH);
+}
+
+async function saveMeetingRecord(recordInput: Partial<MeetingRecord>): Promise<MeetingRecord> {
+  const database = await readMeetingMemoryDatabase();
+  const now = new Date().toISOString();
+  const metadata = normalizeMeetingMetadata(recordInput.metadata);
+  const transcriptText = normalizeShortText(recordInput.transcriptText, "", 200000);
+  const debrief = coerceMeetingDebriefAnalysis(recordInput.debrief, metadata, transcriptText);
+  const id = normalizeShortText(recordInput.id, "", 128) || createMeetingRecordId(metadata);
+  const existingRecord = database.meeting_records.find((record) => record.id === id);
+  const createdBy = recordInput.createdBy && typeof recordInput.createdBy === "object"
+    ? recordInput.createdBy
+    : { displayName: "Staff User", email: "", role: "staff" as AppRole };
+
+  const record: MeetingRecord = {
+    id,
+    metadata,
+    transcriptText,
+    uploadedFileName: normalizeShortText(recordInput.uploadedFileName, "", 240) || undefined,
+    debrief,
+    createdBy: {
+      displayName: normalizeShortText(createdBy.displayName, "Staff User", 160),
+      email: normalizeShortText(createdBy.email, "", 240),
+      role: createdBy.role === "staff" || createdBy.role === "developer" || createdBy.role === "executive" ? createdBy.role : "staff",
+    },
+    createdAt: existingRecord?.createdAt || normalizeShortText(recordInput.createdAt, now, 80),
+    updatedAt: now,
+  };
+
+  const nextRecords = database.meeting_records.filter((currentRecord) => currentRecord.id !== id);
+  nextRecords.push(record);
+
+  const nextActionItems = database.meeting_action_items.filter((actionItem) => actionItem.meetingRecordId !== id);
+  debrief.actionItems.forEach((actionItem, index) => {
+    nextActionItems.push({
+      ...actionItem,
+      id: normalizeShortText(actionItem.id, "", 128) || createMeetingActionId(id, index),
+      meetingRecordId: id,
+      countryId: metadata.countryId,
+      meetingTitle: metadata.title,
+      meetingDate: metadata.meetingDate,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    });
+  });
+
+  await writeMeetingMemoryDatabase({
+    meeting_records: nextRecords.sort((a, b) => b.metadata.meetingDate.localeCompare(a.metadata.meetingDate) || b.updatedAt.localeCompare(a.updatedAt)),
+    meeting_action_items: nextActionItems,
+  });
+
+  return record;
+}
+
+function getMeetingRecordSearchBlob(record: MeetingRecord): string {
+  return [
+    record.metadata.title,
+    record.metadata.country,
+    record.metadata.countryId,
+    record.metadata.sector,
+    record.metadata.meetingType,
+    record.metadata.attendees,
+    record.debrief.executiveSummary,
+    record.debrief.relationshipImpactAnalysis,
+    ...record.debrief.keyDiscussionPoints,
+    ...record.debrief.decisionsOrAgreements,
+    ...record.debrief.opportunitiesForUaeMoei,
+    ...record.debrief.risksAndConcerns,
+    ...record.debrief.strategicTags,
+    ...record.debrief.actionItems.map((actionItem) => `${actionItem.description} ${actionItem.suggestedOwner} ${actionItem.status}`),
+  ].join(" ").toLowerCase();
+}
+
+function isMeetingDateInRange(meetingDate: string, dateFrom?: string, dateTo?: string): boolean {
+  if (dateFrom && meetingDate < dateFrom) return false;
+  if (dateTo && meetingDate > dateTo) return false;
+  return true;
+}
+
+async function listMeetingRecords(filters: {
+  country?: string;
+  sector?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  q?: string;
+  limit?: number;
+} = {}): Promise<MeetingRecord[]> {
+  const database = await readMeetingMemoryDatabase();
+  const countryId = filters.country ? normalizeCountryId(filters.country) : "";
+  const sector = filters.sector?.trim().toLowerCase() || "";
+  const q = filters.q?.trim().toLowerCase() || "";
+  const limit = filters.limit && Number.isFinite(filters.limit) ? filters.limit : 100;
+
+  return database.meeting_records
+    .filter((record) => {
+      if (countryId && record.metadata.countryId !== countryId) return false;
+      if (sector && !record.metadata.sector.toLowerCase().includes(sector)) return false;
+      if (!isMeetingDateInRange(record.metadata.meetingDate, filters.dateFrom, filters.dateTo)) return false;
+      if (q && !getMeetingRecordSearchBlob(record).includes(q)) return false;
+      return true;
+    })
+    .sort((a, b) => b.metadata.meetingDate.localeCompare(a.metadata.meetingDate) || b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, limit);
+}
+
+async function loadRecentMeetingMemoryForCountry(countryId: string, question?: string): Promise<MeetingRecord[]> {
+  const queryText = question?.trim() || "";
+  const records = await listMeetingRecords({ country: countryId, limit: 25 });
+
+  if (!queryText) {
+    return records.slice(0, getPositiveNumberEnv("MEETING_MEMORY_LIMIT", 4));
+  }
+
+  const terms = tokenizeQuery(queryText);
+  // Future semantic search integration point:
+  // Replace this lexical scoring with embedding similarity against meeting_records and meeting_action_items.
+  return records
+    .map((record) => {
+      const searchableText = getMeetingRecordSearchBlob(record);
+      const score = terms.reduce((count, term) => count + (searchableText.includes(term) ? 1 : 0), 0);
+      return { record, score };
+    })
+    .sort((a, b) => b.score - a.score || b.record.metadata.meetingDate.localeCompare(a.record.metadata.meetingDate))
+    .slice(0, getPositiveNumberEnv("MEETING_MEMORY_LIMIT", 4))
+    .map(({ record }) => record);
+}
+
+function renderMeetingMemorySignals(meetingMemory: MeetingRecord[], language: "en" | "ar"): string {
+  if (meetingMemory.length === 0) return "";
+
+  const isAr = language === "ar";
+  const renderedMeetings = meetingMemory
+    .map((record) => {
+      const pendingActions = record.debrief.actionItems
+        .filter((actionItem) => actionItem.status !== "Completed")
+        .slice(0, 2)
+        .map((actionItem) => `${actionItem.description} (${actionItem.suggestedOwner}, ${actionItem.priority})`)
+        .join("; ");
+
+      const tags = record.debrief.strategicTags.slice(0, 5).join(", ");
+      return isAr
+        ? `* **${record.metadata.title} (${record.metadata.meetingDate}):** ${record.debrief.executiveSummary}${pendingActions ? ` المتابعات المفتوحة: ${pendingActions}.` : ""}${tags ? ` الوسوم: ${tags}.` : ""}`
+        : `* **${record.metadata.title} (${record.metadata.meetingDate}):** ${record.debrief.executiveSummary}${pendingActions ? ` Pending follow-up: ${pendingActions}.` : ""}${tags ? ` Tags: ${tags}.` : ""}`;
+    })
+    .join("\n");
+
+  return isAr
+    ? `\n\n**ذاكرة الاجتماعات الحديثة والمتابعات المفتوحة:**\n${renderedMeetings}`
+    : `\n\n**Recent Meeting Memory and Pending Follow-Up:**\n${renderedMeetings}`;
+}
+
 function loadFirestoreConfig(): FirestoreConfig | null {
   if (firestoreConfigCache !== undefined) {
     return firestoreConfigCache;
@@ -1175,6 +1616,7 @@ function renderVectorSignals(vectorContext: VectorContextRecord[], language: "en
 function renderDatabaseBriefing(
   countryData: any,
   vectorContext: VectorContextRecord[],
+  meetingMemory: MeetingRecord[],
   language: "en" | "ar",
   question?: string
 ): string {
@@ -1211,7 +1653,7 @@ ${ar.overview}
 **فرص الشراكة الفورية والاستثمار:**
 * ${ar.partnerships}
 * ${ar.investments}
-* ${ar.knowledge}${renderVectorSignals(vectorContext, language)}
+* ${ar.knowledge}${renderVectorSignals(vectorContext, language)}${renderMeetingMemorySignals(meetingMemory, language)}
 
 **الذكاء التنبؤي وتوصيات وفد الدولة:**
 * **الأسواق الناشئة:** ${ar.markets}
@@ -1235,7 +1677,7 @@ The country is governed under the ${countryData.profile.governmentEn} Led active
 **Priority Strategic Partnerships & Immediate Investments:**
 * ${countryData.strategicInsights.partnershipsEn}
 * ${countryData.strategicInsights.investmentsEn}
-* ${countryData.strategicInsights.knowledgeEn}${renderVectorSignals(vectorContext, language)}
+* ${countryData.strategicInsights.knowledgeEn}${renderVectorSignals(vectorContext, language)}${renderMeetingMemorySignals(meetingMemory, language)}
 
 **Predictive Intelligence & Diplomatic Recommendations:**
 * **Emerging Markets:** ${countryData.predictive.marketsEn}
@@ -1327,6 +1769,149 @@ async function callOpenAIWithRetryAndFallback(
   }
 }
 
+// Analyze a post-meeting transcript into a structured debrief.
+app.post("/api/meetings/analyze", async (req, res) => {
+  const metadata = normalizeMeetingMetadata(req.body?.metadata);
+  const transcriptText = normalizeShortText(req.body?.transcriptText || req.body?.transcript, "", 200000);
+  const requestRole = req.body?.createdBy?.role;
+
+  if (requestRole && requestRole !== "staff") {
+    return res.status(403).json({ success: false, error: "Strategic Meeting Debrief is available to staff users only." });
+  }
+
+  if (transcriptText.length < 40) {
+    return res.status(400).json({ success: false, error: "Transcript text is required before analysis." });
+  }
+
+  const oClient = getOpenAIClient();
+  const fallbackDebrief = buildMockMeetingDebrief(metadata, transcriptText);
+
+  if (!oClient) {
+    return res.json({
+      success: true,
+      source: "local-structured-mock",
+      debrief: fallbackDebrief,
+    });
+  }
+
+  try {
+    const { countryData } = await loadCountryProfile(metadata.countryId, metadata.country);
+    const systemInstruction = `You are Majlis AI, an executive intelligence analyst for UAE Ministry of Energy and Infrastructure staff.
+Return strict JSON only. Do not include markdown, prose wrappers, or citations.
+The JSON object must match this exact schema:
+{
+  "executiveSummary": "string",
+  "keyDiscussionPoints": ["string"],
+  "decisionsOrAgreements": ["string"],
+  "openQuestions": ["string"],
+  "risksAndConcerns": ["string"],
+  "opportunitiesForUaeMoei": ["string"],
+  "actionItems": [{"description": "string", "suggestedOwner": "string", "priority": "Critical|High|Medium|Low", "deadline": "string", "status": "Pending|In Progress|Completed|Deferred"}],
+  "relationshipImpactAnalysis": "string",
+  "strategicTags": ["string"]
+}`;
+
+    const prompt = `Analyze the following post-meeting transcript for institutional memory and future UAE leadership briefing generation.
+
+Meeting metadata:
+${JSON.stringify(metadata, null, 2)}
+
+Country relationship context:
+${JSON.stringify({
+  countryId: countryData.id,
+  nameEn: countryData.nameEn,
+  cooperationAgreement: countryData.indicators?.cooperationAgreementEn,
+  strategicPartnerships: countryData.strategicInsights?.partnershipsEn,
+  risks: countryData.predictive?.risksEn,
+  proposals: countryData.predictive?.proposalsEn,
+}, null, 2)}
+
+Transcript:
+${transcriptText.slice(0, 28000)}
+
+Analysis requirements:
+- Be concise, executive-ready, and specific to UAE/MOEI.
+- Extract decisions only when the transcript supports them. If unclear, flag as an open question.
+- Action items should include suggested owner, priority, deadline if available, and status.
+- Relationship impact must explain how this meeting changes or reinforces the UAE relationship with ${metadata.country}.
+- Strategic tags must be useful for future retrieval.`;
+
+    const generated = await callOpenAIWithRetryAndFallback(oClient, systemInstruction, prompt, {
+      cacheTtlMs: getPositiveNumberEnv("MEETING_ANALYSIS_CACHE_TTL_MS", 2 * 60 * 1000),
+      maxOutputTokens: 3200,
+    });
+    const parsed = parseJsonObjectFromText(generated.text);
+
+    return res.json({
+      success: true,
+      source: `openai-${generated.modelUsed}`,
+      debrief: coerceMeetingDebriefAnalysis(parsed, metadata, transcriptText),
+    });
+  } catch (error: any) {
+    console.warn("[Meeting Debrief] AI analysis unavailable. Returning structured local fallback.", error?.message || error);
+    return res.json({
+      success: true,
+      source: "local-structured-mock",
+      debrief: fallbackDebrief,
+    });
+  }
+});
+
+app.post("/api/meetings", async (req, res) => {
+  const requestRole = req.body?.createdBy?.role;
+  if (requestRole !== "staff") {
+    return res.status(403).json({ success: false, error: "Only staff users can save meeting debriefs." });
+  }
+
+  try {
+    const metadata = normalizeMeetingMetadata(req.body?.metadata);
+    const transcriptText = normalizeShortText(req.body?.transcriptText || req.body?.transcript, "", 200000);
+
+    if (transcriptText.length < 40) {
+      return res.status(400).json({ success: false, error: "Transcript text is required before saving." });
+    }
+
+    const record = await saveMeetingRecord({
+      id: req.body?.id,
+      metadata,
+      transcriptText,
+      uploadedFileName: req.body?.uploadedFileName,
+      debrief: req.body?.debrief,
+      createdBy: req.body?.createdBy,
+    });
+
+    return res.json({
+      success: true,
+      record,
+      schema: {
+        meeting_records: "Post-meeting metadata, transcript reference/text, and generated strategic analysis.",
+        meeting_action_items: "Flattened follow-up items linked to meeting_records for briefing generation.",
+      },
+    });
+  } catch (error: any) {
+    console.error("[Meeting Memory] Save failed.", error);
+    return res.status(500).json({ success: false, error: error?.message || "Failed to save meeting debrief." });
+  }
+});
+
+app.get("/api/meetings", async (req, res) => {
+  try {
+    const records = await listMeetingRecords({
+      country: typeof req.query.country === "string" ? req.query.country : undefined,
+      sector: typeof req.query.sector === "string" ? req.query.sector : undefined,
+      dateFrom: typeof req.query.dateFrom === "string" ? req.query.dateFrom : undefined,
+      dateTo: typeof req.query.dateTo === "string" ? req.query.dateTo : undefined,
+      q: typeof req.query.q === "string" ? req.query.q : undefined,
+      limit: typeof req.query.limit === "string" ? Number(req.query.limit) : 100,
+    });
+
+    return res.json({ success: true, records });
+  } catch (error: any) {
+    console.error("[Meeting Memory] History query failed.", error);
+    return res.status(500).json({ success: false, error: error?.message || "Failed to load meeting history." });
+  }
+});
+
 // Strategic Advisory generator using standard database + vector database context
 app.post("/api/advisor/brief", async (req, res) => {
   const { country, question, language } = req.body;
@@ -1336,23 +1921,32 @@ app.post("/api/advisor/brief", async (req, res) => {
   try {
     const { countryData, source } = await loadCountryProfile(normalizedCountry, country || normalizedCountry);
     const vectorContext = await loadCountryVectorContext(countryData, question, currentLang);
+    const meetingMemory = await loadRecentMeetingMemoryForCountry(normalizedCountry, question);
     const localized = await translateCountryDataForLanguage(countryData, vectorContext, currentLang);
 
     return res.json({
       success: true,
-      source: vectorContext.length > 0 ? `${source}+vector-database` : source,
+      source: [
+        source,
+        vectorContext.length > 0 ? "vector-database" : "",
+        meetingMemory.length > 0 ? "meeting-memory" : "",
+      ].filter(Boolean).join("+"),
       dataSources: {
         standardDatabase: source,
         vectorDatabase: {
           collection: process.env.VECTOR_CONTEXT_COLLECTION || "countryVectors",
           matches: vectorContext.length,
         },
+        meetingMemory: {
+          collection: "meeting_records",
+          matches: meetingMemory.length,
+        },
         translation: localized.translation,
       },
       country: localized.countryData.nameEn,
       countryData: localized.countryData,
       aiBriefing: {
-        rawText: renderDatabaseBriefing(localized.countryData, localized.vectorContext, currentLang, question)
+        rawText: renderDatabaseBriefing(localized.countryData, localized.vectorContext, meetingMemory, currentLang, question)
       }
     });
   } catch (error: any) {
@@ -1369,12 +1963,16 @@ app.post("/api/advisor/brief", async (req, res) => {
           collection: process.env.VECTOR_CONTEXT_COLLECTION || "countryVectors",
           matches: 0,
         },
+        meetingMemory: {
+          collection: "meeting_records",
+          matches: 0,
+        },
         translation: localizedFallback.translation,
       },
       country: localizedFallback.countryData.nameEn,
       countryData: localizedFallback.countryData,
       aiBriefing: {
-        rawText: renderDatabaseBriefing(localizedFallback.countryData, [], currentLang, question)
+        rawText: renderDatabaseBriefing(localizedFallback.countryData, [], [], currentLang, question)
       }
     });
   }
