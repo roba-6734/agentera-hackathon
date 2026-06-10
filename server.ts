@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import OpenAI, { toFile } from "openai";
 import { createHash } from "crypto";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import type {
   AppRole,
   MeetingActionItem,
@@ -864,6 +865,28 @@ type FirestoreConfig = {
   firestoreDatabaseId?: string;
 };
 
+type NeonCountryIntelligenceRow = {
+  id: number;
+  country_name: string;
+  iso_code: string;
+  m49_code: number | null;
+  macro_economics: unknown;
+  trade_flows: unknown;
+  diplomatic_pulse: unknown;
+  infrastructure_logistics: unknown;
+  risk_and_legal: unknown;
+  last_updated: string | Date | null;
+  sustainability_index: unknown;
+  political_context: unknown;
+  official_figures: unknown;
+  national_priorities: unknown;
+  competitiveness: unknown;
+  comparison_metrics: unknown;
+  rag_needs_refresh: boolean | null;
+  profile_needs_refresh: boolean | null;
+  bilateral_relations: unknown;
+};
+
 type VectorContextRecord = {
   id: string;
   countryId?: string;
@@ -921,7 +944,31 @@ type VoiceTranscriptionResult = {
   mock?: boolean;
 };
 
+const NEON_COUNTRY_INTELLIGENCE_TABLE = "country_intelligence_hub";
+const NEON_COUNTRY_SELECT_COLUMNS = [
+  "id",
+  "country_name",
+  "iso_code",
+  "m49_code",
+  "macro_economics",
+  "trade_flows",
+  "diplomatic_pulse",
+  "infrastructure_logistics",
+  "risk_and_legal",
+  "last_updated",
+  "sustainability_index",
+  "political_context",
+  "official_figures",
+  "national_priorities",
+  "competitiveness",
+  "comparison_metrics",
+  "rag_needs_refresh",
+  "profile_needs_refresh",
+  "bilateral_relations",
+].join(", ");
+
 let firestoreConfigCache: FirestoreConfig | null | undefined;
+let neonSqlCache: NeonQueryFunction<false, false> | null | undefined;
 
 function normalizeCountryId(value: string): string {
   return (value || "")
@@ -943,6 +990,582 @@ function normalizeShortText(value: unknown, fallback = "", maxLength = 4000): st
   const normalized = typeof value === "string" ? value.trim() : "";
   if (!normalized) return fallback;
   return normalized.length > maxLength ? normalized.slice(0, maxLength).trim() : normalized;
+}
+
+function getNeonConnectionString(): string | null {
+  const rawValue = process.env.NEON_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  const connectionString = typeof rawValue === "string" ? rawValue.trim() : "";
+  if (!connectionString || connectionString.includes("MY_")) {
+    return null;
+  }
+  return connectionString;
+}
+
+function getNeonSql(): NeonQueryFunction<false, false> | null {
+  if (neonSqlCache !== undefined) {
+    return neonSqlCache;
+  }
+
+  const connectionString = getNeonConnectionString();
+  if (!connectionString) {
+    neonSqlCache = null;
+    return neonSqlCache;
+  }
+
+  try {
+    neonSqlCache = neon(connectionString);
+    return neonSqlCache;
+  } catch (error) {
+    console.warn("[Neon] Could not initialize the database client. Check NEON_URL formatting.", error);
+    neonSqlCache = null;
+    return neonSqlCache;
+  }
+}
+
+function isRecordValue(value: unknown): value is Record<string, any> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseJsonRecord(value: unknown): Record<string, any> {
+  if (!value) return {};
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parseJsonRecord(parsed);
+    } catch {
+      return {};
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return { items: value };
+  }
+
+  return isRecordValue(value) ? value : {};
+}
+
+function hasJsonContent(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length > 0;
+  if (isRecordValue(value)) return Object.keys(value).length > 0;
+  return value !== undefined && value !== null && `${value}`.trim().length > 0;
+}
+
+function normalizeJsonKey(key: string): string {
+  return key.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function getFlexibleObjectValue(source: unknown, key: string): unknown {
+  if (!isRecordValue(source)) return undefined;
+  if (Object.prototype.hasOwnProperty.call(source, key)) {
+    return source[key];
+  }
+
+  const normalizedKey = normalizeJsonKey(key);
+  const matchedKey = Object.keys(source).find((candidate) => normalizeJsonKey(candidate) === normalizedKey);
+  return matchedKey ? source[matchedKey] : undefined;
+}
+
+function getFlexibleNestedValue(source: unknown, pathSegments: string[]): unknown {
+  return pathSegments.reduce<unknown>((current, segment) => getFlexibleObjectValue(current, segment), source);
+}
+
+function humanizeJsonKey(key: string): string {
+  return key
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function compactJsonValue(value: unknown, maxLength = 700): string | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  if (typeof value === "string") {
+    return normalizeShortText(value, "", maxLength) || undefined;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return normalizeShortText(String(value), "", maxLength) || undefined;
+  }
+
+  if (Array.isArray(value)) {
+    const text = value
+      .map((item) => compactJsonValue(item, 220))
+      .filter(Boolean)
+      .slice(0, 8)
+      .join("; ");
+    return normalizeShortText(text, "", maxLength) || undefined;
+  }
+
+  if (isRecordValue(value)) {
+    const text = Object.entries(value)
+      .map(([key, nestedValue]) => {
+        const nestedText = compactJsonValue(nestedValue, 240);
+        return nestedText ? `${humanizeJsonKey(key)}: ${nestedText}` : "";
+      })
+      .filter(Boolean)
+      .slice(0, 8)
+      .join("; ");
+    return normalizeShortText(text, "", maxLength) || undefined;
+  }
+
+  return undefined;
+}
+
+function pickFirstJsonTextFromSources(
+  sources: unknown[],
+  candidatePaths: string[][],
+  maxLength = 700
+): string | undefined {
+  for (const source of sources) {
+    if (!hasJsonContent(source)) continue;
+
+    for (const pathSegments of candidatePaths) {
+      const text = compactJsonValue(getFlexibleNestedValue(source, pathSegments), maxLength);
+      if (text) return text;
+    }
+  }
+
+  return undefined;
+}
+
+function compactJsonSections(
+  sections: Record<string, unknown>,
+  preferredKeys: string[],
+  maxLength = 900
+): string | undefined {
+  const text = preferredKeys
+    .map((key) => {
+      const section = sections[key];
+      const sectionText = compactJsonValue(section, Math.floor(maxLength / 2));
+      return sectionText ? `${humanizeJsonKey(key)}: ${sectionText}` : "";
+    })
+    .filter(Boolean)
+    .join("; ");
+  return normalizeShortText(text, "", maxLength) || undefined;
+}
+
+function pruneUndefinedDeep(value: unknown): any {
+  if (Array.isArray(value)) {
+    const items = value.map(pruneUndefinedDeep).filter((item) => item !== undefined);
+    return items.length > 0 ? items : undefined;
+  }
+
+  if (isRecordValue(value)) {
+    const entries = Object.entries(value)
+      .map(([key, nestedValue]) => [key, pruneUndefinedDeep(nestedValue)] as const)
+      .filter(([, nestedValue]) => nestedValue !== undefined);
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+  }
+
+  return value === undefined || value === "" ? undefined : value;
+}
+
+function countryFlagFromIsoCode(isoCode: string): string | undefined {
+  const iso3ToIso2: Record<string, string> = {
+    ARE: "AE",
+    BRA: "BR",
+    CHN: "CN",
+    DEU: "DE",
+    EGY: "EG",
+    FRA: "FR",
+    GBR: "GB",
+    IND: "IN",
+    JPN: "JP",
+    NOR: "NO",
+    SAU: "SA",
+    SGP: "SG",
+    USA: "US",
+  };
+  const normalized = isoCode.trim().toUpperCase();
+  const alpha2 = normalized.length === 2 ? normalized : iso3ToIso2[normalized];
+  if (!alpha2 || !/^[A-Z]{2}$/.test(alpha2)) {
+    return undefined;
+  }
+
+  return Array.from(alpha2)
+    .map((letter) => String.fromCodePoint(127397 + letter.charCodeAt(0)))
+    .join("");
+}
+
+function buildNeonIntelligenceSections(row: NeonCountryIntelligenceRow): Record<string, Record<string, any>> {
+  return {
+    macroEconomics: parseJsonRecord(row.macro_economics),
+    tradeFlows: parseJsonRecord(row.trade_flows),
+    diplomaticPulse: parseJsonRecord(row.diplomatic_pulse),
+    infrastructureLogistics: parseJsonRecord(row.infrastructure_logistics),
+    riskAndLegal: parseJsonRecord(row.risk_and_legal),
+    sustainabilityIndex: parseJsonRecord(row.sustainability_index),
+    politicalContext: parseJsonRecord(row.political_context),
+    officialFigures: parseJsonRecord(row.official_figures),
+    nationalPriorities: parseJsonRecord(row.national_priorities),
+    competitiveness: parseJsonRecord(row.competitiveness),
+    comparisonMetrics: parseJsonRecord(row.comparison_metrics),
+    bilateralRelations: parseJsonRecord(row.bilateral_relations),
+  };
+}
+
+function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
+  const sections = buildNeonIntelligenceSections(row);
+  const countryName = normalizeShortText(row.country_name, "Country", 120);
+  const isoCode = normalizeShortText(row.iso_code, "", 3).toUpperCase();
+  const countryId = normalizeCountryId(countryName) || normalizeCountryId(isoCode) || String(row.id);
+  const countrySources = [sections.officialFigures, sections.politicalContext, sections.bilateralRelations];
+  const macroSources = [sections.macroEconomics, sections.comparisonMetrics];
+  const energySources = [sections.infrastructureLogistics, sections.sustainabilityIndex, sections.macroEconomics];
+  const infrastructureSources = [sections.infrastructureLogistics, sections.comparisonMetrics];
+  const relationshipSources = [sections.bilateralRelations, sections.diplomaticPulse, sections.tradeFlows];
+  const strategicSources = [sections.nationalPriorities, sections.bilateralRelations, sections.diplomaticPulse];
+
+  const lastUpdated = row.last_updated instanceof Date
+    ? row.last_updated.toISOString()
+    : row.last_updated
+      ? String(row.last_updated)
+      : undefined;
+
+  return pruneUndefinedDeep({
+    id: countryId,
+    nameEn: countryName,
+    nameAr: pickFirstJsonTextFromSources(countrySources, [
+      ["nameAr"],
+      ["name_ar"],
+      ["arabicName"],
+      ["arabic_name"],
+      ["countryNameAr"],
+      ["country_name_ar"],
+    ], 120),
+    flag: pickFirstJsonTextFromSources(countrySources, [["flag"], ["emoji"], ["flagEmoji"], ["flag_emoji"]], 8)
+      || countryFlagFromIsoCode(isoCode),
+    profile: {
+      overviewEn: pickFirstJsonTextFromSources([
+        sections.politicalContext,
+        sections.diplomaticPulse,
+        sections.nationalPriorities,
+        sections.bilateralRelations,
+        sections.macroEconomics,
+      ], [
+        ["overview"],
+        ["summary"],
+        ["executiveSummary"],
+        ["executive_summary"],
+        ["countryProfile"],
+        ["country_profile"],
+        ["context"],
+        ["profile"],
+      ], 900) || compactJsonSections(sections, ["politicalContext", "diplomaticPulse", "nationalPriorities"], 900),
+      overviewAr: pickFirstJsonTextFromSources(countrySources, [["overviewAr"], ["overview_ar"], ["summaryAr"], ["summary_ar"]], 900),
+      governmentEn: pickFirstJsonTextFromSources([sections.politicalContext, sections.officialFigures], [
+        ["government"],
+        ["governmentType"],
+        ["government_type"],
+        ["politicalSystem"],
+        ["political_system"],
+        ["governance"],
+        ["system"],
+      ], 500),
+      governmentAr: pickFirstJsonTextFromSources([sections.politicalContext, sections.officialFigures], [
+        ["governmentAr"],
+        ["government_ar"],
+        ["politicalSystemAr"],
+        ["political_system_ar"],
+      ], 500),
+      leadershipEn: pickFirstJsonTextFromSources([sections.officialFigures, sections.politicalContext], [
+        ["leadership"],
+        ["leaders"],
+        ["keyOfficials"],
+        ["key_officials"],
+        ["officials"],
+        ["headOfState"],
+        ["head_of_state"],
+        ["headOfGovernment"],
+        ["head_of_government"],
+        ["president"],
+        ["primeMinister"],
+        ["prime_minister"],
+      ], 700) || compactJsonValue(sections.officialFigures, 700),
+      leadershipAr: pickFirstJsonTextFromSources([sections.officialFigures, sections.politicalContext], [
+        ["leadershipAr"],
+        ["leadership_ar"],
+        ["keyOfficialsAr"],
+        ["key_officials_ar"],
+        ["officialsAr"],
+        ["officials_ar"],
+      ], 700),
+    },
+    indicators: {
+      gdp: pickFirstJsonTextFromSources(macroSources, [
+        ["gdp"],
+        ["nominalGdp"],
+        ["nominal_gdp"],
+        ["gdpUsd"],
+        ["gdp_usd"],
+        ["grossDomesticProduct"],
+        ["gross_domestic_product"],
+      ], 180),
+      gdpAr: pickFirstJsonTextFromSources(macroSources, [["gdpAr"], ["gdp_ar"], ["nominalGdpAr"], ["nominal_gdp_ar"]], 180),
+      growth: pickFirstJsonTextFromSources(macroSources, [
+        ["growth"],
+        ["gdpGrowth"],
+        ["gdp_growth"],
+        ["realGdpGrowth"],
+        ["real_gdp_growth"],
+        ["annualGrowth"],
+        ["annual_growth"],
+      ], 120),
+      gdpPerCapita: pickFirstJsonTextFromSources(macroSources, [
+        ["gdpPerCapita"],
+        ["gdp_per_capita"],
+        ["perCapitaGdp"],
+        ["per_capita_gdp"],
+      ], 160),
+      energyMix: pickFirstJsonTextFromSources(energySources, [
+        ["energyMix"],
+        ["energy_mix"],
+        ["powerMix"],
+        ["power_mix"],
+        ["electricityMix"],
+        ["electricity_mix"],
+      ], 260),
+      energyMixAr: pickFirstJsonTextFromSources(energySources, [["energyMixAr"], ["energy_mix_ar"], ["powerMixAr"], ["power_mix_ar"]], 260),
+      infrastructureIndex: pickFirstJsonTextFromSources(infrastructureSources, [
+        ["infrastructureIndex"],
+        ["infrastructure_index"],
+        ["logisticsIndex"],
+        ["logistics_index"],
+        ["score"],
+        ["index"],
+      ], 220),
+      infrastructureIndexAr: pickFirstJsonTextFromSources(infrastructureSources, [["infrastructureIndexAr"], ["infrastructure_index_ar"]], 220),
+      environmentalRank: pickFirstJsonTextFromSources([sections.sustainabilityIndex, sections.comparisonMetrics], [
+        ["environmentalRank"],
+        ["environmental_rank"],
+        ["sustainabilityRank"],
+        ["sustainability_rank"],
+        ["climateRank"],
+        ["climate_rank"],
+        ["rank"],
+        ["score"],
+      ], 220),
+      environmentalRankAr: pickFirstJsonTextFromSources([sections.sustainabilityIndex], [["environmentalRankAr"], ["environmental_rank_ar"], ["sustainabilityRankAr"], ["sustainability_rank_ar"]], 220),
+      competitivenessRank: pickFirstJsonTextFromSources([sections.competitiveness, sections.comparisonMetrics], [
+        ["competitivenessRank"],
+        ["competitiveness_rank"],
+        ["globalRank"],
+        ["global_rank"],
+        ["rank"],
+        ["score"],
+      ], 220),
+      competitivenessRankAr: pickFirstJsonTextFromSources([sections.competitiveness], [["competitivenessRankAr"], ["competitiveness_rank_ar"]], 220),
+      cooperationAgreementEn: pickFirstJsonTextFromSources(relationshipSources, [
+        ["cooperationAgreement"],
+        ["cooperation_agreement"],
+        ["agreement"],
+        ["agreements"],
+        ["framework"],
+        ["bilateralFramework"],
+        ["bilateral_framework"],
+      ], 500),
+      cooperationAgreementAr: pickFirstJsonTextFromSources(relationshipSources, [
+        ["cooperationAgreementAr"],
+        ["cooperation_agreement_ar"],
+        ["agreementAr"],
+        ["agreement_ar"],
+        ["frameworkAr"],
+        ["framework_ar"],
+      ], 500),
+    },
+    sectors: {
+      energyEn: pickFirstJsonTextFromSources(energySources, [
+        ["energy"],
+        ["energyProfile"],
+        ["energy_profile"],
+        ["cleanEnergy"],
+        ["clean_energy"],
+        ["renewables"],
+        ["power"],
+      ], 700),
+      energyAr: pickFirstJsonTextFromSources(energySources, [["energyAr"], ["energy_ar"], ["energyProfileAr"], ["energy_profile_ar"]], 700),
+      infrastructureEn: pickFirstJsonTextFromSources([sections.infrastructureLogistics], [
+        ["infrastructure"],
+        ["logistics"],
+        ["transport"],
+        ["ports"],
+        ["summary"],
+        ["overview"],
+      ], 700) || compactJsonValue(sections.infrastructureLogistics, 700),
+      infrastructureAr: pickFirstJsonTextFromSources([sections.infrastructureLogistics], [["infrastructureAr"], ["infrastructure_ar"], ["logisticsAr"], ["logistics_ar"]], 700),
+      sustainabilityEn: pickFirstJsonTextFromSources([sections.sustainabilityIndex], [
+        ["sustainability"],
+        ["climate"],
+        ["netZero"],
+        ["net_zero"],
+        ["summary"],
+        ["overview"],
+      ], 700) || compactJsonValue(sections.sustainabilityIndex, 700),
+      sustainabilityAr: pickFirstJsonTextFromSources([sections.sustainabilityIndex], [["sustainabilityAr"], ["sustainability_ar"], ["climateAr"], ["climate_ar"]], 700),
+    },
+    strategicInsights: {
+      partnershipsEn: pickFirstJsonTextFromSources(strategicSources, [
+        ["partnerships"],
+        ["strategicPartnerships"],
+        ["strategic_partnerships"],
+        ["relations"],
+        ["cooperation"],
+        ["summary"],
+      ], 800),
+      partnershipsAr: pickFirstJsonTextFromSources(strategicSources, [["partnershipsAr"], ["partnerships_ar"], ["relationsAr"], ["relations_ar"]], 800),
+      investmentsEn: pickFirstJsonTextFromSources([sections.tradeFlows, sections.bilateralRelations], [
+        ["investments"],
+        ["investment"],
+        ["fdi"],
+        ["trade"],
+        ["tradeFlows"],
+        ["trade_flows"],
+        ["exports"],
+        ["imports"],
+      ], 800) || compactJsonValue(sections.tradeFlows, 800),
+      investmentsAr: pickFirstJsonTextFromSources([sections.tradeFlows, sections.bilateralRelations], [["investmentsAr"], ["investments_ar"], ["tradeAr"], ["trade_ar"]], 800),
+      knowledgeEn: pickFirstJsonTextFromSources([sections.nationalPriorities, sections.diplomaticPulse], [
+        ["knowledge"],
+        ["innovation"],
+        ["technology"],
+        ["priorities"],
+        ["capacityBuilding"],
+        ["capacity_building"],
+      ], 700),
+      knowledgeAr: pickFirstJsonTextFromSources([sections.nationalPriorities, sections.diplomaticPulse], [["knowledgeAr"], ["knowledge_ar"], ["innovationAr"], ["innovation_ar"]], 700),
+    },
+    predictive: {
+      marketsEn: pickFirstJsonTextFromSources([sections.macroEconomics, sections.tradeFlows, sections.comparisonMetrics], [
+        ["markets"],
+        ["marketOpportunities"],
+        ["market_opportunities"],
+        ["opportunities"],
+        ["outlook"],
+        ["forecast"],
+      ], 800),
+      marketsAr: pickFirstJsonTextFromSources([sections.macroEconomics, sections.tradeFlows], [["marketsAr"], ["markets_ar"], ["opportunitiesAr"], ["opportunities_ar"]], 800),
+      risksEn: pickFirstJsonTextFromSources([sections.riskAndLegal], [
+        ["risks"],
+        ["risk"],
+        ["riskAssessment"],
+        ["risk_assessment"],
+        ["legal"],
+        ["regulatory"],
+        ["summary"],
+      ], 800) || compactJsonValue(sections.riskAndLegal, 800),
+      risksAr: pickFirstJsonTextFromSources([sections.riskAndLegal], [["risksAr"], ["risks_ar"], ["riskAssessmentAr"], ["risk_assessment_ar"]], 800),
+      proposalsEn: pickFirstJsonTextFromSources([sections.nationalPriorities, sections.bilateralRelations, sections.diplomaticPulse], [
+        ["proposals"],
+        ["recommendations"],
+        ["nextSteps"],
+        ["next_steps"],
+        ["uaeOpportunities"],
+        ["uae_opportunities"],
+        ["priorities"],
+      ], 800),
+      proposalsAr: pickFirstJsonTextFromSources([sections.nationalPriorities, sections.bilateralRelations], [["proposalsAr"], ["proposals_ar"], ["recommendationsAr"], ["recommendations_ar"]], 800),
+    },
+    intelligenceHub: {
+      provider: "neon",
+      table: NEON_COUNTRY_INTELLIGENCE_TABLE,
+      rowId: row.id,
+      countryName,
+      isoCode,
+      m49Code: row.m49_code,
+      lastUpdated,
+      ragNeedsRefresh: row.rag_needs_refresh,
+      profileNeedsRefresh: row.profile_needs_refresh,
+      sections,
+    },
+  }) || {};
+}
+
+async function fetchNeonCountryProfile(countryId: string, rawCountry: string): Promise<NeonCountryIntelligenceRow | null> {
+  const sql = getNeonSql();
+  if (!sql) return null;
+
+  const requestedCountry = normalizeShortText(rawCountry, countryId, 160);
+  const requestedIso = requestedCountry.replace(/[^a-zA-Z]/g, "").slice(0, 3);
+  const rows = await sql.query(
+    `SELECT ${NEON_COUNTRY_SELECT_COLUMNS}
+     FROM ${NEON_COUNTRY_INTELLIGENCE_TABLE}
+     WHERE trim(both '-' from regexp_replace(replace(lower(country_name), '&', 'and'), '[^a-z0-9]+', '-', 'g')) = $1
+        OR lower(country_name) = lower($2)
+        OR lower(iso_code) = lower($2)
+        OR lower(iso_code) = lower($3)
+     ORDER BY country_name ASC
+     LIMIT 1`,
+    [countryId, requestedCountry, requestedIso || countryId]
+  ) as NeonCountryIntelligenceRow[];
+
+  return rows[0] || null;
+}
+
+async function fetchAllNeonCountryProfiles(): Promise<NeonCountryIntelligenceRow[]> {
+  const sql = getNeonSql();
+  if (!sql) return [];
+
+  const limit = Math.min(Math.floor(getPositiveNumberEnv("NEON_COUNTRY_LIMIT", 500)), 2000);
+  return await sql.query(
+    `SELECT ${NEON_COUNTRY_SELECT_COLUMNS}
+     FROM ${NEON_COUNTRY_INTELLIGENCE_TABLE}
+     ORDER BY country_name ASC
+     LIMIT $1`,
+    [limit]
+  ) as NeonCountryIntelligenceRow[];
+}
+
+async function getNeonDatabaseStatus(): Promise<{
+  configured: boolean;
+  reachable: boolean;
+  table: string;
+  countriesCount: number;
+  latestUpdate?: string;
+  error?: string;
+}> {
+  const configured = Boolean(getNeonConnectionString());
+  const sql = getNeonSql();
+  if (!configured || !sql) {
+    return {
+      configured,
+      reachable: false,
+      table: NEON_COUNTRY_INTELLIGENCE_TABLE,
+      countriesCount: 0,
+      error: "NEON_URL is not configured.",
+    };
+  }
+
+  try {
+    const rows = await sql.query(
+      `SELECT count(*)::int AS countries_count, max(last_updated) AS latest_update
+       FROM ${NEON_COUNTRY_INTELLIGENCE_TABLE}`
+    ) as Array<{ countries_count: number; latest_update?: string | Date | null }>;
+    const status = rows[0];
+    const latestUpdate = status?.latest_update instanceof Date
+      ? status.latest_update.toISOString()
+      : status?.latest_update
+        ? String(status.latest_update)
+        : undefined;
+
+    return {
+      configured: true,
+      reachable: true,
+      table: NEON_COUNTRY_INTELLIGENCE_TABLE,
+      countriesCount: Number(status?.countries_count || 0),
+      latestUpdate,
+    };
+  } catch (error: any) {
+    return {
+      configured: true,
+      reachable: false,
+      table: NEON_COUNTRY_INTELLIGENCE_TABLE,
+      countriesCount: 0,
+      error: error?.message || "Unable to query Neon.",
+    };
+  }
 }
 
 function normalizeStringArray(value: unknown, fallback: string[] = [], maxItems = 10): string[] {
@@ -1667,23 +2290,32 @@ async function translateCountryDataForLanguage(
 
 async function loadCountryProfile(countryId: string, rawCountry: string): Promise<{ countryData: any; source: string }> {
   const localBase = prebuiltCountries[countryId] || buildGenericCountryData(rawCountry, countryId);
+  let mergedCountryData = localBase;
+  let source = prebuiltCountries[countryId] ? "local-standby-database" : "generated-standby-profile";
 
   try {
     const standardDbRecord = await fetchFirestoreDocument("countries", countryId);
     if (standardDbRecord) {
-      return {
-        countryData: deepMergeCountryData(localBase, standardDbRecord),
-        source: "standard-database",
-      };
+      mergedCountryData = deepMergeCountryData(mergedCountryData, standardDbRecord);
+      source = "firestore-standard-database";
     }
   } catch (error) {
-    console.warn(`[Standard DB] Could not read country profile '${countryId}'. Using local standby profile.`, error);
+    console.warn(`[Standard DB] Could not read Firestore country profile '${countryId}'. Continuing with available profile sources.`, error);
   }
 
-  return {
-    countryData: localBase,
-    source: prebuiltCountries[countryId] ? "local-standby-database" : "generated-standby-profile",
-  };
+  try {
+    const neonRecord = await fetchNeonCountryProfile(countryId, rawCountry);
+    if (neonRecord) {
+      mergedCountryData = deepMergeCountryData(mergedCountryData, normalizeNeonCountryRow(neonRecord));
+      source = source === "firestore-standard-database"
+        ? "neon-country-intelligence-hub+firestore-standard-database"
+        : "neon-country-intelligence-hub";
+    }
+  } catch (error) {
+    console.warn(`[Neon] Could not read country profile '${countryId}'. Continuing with fallback profile sources.`, error);
+  }
+
+  return { countryData: mergedCountryData, source };
 }
 
 async function loadAllCountryProfiles(): Promise<Record<string, any>> {
@@ -1699,6 +2331,19 @@ async function loadAllCountryProfiles(): Promise<Record<string, any>> {
     });
   } catch (error) {
     console.warn("[Standard DB] Could not load Firestore countries collection. Serving local standby index.", error);
+  }
+
+  try {
+    const neonCountries = await fetchAllNeonCountryProfiles();
+    neonCountries.forEach((countryRecord) => {
+      const normalizedRecord = normalizeNeonCountryRow(countryRecord);
+      const countryId = normalizeCountryId(normalizedRecord.id || normalizedRecord.nameEn || countryRecord.country_name);
+      if (!countryId) return;
+      const localBase = mergedCountries[countryId] || buildGenericCountryData(countryRecord.country_name || countryId, countryId);
+      mergedCountries[countryId] = deepMergeCountryData(localBase, { ...normalizedRecord, id: countryId });
+    });
+  } catch (error) {
+    console.warn("[Neon] Could not load country_intelligence_hub records. Serving available country index.", error);
   }
 
   return mergedCountries;
@@ -3048,6 +3693,20 @@ ${rawData}`;
     };
     return res.json({ success: true, data: fallbackDoubleSafeguard });
   }
+});
+
+app.get("/api/advisor/database-status", async (req, res) => {
+  const neonStatus = await getNeonDatabaseStatus();
+
+  res.status(neonStatus.reachable || !neonStatus.configured ? 200 : 503).json({
+    success: neonStatus.reachable,
+    standardDatabasePriority: [
+      "neon-country-intelligence-hub",
+      "firestore-standard-database",
+      "local-standby-database",
+    ],
+    neon: neonStatus,
+  });
 });
 
 // Compare countries endpoint
