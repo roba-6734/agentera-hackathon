@@ -1012,10 +1012,6 @@ export default function App() {
             selectedCountryCode={selectedCountryCode}
             selectedCountryNameEn={activeCountry.nameEn}
             selectedCountryNameAr={activeCountry.nameAr}
-            onNewBriefGenerated={(newText) => {
-              setAiBriefingText(newText);
-              setActiveTab("briefing"); // Direct user straight to formatting preview to read update
-            }}
             onClose={() => setIsChatOpen(false)}
           />
         </div>

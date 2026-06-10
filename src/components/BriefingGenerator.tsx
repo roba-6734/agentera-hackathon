@@ -13,6 +13,138 @@ interface BriefingGeneratorProps {
   uaeData?: UaeIndicator;
 }
 
+const HTML_ESCAPE_MAP: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  "\"": "&quot;",
+  "'": "&#39;",
+};
+
+const escapeHtml = (value: unknown) =>
+  String(value ?? "").replace(/[&<>"']/g, (char) => HTML_ESCAPE_MAP[char]);
+
+const formatHtmlFileSegment = (value: string) => {
+  const safeName = value
+    .replace(/[^a-z0-9]+/gi, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return safeName || "strategic_briefing";
+};
+
+const formatInlineMarkdownForHtml = (value: string) =>
+  escapeHtml(value).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+
+const formatBriefingTextForHtml = (value: string) => {
+  const blocks: string[] = [];
+  let paragraphLines: string[] = [];
+
+  const flushParagraph = () => {
+    if (!paragraphLines.length) return;
+
+    blocks.push(
+      `<p style="margin-bottom: 12px; text-align: justify;">${paragraphLines
+        .map(formatInlineMarkdownForHtml)
+        .join("<br/>")}</p>`
+    );
+    paragraphLines = [];
+  };
+
+  value.split(/\r?\n/).forEach((line) => {
+    const headingMatch = line.match(/^###\s+(.+?)\s*$/);
+
+    if (headingMatch) {
+      flushParagraph();
+      blocks.push(
+        `<h3 style='margin-top: 22px; margin-bottom: 8px; font-size: 15px; color: #16211C; border-bottom: 1px solid #E8DCC4; padding-bottom: 4px;font-family: "Playfair Display", serif;'>${formatInlineMarkdownForHtml(headingMatch[1])}</h3>`
+      );
+      return;
+    }
+
+    if (!line.trim()) {
+      flushParagraph();
+      return;
+    }
+
+    paragraphLines.push(line);
+  });
+
+  flushParagraph();
+
+  return blocks.join("");
+};
+
+const renderInlineMarkdown = (value: string, keyPrefix: string) => {
+  const nodes: React.ReactNode[] = [];
+  const boldPattern = /\*\*(.+?)\*\*/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = boldPattern.exec(value)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(value.slice(lastIndex, match.index));
+    }
+
+    nodes.push(<strong key={`${keyPrefix}-bold-${match.index}`}>{match[1]}</strong>);
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < value.length) {
+    nodes.push(value.slice(lastIndex));
+  }
+
+  return nodes;
+};
+
+const renderBriefingText = (value: string) => {
+  const nodes: React.ReactNode[] = [];
+  let paragraphLines: string[] = [];
+  let paragraphIndex = 0;
+
+  const flushParagraph = () => {
+    if (!paragraphLines.length) return;
+
+    const key = `briefing-paragraph-${paragraphIndex}`;
+    nodes.push(
+      <p key={key}>
+        {paragraphLines.map((line, lineIndex) => (
+          <React.Fragment key={`${key}-line-${lineIndex}`}>
+            {lineIndex > 0 && <br />}
+            {renderInlineMarkdown(line, `${key}-line-${lineIndex}`)}
+          </React.Fragment>
+        ))}
+      </p>
+    );
+    paragraphLines = [];
+    paragraphIndex += 1;
+  };
+
+  value.split(/\r?\n/).forEach((line, lineIndex) => {
+    const headingMatch = line.match(/^###\s+(.+?)\s*$/);
+
+    if (headingMatch) {
+      flushParagraph();
+      nodes.push(
+        <h3 key={`briefing-heading-${lineIndex}`}>
+          {renderInlineMarkdown(headingMatch[1], `briefing-heading-${lineIndex}`)}
+        </h3>
+      );
+      return;
+    }
+
+    if (!line.trim()) {
+      flushParagraph();
+      return;
+    }
+
+    paragraphLines.push(line);
+  });
+
+  flushParagraph();
+
+  return nodes;
+};
+
 export default function BriefingGenerator({
   country,
   language,
@@ -334,18 +466,15 @@ export default function BriefingGenerator({
       iframe.style.border = "none";
       document.body.appendChild(iframe);
 
-      const formattedBriefingText = aiBriefingText
-        .replace(/\n\n/g, "</p><p style='margin-bottom: 12px; text-align: justify;'>")
-        .replace(/\n/g, "<br/>")
-        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-        .replace(/### (.*?)(?:<br\/>|\n|$)/g, "<h3 style='margin-top: 22px; margin-bottom: 8px; font-size: 15px; color: #16211C; border-bottom: 1px solid #E8DCC4; padding-bottom: 4px;font-family: \"Playfair Display\", serif;'>$1</h3>");
+      const h = escapeHtml;
+      const formattedBriefingText = formatBriefingTextForHtml(aiBriefingText);
 
       const printHtml = `
 <!DOCTYPE html>
 <html lang="${language}" dir="${isEn ? "ltr" : "rtl"}">
 <head>
   <meta charset="utf-8">
-  <title>Cabinet_Briefing_Memo_${country.nameEn}</title>
+  <title>Cabinet_Briefing_Memo_${h(country.nameEn)}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Noto+Kufi+Arabic:wght@400;500;700&display=swap');
     
@@ -577,7 +706,7 @@ export default function BriefingGenerator({
     <div class="metadata-box">
       <div class="metadata-item">
         <h5>${isEn ? "PARTNER STATE" : "الشريك الدولي"}</h5>
-        <p>${country.flag} ${isEn ? country.nameEn : country.nameAr}</p>
+        <p>${h(country.flag)} ${h(isEn ? country.nameEn : country.nameAr)}</p>
       </div>
       <div class="metadata-item">
         <h5>${isEn ? "AUTHORITY NODE" : "جهة الصدور"}</h5>
@@ -586,7 +715,7 @@ export default function BriefingGenerator({
       <div class="metadata-item" style="grid-column: span 2;">
         <h5>${isEn ? "SPECIFIC TALKS OBJECTIVE" : "الهدف المحدد والمطلوب للمباحثات الثنائية"}</h5>
         <p style="font-weight: 500; font-size: 11px; line-height: 1.4; color: #2d3748;">
-          ${activeObjective}
+          ${h(activeObjective)}
         </p>
       </div>
       <div class="metadata-item">
@@ -595,7 +724,7 @@ export default function BriefingGenerator({
       </div>
       <div class="metadata-item">
         <h5>${isEn ? "Bilateral Treaty" : "طبيعة العلاقات الثنائية"}</h5>
-        <p style="font-size: 11px; color: #16211C;">${isEn ? country.indicators.cooperationAgreementEn : country.indicators.cooperationAgreementAr}</p>
+        <p style="font-size: 11px; color: #16211C;">${h(isEn ? country.indicators.cooperationAgreementEn : country.indicators.cooperationAgreementAr)}</p>
       </div>
     </div>
 
@@ -606,39 +735,39 @@ export default function BriefingGenerator({
         <tr>
           <th>${isEn ? "Benchmark Indicator" : "مؤشر القياس والتنافسية"}</th>
           <th>${isEn ? "United Arab Emirates 🇦🇪" : "دولة الإمارات العربية المتحدة 🇦🇪"}</th>
-          <th>${country.flag} ${isEn ? country.nameEn : country.nameAr}</th>
+          <th>${h(country.flag)} ${h(isEn ? country.nameEn : country.nameAr)}</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td><strong>${isEn ? "Sovereign GDP" : "الناتج المحلي الإجمالي"}</strong></td>
-          <td>${isEn ? activeUae.gdp : activeUae.gdpAr}</td>
-          <td>${isEn ? country.indicators.gdp : country.indicators.gdpAr}</td>
+          <td>${h(isEn ? activeUae.gdp : activeUae.gdpAr)}</td>
+          <td>${h(isEn ? country.indicators.gdp : country.indicators.gdpAr)}</td>
         </tr>
         <tr>
           <td><strong>${isEn ? "Annual Real Growth Rate" : "معدل النمو السنوي الفعلي"}</strong></td>
-          <td>${activeUae.growth}</td>
-          <td>${country.indicators.growth}</td>
+          <td>${h(activeUae.growth)}</td>
+          <td>${h(country.indicators.growth)}</td>
         </tr>
         <tr>
           <td><strong>${isEn ? "Infrastructure System Index" : "ترتيب جودة البنية التحتية والموانئ"}</strong></td>
-          <td>${isEn ? activeUae.infrastructureIndex : activeUae.infrastructureIndexAr}</td>
-          <td>${country.indicators.infrastructureIndex}</td>
+          <td>${h(isEn ? activeUae.infrastructureIndex : activeUae.infrastructureIndexAr)}</td>
+          <td>${h(country.indicators.infrastructureIndex)}</td>
         </tr>
         <tr>
           <td><strong>${isEn ? "Global Competitiveness Rank" : "تأهيل مؤشر التنافسية العالمي"}</strong></td>
-          <td>${isEn ? activeUae.competitivenessRank : activeUae.competitivenessRankAr}</td>
-          <td>${country.indicators.competitivenessRank}</td>
+          <td>${h(isEn ? activeUae.competitivenessRank : activeUae.competitivenessRankAr)}</td>
+          <td>${h(country.indicators.competitivenessRank)}</td>
         </tr>
         <tr>
           <td><strong>${isEn ? "Environmental Quality Rank" : "مؤشر التنمية والاستدامة البيئية"}</strong></td>
-          <td>${isEn ? activeUae.environmentalRank : activeUae.environmentalRankAr}</td>
-          <td>${country.indicators.environmentalRank}</td>
+          <td>${h(isEn ? activeUae.environmentalRank : activeUae.environmentalRankAr)}</td>
+          <td>${h(country.indicators.environmentalRank)}</td>
         </tr>
         <tr>
           <td><strong>${isEn ? "Energy Sourcing Grid Mix" : "مزيج خطوط توليد الشبكة الوطنية للكهرباء"}</strong></td>
-          <td>${isEn ? activeUae.energyMix : activeUae.energyMixAr}</td>
-          <td>${isEn ? country.indicators.energyMix : country.indicators.energyMixAr}</td>
+          <td>${h(isEn ? activeUae.energyMix : activeUae.energyMixAr)}</td>
+          <td>${h(isEn ? country.indicators.energyMix : country.indicators.energyMixAr)}</td>
         </tr>
       </tbody>
     </table>
@@ -675,9 +804,7 @@ export default function BriefingGenerator({
 
     <h2 class="section-title" style="margin-top: 0;">${isEn ? "Real-Time Alignment Intelligence Summary" : "تقرير الإيجاز التوليدي الذكي لمذكرة التفاهم"}</h2>
     <div class="briefing-content">
-      <p style="margin-bottom: 12px; text-align: justify;">
-        ${formattedBriefingText}
-      </p>
+      ${formattedBriefingText}
     </div>
 
     <h2 class="section-title">${isEn ? "Strategic Preparatory Dialogue Protocols" : "نقاط الحديث الثنائية الموصى بتغطيتها خلال الاجتماع"}</h2>
@@ -686,10 +813,10 @@ export default function BriefingGenerator({
         <div class="point-card">
           <h4>
             <span class="point-number">${idxKey + 1}</span>
-            ${isEn ? tpOn.headerEn : tpOn.headerAr}
+            ${h(isEn ? tpOn.headerEn : tpOn.headerAr)}
           </h4>
           <p style="margin: 0; color: #4a5568; line-height: 1.4; font-size: 11px;">
-            ${isEn ? tpOn.pointEn : tpOn.pointAr}
+            ${h(isEn ? tpOn.pointEn : tpOn.pointAr)}
           </p>
         </div>
       `).join("")}
@@ -771,18 +898,15 @@ export default function BriefingGenerator({
         ? "Consolidate active trade corridors, harmonize deep water shipping protocols, establish mutual renewable power targets, and coordinate regional policy."
         : "توطيد ممرات التبادل التجاري المفتوح، ومواءمة معايير الشحن والموانئ البحرية العميقة، وبناء محطات توليد الطاقة والممر المشترك.");
 
-      const formattedBriefingText = aiBriefingText
-        .replace(/\n\n/g, "</p><p style='margin-bottom: 12px; text-align: justify;'>")
-        .replace(/\n/g, "<br/>")
-        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-        .replace(/### (.*?)(?:<br\/>|\n|$)/g, "<h3 style='margin-top: 22px; margin-bottom: 8px; font-size: 15px; color: #16211C; border-bottom: 1px solid #E8DCC4; padding-bottom: 4px;font-family: \"Playfair Display\", serif;'>$1</h3>");
+      const h = escapeHtml;
+      const formattedBriefingText = formatBriefingTextForHtml(aiBriefingText);
 
       const printHtml = `
 <!DOCTYPE html>
 <html lang="${language}" dir="${isEn ? "ltr" : "rtl"}">
 <head>
   <meta charset="utf-8">
-  <title>Cabinet_Briefing_Memo_${country.nameEn.replace(/\s+/g, "_")}</title>
+  <title>Cabinet_Briefing_Memo_${h(formatHtmlFileSegment(country.nameEn))}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Noto+Kufi+Arabic:wght@400;500;700&display=swap');
     
@@ -1056,7 +1180,7 @@ export default function BriefingGenerator({
     <div class="metadata-box">
       <div class="metadata-item">
         <h5>${isEn ? "PARTNER STATE" : "الشريك الدولي"}</h5>
-        <p>${country.flag} ${isEn ? country.nameEn : country.nameAr}</p>
+        <p>${h(country.flag)} ${h(isEn ? country.nameEn : country.nameAr)}</p>
       </div>
       <div class="metadata-item">
         <h5>${isEn ? "AUTHORITY NODE" : "جهة الصدور"}</h5>
@@ -1065,7 +1189,7 @@ export default function BriefingGenerator({
       <div class="metadata-item" style="grid-column: span 2;">
         <h5>${isEn ? "SPECIFIC TALKS OBJECTIVE" : "الهدف المحدد والمطلوب للمباحثات الثنائية"}</h5>
         <p style="font-weight: 500; font-size: 11px; line-height: 1.4; color: #2d3748;">
-          ${activeObjective}
+          ${h(activeObjective)}
         </p>
       </div>
       <div class="metadata-item">
@@ -1074,7 +1198,7 @@ export default function BriefingGenerator({
       </div>
       <div class="metadata-item">
         <h5>${isEn ? "Bilateral Treaty" : "طبيعة العلاقات الثنائية"}</h5>
-        <p style="font-size: 11px; color: #16211C;">${isEn ? country.indicators.cooperationAgreementEn : country.indicators.cooperationAgreementAr}</p>
+        <p style="font-size: 11px; color: #16211C;">${h(isEn ? country.indicators.cooperationAgreementEn : country.indicators.cooperationAgreementAr)}</p>
       </div>
     </div>
 
@@ -1085,39 +1209,39 @@ export default function BriefingGenerator({
         <tr>
           <th>${isEn ? "Benchmark Indicator" : "مؤشر القياس والتنافسية"}</th>
           <th>${isEn ? "United Arab Emirates 🇦🇪" : "دولة الإمارات العربية المتحدة 🇦🇪"}</th>
-          <th>${country.flag} ${isEn ? country.nameEn : country.nameAr}</th>
+          <th>${h(country.flag)} ${h(isEn ? country.nameEn : country.nameAr)}</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td><strong>${isEn ? "Sovereign GDP" : "الناتج المحلي الإجمالي"}</strong></td>
-          <td>${isEn ? activeUae.gdp : activeUae.gdpAr}</td>
-          <td>${isEn ? country.indicators.gdp : country.indicators.gdpAr}</td>
+          <td>${h(isEn ? activeUae.gdp : activeUae.gdpAr)}</td>
+          <td>${h(isEn ? country.indicators.gdp : country.indicators.gdpAr)}</td>
         </tr>
         <tr>
           <td><strong>${isEn ? "Annual Real Growth Rate" : "معدل النمو السنوي الفعلي"}</strong></td>
-          <td>${activeUae.growth}</td>
-          <td>${country.indicators.growth}</td>
+          <td>${h(activeUae.growth)}</td>
+          <td>${h(country.indicators.growth)}</td>
         </tr>
         <tr>
           <td><strong>${isEn ? "Infrastructure System Index" : "ترتيب جودة البنية التحتية والموانئ"}</strong></td>
-          <td>${isEn ? activeUae.infrastructureIndex : activeUae.infrastructureIndexAr}</td>
-          <td>${country.indicators.infrastructureIndex}</td>
+          <td>${h(isEn ? activeUae.infrastructureIndex : activeUae.infrastructureIndexAr)}</td>
+          <td>${h(country.indicators.infrastructureIndex)}</td>
         </tr>
         <tr>
           <td><strong>${isEn ? "Global Competitiveness Rank" : "تأهيل مؤشر التنافسية العالمي"}</strong></td>
-          <td>${isEn ? activeUae.competitivenessRank : activeUae.competitivenessRankAr}</td>
-          <td>${country.indicators.competitivenessRank}</td>
+          <td>${h(isEn ? activeUae.competitivenessRank : activeUae.competitivenessRankAr)}</td>
+          <td>${h(country.indicators.competitivenessRank)}</td>
         </tr>
         <tr>
           <td><strong>${isEn ? "Environmental Quality Rank" : "مؤشر التنمية والاستدامة البيئية"}</strong></td>
-          <td>${isEn ? activeUae.environmentalRank : activeUae.environmentalRankAr}</td>
-          <td>${country.indicators.environmentalRank}</td>
+          <td>${h(isEn ? activeUae.environmentalRank : activeUae.environmentalRankAr)}</td>
+          <td>${h(country.indicators.environmentalRank)}</td>
         </tr>
         <tr>
           <td><strong>${isEn ? "Energy Sourcing Grid Mix" : "مزيج خطوط توليد الشبكة الوطنية للكهرباء"}</strong></td>
-          <td>${isEn ? activeUae.energyMix : activeUae.energyMixAr}</td>
-          <td>${isEn ? country.indicators.energyMix : country.indicators.energyMixAr}</td>
+          <td>${h(isEn ? activeUae.energyMix : activeUae.energyMixAr)}</td>
+          <td>${h(isEn ? country.indicators.energyMix : country.indicators.energyMixAr)}</td>
         </tr>
       </tbody>
     </table>
@@ -1154,9 +1278,7 @@ export default function BriefingGenerator({
 
     <h2 class="section-title" style="margin-top: 0;">${isEn ? "Real-Time Alignment Intelligence Summary" : "تقرير الإيجاز التوليدي الذكي لمذكرة التفاهم"}</h2>
     <div class="briefing-content">
-      <p style="margin-bottom: 12px; text-align: justify;">
-        ${formattedBriefingText}
-      </p>
+      ${formattedBriefingText}
     </div>
 
     <h2 class="section-title">${isEn ? "Strategic Preparatory Dialogue Protocols" : "نقاط الحديث الثنائية الموصى بتغطيتها خلال الاجتماع"}</h2>
@@ -1165,10 +1287,10 @@ export default function BriefingGenerator({
         <div class="point-card">
           <h4>
             <span class="point-number">${idxKey + 1}</span>
-            ${isEn ? tpOn.headerEn : tpOn.headerAr}
+            ${h(isEn ? tpOn.headerEn : tpOn.headerAr)}
           </h4>
           <p style="margin: 0; color: #4a5568; line-height: 1.4; font-size: 11px;">
-            ${isEn ? tpOn.pointEn : tpOn.pointAr}
+            ${h(isEn ? tpOn.pointEn : tpOn.pointAr)}
           </p>
         </div>
       `).join("")}
@@ -1201,7 +1323,7 @@ export default function BriefingGenerator({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `Cabinet_Bilateral_Briefing_${country.nameEn.replace(/\s+/g, "_")}.html`;
+      link.download = `Cabinet_Bilateral_Briefing_${formatHtmlFileSegment(country.nameEn)}.html`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1368,7 +1490,9 @@ export default function BriefingGenerator({
                   .text-brief-formatted li { margin-bottom: 0.4rem; }
                   .text-brief-formatted strong { color: #005A3C; font-weight: 600; }
                 `}</style>
-                <div className="text-brief-formatted text-sm md:text-base leading-relaxed" dangerouslySetInnerHTML={{ __html: aiBriefingText.replace(/\n\n/g, "<br/><br/>").replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/### (.*?)\n/g, "<h3>$1</h3>") }} />
+                <div className="text-brief-formatted text-sm md:text-base leading-relaxed">
+                  {renderBriefingText(aiBriefingText)}
+                </div>
               </div>
             )}
           </div>

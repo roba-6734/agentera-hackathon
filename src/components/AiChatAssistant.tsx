@@ -6,7 +6,6 @@ interface AiChatAssistantProps {
   selectedCountryCode: string;
   selectedCountryNameEn: string;
   selectedCountryNameAr: string;
-  onNewBriefGenerated: (text: string) => void;
   onClose?: () => void;
 }
 
@@ -256,7 +255,6 @@ export default function AiChatAssistant({
   selectedCountryCode,
   selectedCountryNameEn,
   selectedCountryNameAr,
-  onNewBriefGenerated,
   onClose,
 }: AiChatAssistantProps) {
   const isEn = language === "en";
@@ -646,7 +644,6 @@ export default function AiChatAssistant({
       }
       setLastWorkflowStatus(workflowStatus);
       setChatLog((prev) => [...prev, advisorMessage]);
-      onNewBriefGenerated(aiResponseText);
     } catch (error) {
       console.error("AI Advisor Query Error:", error);
       const errorMessage: ChatMessage = {
