@@ -39,8 +39,8 @@ const roleOptions: Array<{
     role: "developer",
     titleEn: "Developer",
     titleAr: "المطور",
-    descriptionEn: "Systems console, data migration, Firestore operations, diagnostics, and security audit tools.",
-    descriptionAr: "وحدة الأنظمة وترحيل البيانات وعمليات فايرستور والتشخيص وأدوات التدقيق الأمني.",
+    descriptionEn: "Systems console, Neon data migration, diagnostics, and security audit tools.",
+    descriptionAr: "وحدة الأنظمة وترحيل بيانات نيون والتشخيص وأدوات التدقيق الأمني.",
     icon: Code2,
   },
 ];
@@ -63,7 +63,7 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
     event.preventDefault();
 
     // Placeholder authentication entry point:
-    // Replace this block with Firebase Auth, OAuth, SSO, password hashing, and database-backed user records.
+    // Replace this block with OAuth, SSO, password hashing, and database-backed user records.
     // Persist role claims on the authenticated user server-side before issuing the app session.
     onAuthenticated({
       role: selectedRole,

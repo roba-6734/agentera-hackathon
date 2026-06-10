@@ -48,6 +48,25 @@ export interface CountryPredictive {
   proposalsAr: string;
 }
 
+export type CountryJsonSection = Record<string, unknown>;
+
+export interface CountryIntelligenceHub {
+  provider: "neon";
+  table: string;
+  rowId: number | string;
+  hubCountryId?: number | null;
+  countryName: string;
+  isoCode: string;
+  lastUpdated?: string;
+  createdAt?: string;
+  profileStatus?: string;
+  confidenceScore?: number | null;
+  aiGenerated?: boolean | null;
+  aiGeneratedFacts?: boolean | null;
+  method?: string;
+  sections: Record<string, CountryJsonSection>;
+}
+
 export interface PrebuiltCountry {
   id: string;
   nameEn: string;
@@ -58,6 +77,7 @@ export interface PrebuiltCountry {
   sectors: CountrySectors;
   strategicInsights: CountryStrategicInsights;
   predictive: CountryPredictive;
+  intelligenceHub?: CountryIntelligenceHub;
 }
 
 export interface UaeIndicator {

@@ -19,6 +19,7 @@ import {
   UploadCloud,
   UserRound,
 } from "lucide-react";
+import { apiFetch } from "../api";
 import {
   AppSession,
   MeetingActionItem,
@@ -194,7 +195,7 @@ export default function StrategicMeetingDebrief({
     setSaveStatus(null);
 
     try {
-      const response = await fetch("/api/meetings/analyze", {
+      const response = await apiFetch("/api/meetings/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -227,7 +228,7 @@ export default function StrategicMeetingDebrief({
     setSaveStatus(null);
 
     try {
-      const response = await fetch("/api/meetings", {
+      const response = await apiFetch("/api/meetings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -313,7 +314,7 @@ export default function StrategicMeetingDebrief({
       if (filters.dateTo) params.set("dateTo", filters.dateTo);
       if (filters.q.trim()) params.set("q", filters.q.trim());
 
-      const response = await fetch(`/api/meetings?${params.toString()}`);
+      const response = await apiFetch(`/api/meetings?${params.toString()}`);
       const parsed = await response.json();
       if (!response.ok || !parsed.success) {
         throw new Error(parsed.error || "History load failed.");

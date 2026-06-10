@@ -20,6 +20,41 @@ dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
+const LOCAL_DEV_ORIGIN_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
+
+function isAllowedCorsOrigin(origin: string): boolean {
+  try {
+    const originUrl = new URL(origin);
+    if (LOCAL_DEV_ORIGIN_HOSTS.has(originUrl.hostname)) {
+      return true;
+    }
+
+    const appUrl = process.env.APP_URL;
+    if (appUrl) {
+      return originUrl.origin === new URL(appUrl).origin;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
+}
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (typeof origin === "string" && isAllowedCorsOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  }
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
+  return next();
+});
 
 app.use(express.json({ limit: "16mb" }));
 
@@ -48,6 +83,7 @@ type MeetingMemoryDatabase = {
 const DEFAULT_OPENAI_MODELS = ["gpt-5.5", "gpt-5.4-mini", "gpt-4.1-mini"];
 const MEETING_MEMORY_DIR = process.env.MEETING_MEMORY_DIR || path.join(process.cwd(), "data");
 const MEETING_MEMORY_PATH = process.env.MEETING_MEMORY_PATH || path.join(MEETING_MEMORY_DIR, "meeting-memory.json");
+const NEON_JSONB_CONTEXT_SOURCE = "country_intelligence_profiles.jsonb";
 const openAIResponseCache = new Map<string, { result: OpenAIGenerationResult; expiresAt: number }>();
 const pendingOpenAIRequests = new Map<string, Promise<OpenAIGenerationResult>>();
 const deeplTranslationCache = new Map<string, { text: string; expiresAt: number }>();
@@ -859,32 +895,39 @@ const prebuiltCountries: Record<string, any> = {
   }
 };
 
-type FirestoreConfig = {
-  projectId: string;
-  apiKey: string;
-  firestoreDatabaseId?: string;
-};
-
 type NeonCountryIntelligenceRow = {
-  id: number;
+  id: number | string;
+  hub_country_id: number | null;
   country_name: string;
   iso_code: string;
-  m49_code: number | null;
-  macro_economics: unknown;
-  trade_flows: unknown;
-  diplomatic_pulse: unknown;
-  infrastructure_logistics: unknown;
-  risk_and_legal: unknown;
-  last_updated: string | Date | null;
-  sustainability_index: unknown;
-  political_context: unknown;
-  official_figures: unknown;
-  national_priorities: unknown;
-  competitiveness: unknown;
-  comparison_metrics: unknown;
-  rag_needs_refresh: boolean | null;
-  profile_needs_refresh: boolean | null;
-  bilateral_relations: unknown;
+  overview: string | null;
+  government_structure: string | null;
+  political_context: string | null;
+  economic_context: string | null;
+  energy_context: string | null;
+  infrastructure_context: string | null;
+  sustainability_context: string | null;
+  national_priorities: string | null;
+  uae_bilateral_context: string | null;
+  strategic_relevance_to_uae: string | null;
+  key_opportunities: unknown;
+  key_risks: unknown;
+  key_sectors: unknown;
+  executive_summary: string | null;
+  rag_summary: string | null;
+  rag_keywords: unknown;
+  source_notes: unknown;
+  source_coverage: unknown;
+  available_layers: unknown;
+  missing_layers: unknown;
+  confidence_score: number | string | null;
+  profile_status: string | null;
+  ai_generated: boolean | null;
+  ai_generated_facts: boolean | null;
+  method: string | null;
+  created_at: string | Date | null;
+  updated_at: string | Date | null;
+  profile_json: unknown;
 };
 
 type VectorContextRecord = {
@@ -944,30 +987,42 @@ type VoiceTranscriptionResult = {
   mock?: boolean;
 };
 
-const NEON_COUNTRY_INTELLIGENCE_TABLE = "country_intelligence_hub";
+const NEON_COUNTRY_INTELLIGENCE_TABLE = "country_intelligence_profiles";
 const NEON_COUNTRY_SELECT_COLUMNS = [
   "id",
+  "hub_country_id",
   "country_name",
   "iso_code",
-  "m49_code",
-  "macro_economics",
-  "trade_flows",
-  "diplomatic_pulse",
-  "infrastructure_logistics",
-  "risk_and_legal",
-  "last_updated",
-  "sustainability_index",
+  "overview",
+  "government_structure",
   "political_context",
-  "official_figures",
+  "economic_context",
+  "energy_context",
+  "infrastructure_context",
+  "sustainability_context",
   "national_priorities",
-  "competitiveness",
-  "comparison_metrics",
-  "rag_needs_refresh",
-  "profile_needs_refresh",
-  "bilateral_relations",
+  "uae_bilateral_context",
+  "strategic_relevance_to_uae",
+  "key_opportunities",
+  "key_risks",
+  "key_sectors",
+  "executive_summary",
+  "rag_summary",
+  "rag_keywords",
+  "source_notes",
+  "source_coverage",
+  "available_layers",
+  "missing_layers",
+  "confidence_score",
+  "profile_status",
+  "ai_generated",
+  "ai_generated_facts",
+  "method",
+  "created_at",
+  "updated_at",
+  "profile_json",
 ].join(", ");
 
-let firestoreConfigCache: FirestoreConfig | null | undefined;
 let neonSqlCache: NeonQueryFunction<false, false> | null | undefined;
 
 function normalizeCountryId(value: string): string {
@@ -1131,22 +1186,6 @@ function pickFirstJsonTextFromSources(
   return undefined;
 }
 
-function compactJsonSections(
-  sections: Record<string, unknown>,
-  preferredKeys: string[],
-  maxLength = 900
-): string | undefined {
-  const text = preferredKeys
-    .map((key) => {
-      const section = sections[key];
-      const sectionText = compactJsonValue(section, Math.floor(maxLength / 2));
-      return sectionText ? `${humanizeJsonKey(key)}: ${sectionText}` : "";
-    })
-    .filter(Boolean)
-    .join("; ");
-  return normalizeShortText(text, "", maxLength) || undefined;
-}
-
 function pruneUndefinedDeep(value: unknown): any {
   if (Array.isArray(value)) {
     const items = value.map(pruneUndefinedDeep).filter((item) => item !== undefined);
@@ -1190,40 +1229,114 @@ function countryFlagFromIsoCode(isoCode: string): string | undefined {
     .join("");
 }
 
+function timestampToIso(value: unknown): string | undefined {
+  if (value instanceof Date) return value.toISOString();
+  return normalizeShortText(value, "", 80) || undefined;
+}
+
+function textSection(value: unknown): Record<string, any> {
+  const text = normalizeShortText(value, "", 5000);
+  return text ? { text } : {};
+}
+
+function normalizedNumberOrNull(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 function buildNeonIntelligenceSections(row: NeonCountryIntelligenceRow): Record<string, Record<string, any>> {
   return {
-    macroEconomics: parseJsonRecord(row.macro_economics),
-    tradeFlows: parseJsonRecord(row.trade_flows),
-    diplomaticPulse: parseJsonRecord(row.diplomatic_pulse),
-    infrastructureLogistics: parseJsonRecord(row.infrastructure_logistics),
-    riskAndLegal: parseJsonRecord(row.risk_and_legal),
-    sustainabilityIndex: parseJsonRecord(row.sustainability_index),
-    politicalContext: parseJsonRecord(row.political_context),
-    officialFigures: parseJsonRecord(row.official_figures),
-    nationalPriorities: parseJsonRecord(row.national_priorities),
-    competitiveness: parseJsonRecord(row.competitiveness),
-    comparisonMetrics: parseJsonRecord(row.comparison_metrics),
-    bilateralRelations: parseJsonRecord(row.bilateral_relations),
+    overview: textSection(row.overview),
+    governmentStructure: textSection(row.government_structure),
+    politicalContext: textSection(row.political_context),
+    economicContext: textSection(row.economic_context),
+    energyContext: textSection(row.energy_context),
+    infrastructureContext: textSection(row.infrastructure_context),
+    sustainabilityContext: textSection(row.sustainability_context),
+    nationalPriorities: textSection(row.national_priorities),
+    uaeBilateralContext: textSection(row.uae_bilateral_context),
+    strategicRelevanceToUae: textSection(row.strategic_relevance_to_uae),
+    keyOpportunities: parseJsonRecord(row.key_opportunities),
+    keyRisks: parseJsonRecord(row.key_risks),
+    keySectors: parseJsonRecord(row.key_sectors),
+    executiveSummary: textSection(row.executive_summary),
+    ragSummary: textSection(row.rag_summary),
+    ragKeywords: parseJsonRecord(row.rag_keywords),
+    sourceNotes: parseJsonRecord(row.source_notes),
+    sourceCoverage: parseJsonRecord(row.source_coverage),
+    availableLayers: parseJsonRecord(row.available_layers),
+    missingLayers: parseJsonRecord(row.missing_layers),
+    profileJson: parseJsonRecord(row.profile_json),
+  };
+}
+
+function serializeNeonCountryRow(row: NeonCountryIntelligenceRow): Record<string, any> {
+  return {
+    id: row.id,
+    hub_country_id: row.hub_country_id,
+    country_name: row.country_name,
+    iso_code: row.iso_code,
+    overview: row.overview,
+    government_structure: row.government_structure,
+    political_context: row.political_context,
+    economic_context: row.economic_context,
+    energy_context: row.energy_context,
+    infrastructure_context: row.infrastructure_context,
+    sustainability_context: row.sustainability_context,
+    national_priorities: row.national_priorities,
+    uae_bilateral_context: row.uae_bilateral_context,
+    strategic_relevance_to_uae: row.strategic_relevance_to_uae,
+    key_opportunities: parseJsonRecord(row.key_opportunities),
+    key_risks: parseJsonRecord(row.key_risks),
+    key_sectors: parseJsonRecord(row.key_sectors),
+    executive_summary: row.executive_summary,
+    rag_summary: row.rag_summary,
+    rag_keywords: parseJsonRecord(row.rag_keywords),
+    source_notes: parseJsonRecord(row.source_notes),
+    source_coverage: parseJsonRecord(row.source_coverage),
+    available_layers: parseJsonRecord(row.available_layers),
+    missing_layers: parseJsonRecord(row.missing_layers),
+    confidence_score: normalizedNumberOrNull(row.confidence_score) ?? row.confidence_score,
+    profile_status: row.profile_status,
+    ai_generated: row.ai_generated,
+    ai_generated_facts: row.ai_generated_facts,
+    method: row.method,
+    created_at: timestampToIso(row.created_at) || null,
+    updated_at: timestampToIso(row.updated_at) || null,
+    profile_json: parseJsonRecord(row.profile_json),
   };
 }
 
 function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
   const sections = buildNeonIntelligenceSections(row);
+  const profileJson = sections.profileJson;
   const countryName = normalizeShortText(row.country_name, "Country", 120);
   const isoCode = normalizeShortText(row.iso_code, "", 3).toUpperCase();
   const countryId = normalizeCountryId(countryName) || normalizeCountryId(isoCode) || String(row.id);
-  const countrySources = [sections.officialFigures, sections.politicalContext, sections.bilateralRelations];
-  const macroSources = [sections.macroEconomics, sections.comparisonMetrics];
-  const energySources = [sections.infrastructureLogistics, sections.sustainabilityIndex, sections.macroEconomics];
-  const infrastructureSources = [sections.infrastructureLogistics, sections.comparisonMetrics];
-  const relationshipSources = [sections.bilateralRelations, sections.diplomaticPulse, sections.tradeFlows];
-  const strategicSources = [sections.nationalPriorities, sections.bilateralRelations, sections.diplomaticPulse];
+  const updatedAt = timestampToIso(row.updated_at);
+  const createdAt = timestampToIso(row.created_at);
+  const confidenceScore = normalizedNumberOrNull(row.confidence_score);
+  const opportunitiesText = compactJsonValue(row.key_opportunities, 900);
+  const risksText = compactJsonValue(row.key_risks, 900);
+  const sectorsText = compactJsonValue(row.key_sectors, 900);
 
-  const lastUpdated = row.last_updated instanceof Date
-    ? row.last_updated.toISOString()
-    : row.last_updated
-      ? String(row.last_updated)
-      : undefined;
+  const countrySources = [profileJson, sections.overview, sections.governmentStructure, sections.politicalContext];
+  const macroSources = [profileJson, sections.economicContext];
+  const energySources = [profileJson, sections.energyContext, sections.keySectors];
+  const infrastructureSources = [profileJson, sections.infrastructureContext, sections.keySectors];
+  const sustainabilitySources = [profileJson, sections.sustainabilityContext, sections.keySectors];
+  const relationshipSources = [
+    profileJson,
+    sections.uaeBilateralContext,
+    sections.strategicRelevanceToUae,
+    sections.sourceNotes,
+  ];
+  const opportunitySources = [sections.keyOpportunities, profileJson, sections.economicContext];
+  const riskSources = [sections.keyRisks, profileJson];
 
   return pruneUndefinedDeep({
     id: countryId,
@@ -1239,39 +1352,39 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
     flag: pickFirstJsonTextFromSources(countrySources, [["flag"], ["emoji"], ["flagEmoji"], ["flag_emoji"]], 8)
       || countryFlagFromIsoCode(isoCode),
     profile: {
-      overviewEn: pickFirstJsonTextFromSources([
-        sections.politicalContext,
-        sections.diplomaticPulse,
-        sections.nationalPriorities,
-        sections.bilateralRelations,
-        sections.macroEconomics,
-      ], [
-        ["overview"],
-        ["summary"],
-        ["executiveSummary"],
-        ["executive_summary"],
-        ["countryProfile"],
-        ["country_profile"],
-        ["context"],
-        ["profile"],
-      ], 900) || compactJsonSections(sections, ["politicalContext", "diplomaticPulse", "nationalPriorities"], 900),
-      overviewAr: pickFirstJsonTextFromSources(countrySources, [["overviewAr"], ["overview_ar"], ["summaryAr"], ["summary_ar"]], 900),
-      governmentEn: pickFirstJsonTextFromSources([sections.politicalContext, sections.officialFigures], [
-        ["government"],
-        ["governmentType"],
-        ["government_type"],
-        ["politicalSystem"],
-        ["political_system"],
-        ["governance"],
-        ["system"],
-      ], 500),
-      governmentAr: pickFirstJsonTextFromSources([sections.politicalContext, sections.officialFigures], [
+      overviewEn: normalizeShortText(row.overview || row.executive_summary || row.rag_summary, "", 900)
+        || pickFirstJsonTextFromSources(countrySources, [
+          ["profile", "overviewEn"],
+          ["profile", "overview"],
+          ["overviewEn"],
+          ["overview"],
+          ["executiveSummary"],
+          ["executive_summary"],
+          ["summary"],
+          ["text"],
+        ], 900),
+      overviewAr: pickFirstJsonTextFromSources(countrySources, [["profile", "overviewAr"], ["overviewAr"], ["overview_ar"], ["summaryAr"], ["summary_ar"]], 900),
+      governmentEn: normalizeShortText(row.government_structure, "", 600)
+        || pickFirstJsonTextFromSources([profileJson, sections.governmentStructure, sections.politicalContext], [
+          ["profile", "governmentEn"],
+          ["government"],
+          ["governmentType"],
+          ["government_type"],
+          ["politicalSystem"],
+          ["political_system"],
+          ["governance"],
+          ["system"],
+          ["text"],
+        ], 600),
+      governmentAr: pickFirstJsonTextFromSources([profileJson, sections.governmentStructure, sections.politicalContext], [
+        ["profile", "governmentAr"],
         ["governmentAr"],
         ["government_ar"],
         ["politicalSystemAr"],
         ["political_system_ar"],
-      ], 500),
-      leadershipEn: pickFirstJsonTextFromSources([sections.officialFigures, sections.politicalContext], [
+      ], 600),
+      leadershipEn: pickFirstJsonTextFromSources([profileJson, sections.politicalContext, sections.governmentStructure], [
+        ["profile", "leadershipEn"],
         ["leadership"],
         ["leaders"],
         ["keyOfficials"],
@@ -1284,8 +1397,9 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
         ["president"],
         ["primeMinister"],
         ["prime_minister"],
-      ], 700) || compactJsonValue(sections.officialFigures, 700),
-      leadershipAr: pickFirstJsonTextFromSources([sections.officialFigures, sections.politicalContext], [
+      ], 700) || normalizeShortText(row.political_context, "", 700),
+      leadershipAr: pickFirstJsonTextFromSources([profileJson, sections.politicalContext], [
+        ["profile", "leadershipAr"],
         ["leadershipAr"],
         ["leadership_ar"],
         ["keyOfficialsAr"],
@@ -1296,6 +1410,7 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
     },
     indicators: {
       gdp: pickFirstJsonTextFromSources(macroSources, [
+        ["indicators", "gdp"],
         ["gdp"],
         ["nominalGdp"],
         ["nominal_gdp"],
@@ -1304,8 +1419,9 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
         ["grossDomesticProduct"],
         ["gross_domestic_product"],
       ], 180),
-      gdpAr: pickFirstJsonTextFromSources(macroSources, [["gdpAr"], ["gdp_ar"], ["nominalGdpAr"], ["nominal_gdp_ar"]], 180),
+      gdpAr: pickFirstJsonTextFromSources(macroSources, [["indicators", "gdpAr"], ["gdpAr"], ["gdp_ar"], ["nominalGdpAr"], ["nominal_gdp_ar"]], 180),
       growth: pickFirstJsonTextFromSources(macroSources, [
+        ["indicators", "growth"],
         ["growth"],
         ["gdpGrowth"],
         ["gdp_growth"],
@@ -1315,30 +1431,34 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
         ["annual_growth"],
       ], 120),
       gdpPerCapita: pickFirstJsonTextFromSources(macroSources, [
+        ["indicators", "gdpPerCapita"],
         ["gdpPerCapita"],
         ["gdp_per_capita"],
         ["perCapitaGdp"],
         ["per_capita_gdp"],
       ], 160),
       energyMix: pickFirstJsonTextFromSources(energySources, [
+        ["indicators", "energyMix"],
         ["energyMix"],
         ["energy_mix"],
         ["powerMix"],
         ["power_mix"],
         ["electricityMix"],
         ["electricity_mix"],
-      ], 260),
-      energyMixAr: pickFirstJsonTextFromSources(energySources, [["energyMixAr"], ["energy_mix_ar"], ["powerMixAr"], ["power_mix_ar"]], 260),
+      ], 260) || normalizeShortText(row.energy_context, "", 260),
+      energyMixAr: pickFirstJsonTextFromSources(energySources, [["indicators", "energyMixAr"], ["energyMixAr"], ["energy_mix_ar"], ["powerMixAr"], ["power_mix_ar"]], 260),
       infrastructureIndex: pickFirstJsonTextFromSources(infrastructureSources, [
+        ["indicators", "infrastructureIndex"],
         ["infrastructureIndex"],
         ["infrastructure_index"],
         ["logisticsIndex"],
         ["logistics_index"],
         ["score"],
         ["index"],
-      ], 220),
-      infrastructureIndexAr: pickFirstJsonTextFromSources(infrastructureSources, [["infrastructureIndexAr"], ["infrastructure_index_ar"]], 220),
-      environmentalRank: pickFirstJsonTextFromSources([sections.sustainabilityIndex, sections.comparisonMetrics], [
+      ], 220) || normalizeShortText(row.infrastructure_context, "", 220),
+      infrastructureIndexAr: pickFirstJsonTextFromSources(infrastructureSources, [["indicators", "infrastructureIndexAr"], ["infrastructureIndexAr"], ["infrastructure_index_ar"]], 220),
+      environmentalRank: pickFirstJsonTextFromSources(sustainabilitySources, [
+        ["indicators", "environmentalRank"],
         ["environmentalRank"],
         ["environmental_rank"],
         ["sustainabilityRank"],
@@ -1347,27 +1467,32 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
         ["climate_rank"],
         ["rank"],
         ["score"],
-      ], 220),
-      environmentalRankAr: pickFirstJsonTextFromSources([sections.sustainabilityIndex], [["environmentalRankAr"], ["environmental_rank_ar"], ["sustainabilityRankAr"], ["sustainability_rank_ar"]], 220),
-      competitivenessRank: pickFirstJsonTextFromSources([sections.competitiveness, sections.comparisonMetrics], [
+      ], 220) || normalizeShortText(row.sustainability_context, "", 220),
+      environmentalRankAr: pickFirstJsonTextFromSources(sustainabilitySources, [["indicators", "environmentalRankAr"], ["environmentalRankAr"], ["environmental_rank_ar"], ["sustainabilityRankAr"], ["sustainability_rank_ar"]], 220),
+      competitivenessRank: pickFirstJsonTextFromSources([profileJson, sections.sourceCoverage], [
+        ["indicators", "competitivenessRank"],
         ["competitivenessRank"],
         ["competitiveness_rank"],
         ["globalRank"],
         ["global_rank"],
         ["rank"],
         ["score"],
-      ], 220),
-      competitivenessRankAr: pickFirstJsonTextFromSources([sections.competitiveness], [["competitivenessRankAr"], ["competitiveness_rank_ar"]], 220),
-      cooperationAgreementEn: pickFirstJsonTextFromSources(relationshipSources, [
-        ["cooperationAgreement"],
-        ["cooperation_agreement"],
-        ["agreement"],
-        ["agreements"],
-        ["framework"],
-        ["bilateralFramework"],
-        ["bilateral_framework"],
-      ], 500),
+      ], 220) || (confidenceScore !== null ? `Confidence score ${confidenceScore}` : undefined),
+      competitivenessRankAr: pickFirstJsonTextFromSources([profileJson], [["indicators", "competitivenessRankAr"], ["competitivenessRankAr"], ["competitiveness_rank_ar"]], 220),
+      cooperationAgreementEn: normalizeShortText(row.uae_bilateral_context, "", 500)
+        || pickFirstJsonTextFromSources(relationshipSources, [
+          ["indicators", "cooperationAgreementEn"],
+          ["cooperationAgreement"],
+          ["cooperation_agreement"],
+          ["agreement"],
+          ["agreements"],
+          ["framework"],
+          ["bilateralFramework"],
+          ["bilateral_framework"],
+          ["text"],
+        ], 500),
       cooperationAgreementAr: pickFirstJsonTextFromSources(relationshipSources, [
+        ["indicators", "cooperationAgreementAr"],
         ["cooperationAgreementAr"],
         ["cooperation_agreement_ar"],
         ["agreementAr"],
@@ -1377,107 +1502,139 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
       ], 500),
     },
     sectors: {
-      energyEn: pickFirstJsonTextFromSources(energySources, [
-        ["energy"],
-        ["energyProfile"],
-        ["energy_profile"],
-        ["cleanEnergy"],
-        ["clean_energy"],
-        ["renewables"],
-        ["power"],
-      ], 700),
-      energyAr: pickFirstJsonTextFromSources(energySources, [["energyAr"], ["energy_ar"], ["energyProfileAr"], ["energy_profile_ar"]], 700),
-      infrastructureEn: pickFirstJsonTextFromSources([sections.infrastructureLogistics], [
-        ["infrastructure"],
-        ["logistics"],
-        ["transport"],
-        ["ports"],
-        ["summary"],
-        ["overview"],
-      ], 700) || compactJsonValue(sections.infrastructureLogistics, 700),
-      infrastructureAr: pickFirstJsonTextFromSources([sections.infrastructureLogistics], [["infrastructureAr"], ["infrastructure_ar"], ["logisticsAr"], ["logistics_ar"]], 700),
-      sustainabilityEn: pickFirstJsonTextFromSources([sections.sustainabilityIndex], [
-        ["sustainability"],
-        ["climate"],
-        ["netZero"],
-        ["net_zero"],
-        ["summary"],
-        ["overview"],
-      ], 700) || compactJsonValue(sections.sustainabilityIndex, 700),
-      sustainabilityAr: pickFirstJsonTextFromSources([sections.sustainabilityIndex], [["sustainabilityAr"], ["sustainability_ar"], ["climateAr"], ["climate_ar"]], 700),
+      energyEn: normalizeShortText(row.energy_context, "", 800)
+        || pickFirstJsonTextFromSources(energySources, [
+          ["sectors", "energyEn"],
+          ["energy"],
+          ["energyProfile"],
+          ["energy_profile"],
+          ["cleanEnergy"],
+          ["clean_energy"],
+          ["renewables"],
+          ["power"],
+          ["text"],
+        ], 800),
+      energyAr: pickFirstJsonTextFromSources(energySources, [["sectors", "energyAr"], ["energyAr"], ["energy_ar"], ["energyProfileAr"], ["energy_profile_ar"]], 800),
+      infrastructureEn: normalizeShortText(row.infrastructure_context, "", 800)
+        || pickFirstJsonTextFromSources(infrastructureSources, [
+          ["sectors", "infrastructureEn"],
+          ["infrastructure"],
+          ["logistics"],
+          ["transport"],
+          ["ports"],
+          ["summary"],
+          ["overview"],
+          ["text"],
+        ], 800),
+      infrastructureAr: pickFirstJsonTextFromSources(infrastructureSources, [["sectors", "infrastructureAr"], ["infrastructureAr"], ["infrastructure_ar"], ["logisticsAr"], ["logistics_ar"]], 800),
+      sustainabilityEn: normalizeShortText(row.sustainability_context, "", 800)
+        || pickFirstJsonTextFromSources(sustainabilitySources, [
+          ["sectors", "sustainabilityEn"],
+          ["sustainability"],
+          ["climate"],
+          ["netZero"],
+          ["net_zero"],
+          ["summary"],
+          ["overview"],
+          ["text"],
+        ], 800),
+      sustainabilityAr: pickFirstJsonTextFromSources(sustainabilitySources, [["sectors", "sustainabilityAr"], ["sustainabilityAr"], ["sustainability_ar"], ["climateAr"], ["climate_ar"]], 800),
     },
     strategicInsights: {
-      partnershipsEn: pickFirstJsonTextFromSources(strategicSources, [
-        ["partnerships"],
-        ["strategicPartnerships"],
-        ["strategic_partnerships"],
-        ["relations"],
-        ["cooperation"],
-        ["summary"],
-      ], 800),
-      partnershipsAr: pickFirstJsonTextFromSources(strategicSources, [["partnershipsAr"], ["partnerships_ar"], ["relationsAr"], ["relations_ar"]], 800),
-      investmentsEn: pickFirstJsonTextFromSources([sections.tradeFlows, sections.bilateralRelations], [
-        ["investments"],
-        ["investment"],
-        ["fdi"],
-        ["trade"],
-        ["tradeFlows"],
-        ["trade_flows"],
-        ["exports"],
-        ["imports"],
-      ], 800) || compactJsonValue(sections.tradeFlows, 800),
-      investmentsAr: pickFirstJsonTextFromSources([sections.tradeFlows, sections.bilateralRelations], [["investmentsAr"], ["investments_ar"], ["tradeAr"], ["trade_ar"]], 800),
-      knowledgeEn: pickFirstJsonTextFromSources([sections.nationalPriorities, sections.diplomaticPulse], [
-        ["knowledge"],
-        ["innovation"],
-        ["technology"],
-        ["priorities"],
-        ["capacityBuilding"],
-        ["capacity_building"],
-      ], 700),
-      knowledgeAr: pickFirstJsonTextFromSources([sections.nationalPriorities, sections.diplomaticPulse], [["knowledgeAr"], ["knowledge_ar"], ["innovationAr"], ["innovation_ar"]], 700),
+      partnershipsEn: normalizeShortText(row.strategic_relevance_to_uae || row.uae_bilateral_context, "", 900)
+        || pickFirstJsonTextFromSources(relationshipSources, [
+          ["strategicInsights", "partnershipsEn"],
+          ["partnerships"],
+          ["strategicPartnerships"],
+          ["strategic_partnerships"],
+          ["relations"],
+          ["cooperation"],
+          ["summary"],
+          ["text"],
+        ], 900),
+      partnershipsAr: pickFirstJsonTextFromSources(relationshipSources, [["strategicInsights", "partnershipsAr"], ["partnershipsAr"], ["partnerships_ar"], ["relationsAr"], ["relations_ar"]], 900),
+      investmentsEn: opportunitiesText
+        || pickFirstJsonTextFromSources(opportunitySources, [
+          ["strategicInsights", "investmentsEn"],
+          ["investments"],
+          ["investment"],
+          ["fdi"],
+          ["trade"],
+          ["exports"],
+          ["imports"],
+          ["items"],
+        ], 900),
+      investmentsAr: pickFirstJsonTextFromSources(opportunitySources, [["strategicInsights", "investmentsAr"], ["investmentsAr"], ["investments_ar"], ["tradeAr"], ["trade_ar"]], 900),
+      knowledgeEn: normalizeShortText(row.national_priorities || row.rag_summary, "", 800)
+        || pickFirstJsonTextFromSources([profileJson, sections.nationalPriorities, sections.ragSummary], [
+          ["strategicInsights", "knowledgeEn"],
+          ["knowledge"],
+          ["innovation"],
+          ["technology"],
+          ["priorities"],
+          ["capacityBuilding"],
+          ["capacity_building"],
+          ["text"],
+        ], 800),
+      knowledgeAr: pickFirstJsonTextFromSources([profileJson, sections.nationalPriorities], [["strategicInsights", "knowledgeAr"], ["knowledgeAr"], ["knowledge_ar"], ["innovationAr"], ["innovation_ar"]], 800),
     },
     predictive: {
-      marketsEn: pickFirstJsonTextFromSources([sections.macroEconomics, sections.tradeFlows, sections.comparisonMetrics], [
-        ["markets"],
-        ["marketOpportunities"],
-        ["market_opportunities"],
-        ["opportunities"],
-        ["outlook"],
-        ["forecast"],
-      ], 800),
-      marketsAr: pickFirstJsonTextFromSources([sections.macroEconomics, sections.tradeFlows], [["marketsAr"], ["markets_ar"], ["opportunitiesAr"], ["opportunities_ar"]], 800),
-      risksEn: pickFirstJsonTextFromSources([sections.riskAndLegal], [
-        ["risks"],
-        ["risk"],
-        ["riskAssessment"],
-        ["risk_assessment"],
-        ["legal"],
-        ["regulatory"],
-        ["summary"],
-      ], 800) || compactJsonValue(sections.riskAndLegal, 800),
-      risksAr: pickFirstJsonTextFromSources([sections.riskAndLegal], [["risksAr"], ["risks_ar"], ["riskAssessmentAr"], ["risk_assessment_ar"]], 800),
-      proposalsEn: pickFirstJsonTextFromSources([sections.nationalPriorities, sections.bilateralRelations, sections.diplomaticPulse], [
-        ["proposals"],
-        ["recommendations"],
-        ["nextSteps"],
-        ["next_steps"],
-        ["uaeOpportunities"],
-        ["uae_opportunities"],
-        ["priorities"],
-      ], 800),
-      proposalsAr: pickFirstJsonTextFromSources([sections.nationalPriorities, sections.bilateralRelations], [["proposalsAr"], ["proposals_ar"], ["recommendationsAr"], ["recommendations_ar"]], 800),
+      marketsEn: normalizeShortText(row.economic_context, "", 900)
+        || opportunitiesText
+        || pickFirstJsonTextFromSources(opportunitySources, [
+          ["predictive", "marketsEn"],
+          ["markets"],
+          ["marketOpportunities"],
+          ["market_opportunities"],
+          ["opportunities"],
+          ["outlook"],
+          ["forecast"],
+          ["items"],
+        ], 900),
+      marketsAr: pickFirstJsonTextFromSources(opportunitySources, [["predictive", "marketsAr"], ["marketsAr"], ["markets_ar"], ["opportunitiesAr"], ["opportunities_ar"]], 900),
+      risksEn: risksText
+        || pickFirstJsonTextFromSources(riskSources, [
+          ["predictive", "risksEn"],
+          ["risks"],
+          ["risk"],
+          ["riskAssessment"],
+          ["risk_assessment"],
+          ["legal"],
+          ["regulatory"],
+          ["summary"],
+          ["items"],
+        ], 900),
+      risksAr: pickFirstJsonTextFromSources(riskSources, [["predictive", "risksAr"], ["risksAr"], ["risks_ar"], ["riskAssessmentAr"], ["risk_assessment_ar"]], 900),
+      proposalsEn: normalizeShortText(row.strategic_relevance_to_uae, "", 900)
+        || opportunitiesText
+        || sectorsText
+        || pickFirstJsonTextFromSources([profileJson, sections.strategicRelevanceToUae, sections.keyOpportunities], [
+          ["predictive", "proposalsEn"],
+          ["proposals"],
+          ["recommendations"],
+          ["nextSteps"],
+          ["next_steps"],
+          ["uaeOpportunities"],
+          ["uae_opportunities"],
+          ["priorities"],
+          ["text"],
+        ], 900),
+      proposalsAr: pickFirstJsonTextFromSources([profileJson, sections.strategicRelevanceToUae, sections.keyOpportunities], [["predictive", "proposalsAr"], ["proposalsAr"], ["proposals_ar"], ["recommendationsAr"], ["recommendations_ar"]], 900),
     },
     intelligenceHub: {
       provider: "neon",
       table: NEON_COUNTRY_INTELLIGENCE_TABLE,
       rowId: row.id,
+      hubCountryId: row.hub_country_id,
       countryName,
       isoCode,
-      m49Code: row.m49_code,
-      lastUpdated,
-      ragNeedsRefresh: row.rag_needs_refresh,
-      profileNeedsRefresh: row.profile_needs_refresh,
+      lastUpdated: updatedAt,
+      createdAt,
+      profileStatus: normalizeShortText(row.profile_status, "", 80),
+      confidenceScore,
+      aiGenerated: row.ai_generated,
+      aiGeneratedFacts: row.ai_generated_facts,
+      method: normalizeShortText(row.method, "", 120),
       sections,
     },
   }) || {};
@@ -1540,7 +1697,7 @@ async function getNeonDatabaseStatus(): Promise<{
 
   try {
     const rows = await sql.query(
-      `SELECT count(*)::int AS countries_count, max(last_updated) AS latest_update
+      `SELECT count(*)::int AS countries_count, max(updated_at) AS latest_update
        FROM ${NEON_COUNTRY_INTELLIGENCE_TABLE}`
     ) as Array<{ countries_count: number; latest_update?: string | Date | null }>;
     const status = rows[0];
@@ -1972,127 +2129,6 @@ function renderMeetingMemorySignals(meetingMemory: MeetingRecord[], language: "e
     : `\n\n**Recent Meeting Memory and Pending Follow-Up:**\n${renderedMeetings}`;
 }
 
-function loadFirestoreConfig(): FirestoreConfig | null {
-  if (firestoreConfigCache !== undefined) {
-    return firestoreConfigCache;
-  }
-
-  try {
-    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-    const parsedConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    if (!parsedConfig.projectId || !parsedConfig.apiKey) {
-      firestoreConfigCache = null;
-      return firestoreConfigCache;
-    }
-
-    firestoreConfigCache = {
-      projectId: parsedConfig.projectId,
-      apiKey: parsedConfig.apiKey,
-      firestoreDatabaseId: parsedConfig.firestoreDatabaseId || "(default)",
-    };
-    return firestoreConfigCache;
-  } catch (error) {
-    console.warn("[Standard DB] Firebase applet config unavailable. Falling back to local standby data.", error);
-    firestoreConfigCache = null;
-    return firestoreConfigCache;
-  }
-}
-
-function getFirestoreDocumentsBaseUrl(config: FirestoreConfig): string {
-  const databaseId = encodeURIComponent(config.firestoreDatabaseId || "(default)");
-  return `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/${databaseId}/documents`;
-}
-
-function firestoreValueToJs(value: any): any {
-  if (!value || typeof value !== "object") return undefined;
-  if ("stringValue" in value) return value.stringValue;
-  if ("integerValue" in value) return Number(value.integerValue);
-  if ("doubleValue" in value) return Number(value.doubleValue);
-  if ("booleanValue" in value) return Boolean(value.booleanValue);
-  if ("timestampValue" in value) return value.timestampValue;
-  if ("nullValue" in value) return null;
-  if ("arrayValue" in value) return (value.arrayValue.values || []).map(firestoreValueToJs);
-  if ("mapValue" in value) {
-    return Object.fromEntries(
-      Object.entries(value.mapValue.fields || {}).map(([key, nestedValue]) => [key, firestoreValueToJs(nestedValue)])
-    );
-  }
-  if ("referenceValue" in value) return value.referenceValue;
-  if ("bytesValue" in value) return value.bytesValue;
-  if ("geoPointValue" in value) return value.geoPointValue;
-  return undefined;
-}
-
-function firestoreDocumentToJs(document: any): any {
-  const data = Object.fromEntries(
-    Object.entries(document?.fields || {}).map(([key, value]) => [key, firestoreValueToJs(value)])
-  );
-  const id = document?.name?.split("/").pop();
-  return { id: data.id || id, ...data };
-}
-
-async function fetchFirestoreDocument(collectionId: string, documentId: string): Promise<any | null> {
-  const config = loadFirestoreConfig();
-  if (!config) return null;
-
-  const url = `${getFirestoreDocumentsBaseUrl(config)}/${collectionId}/${encodeURIComponent(documentId)}?key=${config.apiKey}`;
-  const response = await fetch(url);
-  if (response.status === 404) return null;
-  if (!response.ok) {
-    throw new Error(`Firestore document read failed (${collectionId}/${documentId}): ${response.status}`);
-  }
-
-  return firestoreDocumentToJs(await response.json());
-}
-
-async function fetchFirestoreCollection(collectionId: string, pageSize = 200): Promise<any[]> {
-  const config = loadFirestoreConfig();
-  if (!config) return [];
-
-  const url = `${getFirestoreDocumentsBaseUrl(config)}/${collectionId}?pageSize=${pageSize}&key=${config.apiKey}`;
-  const response = await fetch(url);
-  if (response.status === 404) return [];
-  if (!response.ok) {
-    throw new Error(`Firestore collection read failed (${collectionId}): ${response.status}`);
-  }
-
-  const parsed = await response.json();
-  return (parsed.documents || []).map(firestoreDocumentToJs);
-}
-
-async function queryFirestoreCollectionByCountry(collectionId: string, countryId: string, limit = 50): Promise<any[]> {
-  const config = loadFirestoreConfig();
-  if (!config) return [];
-
-  const url = `${getFirestoreDocumentsBaseUrl(config)}:runQuery?key=${config.apiKey}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      structuredQuery: {
-        from: [{ collectionId }],
-        where: {
-          fieldFilter: {
-            field: { fieldPath: "countryId" },
-            op: "EQUAL",
-            value: { stringValue: countryId },
-          },
-        },
-        limit,
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Firestore vector query failed (${collectionId}/${countryId}): ${response.status}`);
-  }
-
-  const parsed = await response.json();
-  return parsed
-    .map((row: any) => row.document ? firestoreDocumentToJs(row.document) : null)
-    .filter(Boolean);
-}
-
 function buildGenericCountryData(rawCountry: string, normalizedCountry: string) {
   const formattedName = (rawCountry || normalizedCountry || "country")
     .replace(/-/g, " ")
@@ -2294,22 +2330,10 @@ async function loadCountryProfile(countryId: string, rawCountry: string): Promis
   let source = prebuiltCountries[countryId] ? "local-standby-database" : "generated-standby-profile";
 
   try {
-    const standardDbRecord = await fetchFirestoreDocument("countries", countryId);
-    if (standardDbRecord) {
-      mergedCountryData = deepMergeCountryData(mergedCountryData, standardDbRecord);
-      source = "firestore-standard-database";
-    }
-  } catch (error) {
-    console.warn(`[Standard DB] Could not read Firestore country profile '${countryId}'. Continuing with available profile sources.`, error);
-  }
-
-  try {
     const neonRecord = await fetchNeonCountryProfile(countryId, rawCountry);
     if (neonRecord) {
       mergedCountryData = deepMergeCountryData(mergedCountryData, normalizeNeonCountryRow(neonRecord));
-      source = source === "firestore-standard-database"
-        ? "neon-country-intelligence-hub+firestore-standard-database"
-        : "neon-country-intelligence-hub";
+      source = "neon-country-intelligence-profiles";
     }
   } catch (error) {
     console.warn(`[Neon] Could not read country profile '${countryId}'. Continuing with fallback profile sources.`, error);
@@ -2322,18 +2346,6 @@ async function loadAllCountryProfiles(): Promise<Record<string, any>> {
   const mergedCountries = { ...prebuiltCountries };
 
   try {
-    const standardDbCountries = await fetchFirestoreCollection("countries");
-    standardDbCountries.forEach((countryRecord) => {
-      const countryId = normalizeCountryId(countryRecord.id || countryRecord.nameEn);
-      if (!countryId) return;
-      const localBase = prebuiltCountries[countryId] || buildGenericCountryData(countryRecord.nameEn || countryId, countryId);
-      mergedCountries[countryId] = deepMergeCountryData(localBase, { ...countryRecord, id: countryId });
-    });
-  } catch (error) {
-    console.warn("[Standard DB] Could not load Firestore countries collection. Serving local standby index.", error);
-  }
-
-  try {
     const neonCountries = await fetchAllNeonCountryProfiles();
     neonCountries.forEach((countryRecord) => {
       const normalizedRecord = normalizeNeonCountryRow(countryRecord);
@@ -2343,7 +2355,7 @@ async function loadAllCountryProfiles(): Promise<Record<string, any>> {
       mergedCountries[countryId] = deepMergeCountryData(localBase, { ...normalizedRecord, id: countryId });
     });
   } catch (error) {
-    console.warn("[Neon] Could not load country_intelligence_hub records. Serving available country index.", error);
+    console.warn("[Neon] Could not load country_intelligence_profiles records. Serving available country index.", error);
   }
 
   return mergedCountries;
@@ -2384,29 +2396,38 @@ async function loadCountryVectorContext(
   question: string | undefined,
   language: "en" | "ar"
 ): Promise<VectorContextRecord[]> {
-  const vectorCollectionId = process.env.VECTOR_CONTEXT_COLLECTION || "countryVectors";
   const countryId = normalizeCountryId(countryData.id || countryData.nameEn);
+  const sections = countryData.intelligenceHub?.sections;
+  if (!isRecordValue(sections)) return [];
 
-  try {
-    const records = await queryFirestoreCollectionByCountry(vectorCollectionId, countryId, 50);
-    const queryText = [
-      countryData.nameEn,
-      countryData.nameAr,
-      question,
-      countryData.sectors?.energyEn,
-      countryData.sectors?.infrastructureEn,
-      countryData.strategicInsights?.partnershipsEn,
-      countryData.predictive?.marketsEn,
-    ].filter(Boolean).join(" ");
+  const queryText = [
+    countryData.nameEn,
+    countryData.nameAr,
+    question,
+    countryData.sectors?.energyEn,
+    countryData.sectors?.infrastructureEn,
+    countryData.strategicInsights?.partnershipsEn,
+    countryData.predictive?.marketsEn,
+  ].filter(Boolean).join(" ");
 
-    return records
-      .map((record) => ({ ...record, score: scoreVectorRecord(record, queryText, language) }))
-      .sort((a, b) => (b.score || 0) - (a.score || 0))
-      .slice(0, getPositiveNumberEnv("VECTOR_CONTEXT_LIMIT", 6));
-  } catch (error) {
-    console.warn(`[Vector DB] Could not load vector context for '${countryId}'. Continuing with standard database profile.`, error);
-    return [];
-  }
+  return Object.entries(sections)
+    .map(([section, value]) => {
+      const textEn = compactJsonValue(value, 1600);
+      if (!textEn) return null;
+
+      const record: VectorContextRecord = {
+        id: `${countryId}-${normalizeCountryId(section)}`,
+        countryId,
+        section,
+        titleEn: humanizeJsonKey(section),
+        textEn,
+        tags: ["neon-jsonb", section],
+      };
+      return { ...record, score: scoreVectorRecord(record, queryText, language) };
+    })
+    .filter((record): record is VectorContextRecord & { score: number } => Boolean(record))
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, getPositiveNumberEnv("VECTOR_CONTEXT_LIMIT", 6));
 }
 
 function renderVectorSignals(vectorContext: VectorContextRecord[], language: "en" | "ar"): string {
@@ -2660,7 +2681,7 @@ async function buildAdvisorGroundingContext(
     dataSources: {
       standardDatabase: source,
       vectorDatabase: {
-        collection: process.env.VECTOR_CONTEXT_COLLECTION || "countryVectors",
+        collection: NEON_JSONB_CONTEXT_SOURCE,
         matches: vectorContext.length,
       },
       meetingMemory: {
@@ -2691,7 +2712,7 @@ async function buildAdvisorChatFallbackContext(
     dataSources: {
       standardDatabase: "local-standby-database",
       vectorDatabase: {
-        collection: process.env.VECTOR_CONTEXT_COLLECTION || "countryVectors",
+        collection: NEON_JSONB_CONTEXT_SOURCE,
         matches: 0,
       },
       meetingMemory: {
@@ -3150,7 +3171,7 @@ app.post("/api/advisor/chat", async (req, res) => {
         source: [
           "n8n-workflow",
           groundingContext.source,
-          groundingContext.vectorContext.length > 0 ? "vector-database" : "",
+          groundingContext.vectorContext.length > 0 ? "neon-jsonb-context" : "",
           groundingContext.meetingMemory.length > 0 ? "meeting-memory" : "",
         ].filter(Boolean).join("+"),
         workflow: {
@@ -3176,7 +3197,7 @@ app.post("/api/advisor/chat", async (req, res) => {
     source: [
       "local-grounded-response",
       groundingContext.source,
-      groundingContext.vectorContext.length > 0 ? "vector-database" : "",
+      groundingContext.vectorContext.length > 0 ? "neon-jsonb-context" : "",
       groundingContext.meetingMemory.length > 0 ? "meeting-memory" : "",
     ].filter(Boolean).join("+"),
     workflow: {
@@ -3215,13 +3236,13 @@ app.post("/api/advisor/brief", async (req, res) => {
       success: true,
       source: [
         source,
-        vectorContext.length > 0 ? "vector-database" : "",
+        vectorContext.length > 0 ? "neon-jsonb-context" : "",
         meetingMemory.length > 0 ? "meeting-memory" : "",
       ].filter(Boolean).join("+"),
       dataSources: {
         standardDatabase: source,
         vectorDatabase: {
-          collection: process.env.VECTOR_CONTEXT_COLLECTION || "countryVectors",
+          collection: NEON_JSONB_CONTEXT_SOURCE,
           matches: vectorContext.length,
         },
         meetingMemory: {
@@ -3247,7 +3268,7 @@ app.post("/api/advisor/brief", async (req, res) => {
       dataSources: {
         standardDatabase: "local-standby-database",
         vectorDatabase: {
-          collection: process.env.VECTOR_CONTEXT_COLLECTION || "countryVectors",
+          collection: NEON_JSONB_CONTEXT_SOURCE,
           matches: 0,
         },
         meetingMemory: {
@@ -3695,14 +3716,47 @@ ${rawData}`;
   }
 });
 
+app.get("/api/advisor/country-intelligence/:country", async (req, res) => {
+  const requestedCountry = normalizeShortText(req.params.country, "brazil", 160);
+  const normalizedCountry = normalizeCountryId(requestedCountry);
+
+  try {
+    const row = await fetchNeonCountryProfile(normalizedCountry, requestedCountry);
+    if (!row) {
+      return res.status(404).json({
+        success: false,
+        source: "neon-country-intelligence-profiles",
+        table: NEON_COUNTRY_INTELLIGENCE_TABLE,
+        error: `No country_intelligence_profiles record found for '${requestedCountry}'.`,
+      });
+    }
+
+    return res.json({
+      success: true,
+      source: "neon-country-intelligence-profiles",
+      table: NEON_COUNTRY_INTELLIGENCE_TABLE,
+      countryId: normalizeCountryId(row.country_name),
+      row: serializeNeonCountryRow(row),
+      countryData: normalizeNeonCountryRow(row),
+    });
+  } catch (error: any) {
+    console.error("[Neon] Direct country intelligence read failed.", error);
+    return res.status(503).json({
+      success: false,
+      source: "neon-country-intelligence-profiles",
+      table: NEON_COUNTRY_INTELLIGENCE_TABLE,
+      error: error?.message || "Unable to read country_intelligence_profiles.",
+    });
+  }
+});
+
 app.get("/api/advisor/database-status", async (req, res) => {
   const neonStatus = await getNeonDatabaseStatus();
 
   res.status(neonStatus.reachable || !neonStatus.configured ? 200 : 503).json({
     success: neonStatus.reachable,
     standardDatabasePriority: [
-      "neon-country-intelligence-hub",
-      "firestore-standard-database",
+      "neon-country-intelligence-profiles",
       "local-standby-database",
     ],
     neon: neonStatus,

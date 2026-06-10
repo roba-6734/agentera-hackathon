@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Cpu, Mic, RotateCcw, Send, Sparkles, Square, X } from "lucide-react";
+import { apiFetch } from "../api";
 
 interface AiChatAssistantProps {
   language: "en" | "ar";
@@ -412,7 +413,7 @@ export default function AiChatAssistant({
 
     try {
       const audioBase64 = await blobToBase64(audioBlob);
-      const resp = await fetch("/api/advisor/transcribe", {
+      const resp = await apiFetch("/api/advisor/transcribe", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -610,7 +611,7 @@ export default function AiChatAssistant({
     }, 600);
 
     try {
-      const resp = await fetch("/api/advisor/chat", {
+      const resp = await apiFetch("/api/advisor/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

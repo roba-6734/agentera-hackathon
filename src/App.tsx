@@ -11,8 +11,7 @@ import DeveloperDashboard from "./components/DeveloperDashboard";
 import AuthPortal from "./components/AuthPortal";
 import StrategicSignalsMonitor from "./components/StrategicSignalsMonitor";
 import StrategicMeetingDebrief from "./components/StrategicMeetingDebrief";
-import { db, OperationType, handleFirestoreError } from "./firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { apiFetch } from "./api";
 import { AppRole, AppSession, PrebuiltCountry, UaeIndicator, activeTabCode } from "./types";
 import { ShieldAlert, Globe, Layers, Award, Landmark, Eye, ArrowRight, HelpCircle, FileText, CheckCircle2, ChevronRight, Activity, Cpu, ChevronDown, Crown, Target, Sparkles, UsersRound, BrainCircuit } from "lucide-react";
 
@@ -144,32 +143,16 @@ export default function App() {
 
     async function loadInitialDatabase() {
       try {
-        const resp = await fetch("/api/advisor/compare");
+        const resp = await apiFetch("/api/advisor/compare");
         const data = await resp.json();
         if (data.countries) {
           const combinedCountries = { ...data.countries };
-          try {
-            const querySnapshot = await getDocs(collection(db, "countries"));
-            querySnapshot.forEach((docSnap) => {
-              const fsData = docSnap.data() as PrebuiltCountry;
-              if (fsData.id) {
-                combinedCountries[fsData.id] = fsData;
-              }
-            });
-          } catch (e) {
-            console.warn("Firestore collection inactive/empty on boot. Continuing with fallbacks.", e);
-            try {
-              handleFirestoreError(e, OperationType.GET, "countries");
-            } catch (err) {
-              console.error("Gracefully caught boot error log wrapper:", err);
-            }
-          }
           setCountriesIndex(combinedCountries);
           setUaeData(data.uae);
           
           // Load default country (brazil) on initial execution
           setIsGenerating(true);
-          const briefResp = await fetch("/api/advisor/brief", {
+          const briefResp = await apiFetch("/api/advisor/brief", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -208,7 +191,7 @@ export default function App() {
     try {
       const trimmedObjective = meetingObjective.trim();
       const executivePrompt = `Draft a concise executive meeting briefing for ${targetCountry}. Keep it focused on decision points, meeting leadership, and no more than three priorities.`;
-      const resp = await fetch("/api/advisor/brief", {
+      const resp = await apiFetch("/api/advisor/brief", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -291,22 +274,10 @@ export default function App() {
 
   const refreshDatabaseIndex = async () => {
     try {
-      const resp = await fetch("/api/advisor/compare");
+      const resp = await apiFetch("/api/advisor/compare");
       const data = await resp.json();
       if (data.countries) {
-        const combinedCountries = { ...data.countries };
-        try {
-          const querySnapshot = await getDocs(collection(db, "countries"));
-          querySnapshot.forEach((docSnap) => {
-            const fsData = docSnap.data() as PrebuiltCountry;
-            if (fsData.id) {
-              combinedCountries[fsData.id] = fsData;
-            }
-          });
-        } catch (e) {
-          console.warn("Firestore refresh failed:", e);
-        }
-        setCountriesIndex(combinedCountries);
+        setCountriesIndex({ ...data.countries });
       }
     } catch (e) {
       console.error("Failed to refresh database index:", e);
