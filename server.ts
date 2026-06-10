@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { createHash } from "crypto";
 import type {
   AppRole,
@@ -20,7 +20,7 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
-app.use(express.json({ limit: "4mb" }));
+app.use(express.json({ limit: "16mb" }));
 
 let aiClient: OpenAI | null = null;
 
@@ -130,6 +130,132 @@ function getOpenAIClient(): OpenAI | null {
     aiClient = new OpenAI({ apiKey });
   }
   return aiClient;
+}
+
+function getAudioExtensionFromMimeType(mimeType: string): string {
+  const normalized = mimeType.toLowerCase();
+  if (normalized.includes("webm")) return "webm";
+  if (normalized.includes("ogg")) return "ogg";
+  if (normalized.includes("mp4")) return "mp4";
+  if (normalized.includes("mpeg") || normalized.includes("mp3")) return "mp3";
+  if (normalized.includes("wav")) return "wav";
+  if (normalized.includes("m4a")) return "m4a";
+  return "webm";
+}
+
+function normalizeAudioMimeType(value: unknown): string {
+  const mimeType = typeof value === "string" ? value.trim().toLowerCase() : "";
+  const safeMimeType = mimeType.split(";")[0] || "audio/webm";
+  if (!safeMimeType.startsWith("audio/") && safeMimeType !== "video/webm") {
+    return "audio/webm";
+  }
+  return mimeType || safeMimeType;
+}
+
+function decodeAudioBase64(value: unknown): Buffer {
+  const rawValue = typeof value === "string" ? value.trim() : "";
+  const base64 = rawValue.includes(",") ? rawValue.slice(rawValue.indexOf(",") + 1) : rawValue;
+  if (!base64) {
+    const error = new Error("No audio recording was received.");
+    (error as any).statusCode = 400;
+    throw error;
+  }
+
+  try {
+    return Buffer.from(base64, "base64");
+  } catch {
+    const error = new Error("The audio recording could not be decoded.");
+    (error as any).statusCode = 400;
+    throw error;
+  }
+}
+
+async function transcribeAdvisorVoiceInput(params: {
+  audioBase64: unknown;
+  mimeType: unknown;
+  language: "en" | "ar";
+  durationMs?: unknown;
+}): Promise<VoiceTranscriptionResult> {
+  const mimeType = normalizeAudioMimeType(params.mimeType);
+  const audioBuffer = decodeAudioBase64(params.audioBase64);
+  const durationMs = typeof params.durationMs === "number" && Number.isFinite(params.durationMs) ? params.durationMs : undefined;
+  const minDurationMs = getPositiveNumberEnv("VOICE_TRANSCRIPTION_MIN_DURATION_MS", 700);
+  const minAudioBytes = getPositiveNumberEnv("VOICE_TRANSCRIPTION_MIN_BYTES", 1600);
+  const maxAudioBytes = getPositiveNumberEnv("VOICE_TRANSCRIPTION_MAX_BYTES", 10 * 1024 * 1024);
+
+  if (durationMs !== undefined && durationMs < minDurationMs) {
+    const error = new Error("Recording is too short. Please record a longer request.");
+    (error as any).statusCode = 400;
+    throw error;
+  }
+
+  if (audioBuffer.byteLength < minAudioBytes) {
+    const error = new Error("Recording is too short or empty. Please record a longer request.");
+    (error as any).statusCode = 400;
+    throw error;
+  }
+
+  if (audioBuffer.byteLength > maxAudioBytes) {
+    const error = new Error("Recording is too large. Please keep voice requests under the configured limit.");
+    (error as any).statusCode = 413;
+    throw error;
+  }
+
+  const configuredProvider = (process.env.VOICE_TRANSCRIPTION_PROVIDER || "").trim().toLowerCase();
+  const openAIClient = getOpenAIClient();
+  const provider: VoiceTranscriptionProvider = configuredProvider === "mock"
+    ? "mock"
+    : configuredProvider === "openai" || openAIClient
+      ? "openai"
+      : "mock";
+
+  if (provider === "mock") {
+    // TODO: Replace this fallback with an approved transcription provider in production
+    // if OpenAI, Azure Speech, Google Speech-to-Text, or another service is preferred.
+    return {
+      text: "Mock transcript: replace this text with the spoken request before sending.",
+      provider: "mock",
+      durationMs,
+      audioBytes: audioBuffer.byteLength,
+      mock: true,
+    };
+  }
+
+  if (!openAIClient) {
+    const error = new Error("Voice transcription provider is not configured.");
+    (error as any).statusCode = 503;
+    throw error;
+  }
+
+  const model = process.env.OPENAI_TRANSCRIPTION_MODEL || "gpt-4o-mini-transcribe";
+  const extension = getAudioExtensionFromMimeType(mimeType);
+  const file = await toFile(audioBuffer, `majlis-voice-request.${extension}`, {
+    type: mimeType.split(";")[0] || "audio/webm",
+  });
+
+  // Arabic transcription is wired through the same field. UI support is first-class later;
+  // keep this parameter explicit so the provider can be switched without changing callers.
+  const transcription = await openAIClient.audio.transcriptions.create({
+    file,
+    model,
+    language: params.language === "ar" ? "ar" : "en",
+    prompt: "Majlis AI policy advisor voice request. Transcribe the user's spoken request exactly and preserve country, sector, company, and official names.",
+  });
+  const text = normalizeShortText((transcription as any).text, "", 8000);
+
+  if (!text || text.split(/\s+/).filter(Boolean).length < 2) {
+    const error = new Error("Transcription did not produce enough text. Please re-record or type the request.");
+    (error as any).statusCode = 422;
+    throw error;
+  }
+
+  return {
+    text,
+    provider: "openai",
+    modelUsed: model,
+    durationMs,
+    audioBytes: audioBuffer.byteLength,
+  };
 }
 
 function getDeepLApiUrl(): string {
@@ -782,6 +908,17 @@ type N8NAdvisorWorkflowResult = {
   rawText: string;
   threadId?: string;
   structured?: any;
+};
+
+type VoiceTranscriptionProvider = "openai" | "mock";
+
+type VoiceTranscriptionResult = {
+  text: string;
+  provider: VoiceTranscriptionProvider;
+  modelUsed?: string;
+  durationMs?: number;
+  audioBytes: number;
+  mock?: boolean;
 };
 
 let firestoreConfigCache: FirestoreConfig | null | undefined;
@@ -2266,6 +2403,32 @@ app.get("/api/meetings", async (req, res) => {
   } catch (error: any) {
     console.error("[Meeting Memory] History query failed.", error);
     return res.status(500).json({ success: false, error: error?.message || "Failed to load meeting history." });
+  }
+});
+
+// Voice input transcription only. The resulting text is submitted through /api/advisor/chat by the client.
+app.post("/api/advisor/transcribe", async (req, res) => {
+  const currentLang: "en" | "ar" = req.body?.language === "ar" ? "ar" : "en";
+
+  try {
+    const transcription = await transcribeAdvisorVoiceInput({
+      audioBase64: req.body?.audioBase64,
+      mimeType: req.body?.mimeType,
+      language: currentLang,
+      durationMs: req.body?.durationMs,
+    });
+
+    return res.json({
+      success: true,
+      transcription,
+    });
+  } catch (error: any) {
+    const statusCode = typeof error?.statusCode === "number" ? error.statusCode : 500;
+    console.warn("[Voice Transcription] Request failed.", error?.message || error);
+    return res.status(statusCode).json({
+      success: false,
+      error: error?.message || (currentLang === "ar" ? "تعذر تفريغ التسجيل الصوتي." : "Voice transcription failed."),
+    });
   }
 });
 
