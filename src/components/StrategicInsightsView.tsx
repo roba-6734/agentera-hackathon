@@ -1,15 +1,42 @@
 import React, { useState } from "react";
 import { PrebuiltCountry } from "../types";
-import { ShieldAlert, Handshake, Landmark, Lightbulb, CheckSquare, PlusCircle, ArrowRightLeft } from "lucide-react";
+import { ShieldAlert, Handshake, Landmark, Lightbulb, CheckSquare, ArrowRightLeft, ChevronDown } from "lucide-react";
 
 interface StrategicInsightsViewProps {
   country: PrebuiltCountry;
   language: "en" | "ar";
 }
 
+function normalizeInsightText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function getInsightSentences(value: string) {
+  const normalized = normalizeInsightText(value);
+  if (!normalized) return [];
+
+  return normalized
+    .split(/(?<=[.!؟])\s+|;\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function getInsightSummary(value: string, maxLength = 190) {
+  const firstSentence = getInsightSentences(value)[0] || normalizeInsightText(value);
+  return firstSentence.length > maxLength ? `${firstSentence.slice(0, maxLength - 3).trim()}...` : firstSentence;
+}
+
+function getInsightBullets(value: string) {
+  const sentences = getInsightSentences(value);
+  return (sentences.length > 1 ? sentences.slice(1) : sentences)
+    .map((sentence) => sentence.replace(/^(Basis|Opportunity|Recommended proposal|Pilot proposal):\s*/i, "").trim())
+    .filter((sentence) => sentence.length > 24)
+    .slice(0, 3);
+}
+
 export default function StrategicInsightsView({ country, language }: StrategicInsightsViewProps) {
   const isEn = language === "en";
-  const [selectedBilateralTopic, setSelectedBilateralTopic] = useState<string>("ports");
+  const [expandedInsightId, setExpandedInsightId] = useState<string | null>(null);
 
   // Specific concrete collaborative projects representing actual high-level scenarios for the countries
   const specificBilateralCases: Record<string, any> = {
@@ -66,116 +93,114 @@ export default function StrategicInsightsView({ country, language }: StrategicIn
     proposeAr: "اقتراح شراكة شاملة تركز على مشروعات الاستدامة والربط اللوجستي الدولي."
   };
 
+  const insightCards = [
+    {
+      id: "partnerships",
+      titleEn: "Bilateral Partnerships",
+      titleAr: "فرص الشراكة والتحالف",
+      Icon: Handshake,
+      text: isEn ? country.strategicInsights.partnershipsEn : country.strategicInsights.partnershipsAr,
+      metaLabelEn: "Target Field",
+      metaLabelAr: "المجال المستهدف",
+      metaValueEn: "Energy / Hydrogen",
+      metaValueAr: "الطاقة / الهيدروجين",
+    },
+    {
+      id: "investments",
+      titleEn: "Strategic Investments",
+      titleAr: "الاستثمارات السيادية والموانئ",
+      Icon: Landmark,
+      text: isEn ? country.strategicInsights.investmentsEn : country.strategicInsights.investmentsAr,
+      metaLabelEn: "Instrument",
+      metaLabelAr: "الآلية الاستثمارية",
+      metaValueEn: "Sovereign / Ports",
+      metaValueAr: "سيادي / موانئ وطرق",
+    },
+    {
+      id: "knowledge",
+      titleEn: "Knowledge Exchange",
+      titleAr: "تبادل الخبرات والعلوم",
+      Icon: Lightbulb,
+      text: isEn ? country.strategicInsights.knowledgeEn : country.strategicInsights.knowledgeAr,
+      metaLabelEn: "Focus Type",
+      metaLabelAr: "نوع نقل المعرفة",
+      metaValueEn: "Tech Transfer",
+      metaValueAr: "نقل التكنولوجيا",
+    },
+  ];
+
+  const actionItems = [
+    {
+      labelEn: "Frame the initiative",
+      labelAr: "تأطير المبادرة",
+      body: getInsightSummary(isEn ? bilateralCase.descEn : bilateralCase.descAr, 150),
+    },
+    {
+      labelEn: "Quantify the value",
+      labelAr: "تحديد القيمة",
+      body: getInsightSummary(isEn ? bilateralCase.impactEn : bilateralCase.impactAr, 150),
+    },
+    {
+      labelEn: "Use as the meeting ask",
+      labelAr: "صياغتها كطلب اجتماع",
+      body: getInsightSummary(isEn ? bilateralCase.proposeEn : bilateralCase.proposeAr, 150),
+    },
+  ];
+
   return (
     <div className="space-y-6" id="strategic-insights-view-tab">
-      
-      {/* Three Pillars Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" id="three-pillars-strategic-grid">
-        
-        {/* Partnership Pillar */}
-        <div className="bg-white rounded-sm shadow-md border border-gold-border border-l-4 border-emerald-deep p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-3 text-emerald-deep mb-4">
-              <div className="p-2 bg-emerald-deep/5 rounded-lg text-emerald-deep">
-                <Handshake className="w-5 h-5 text-gold-deep" />
-              </div>
-              <h4 className="font-serif font-bold text-base text-slate-vip">
-                {isEn ? "Bilateral Partnerships" : "فرص الشراكة والتحالف"}
-              </h4>
-            </div>
-            <p className="text-sm text-gray-600 leading-relaxed font-sans font-medium">
-              {isEn ? country.strategicInsights.partnershipsEn : country.strategicInsights.partnershipsAr}
-            </p>
-          </div>
-          <div className="border-t border-gray-100 pt-4 mt-6 text-xs font-mono text-emerald-light font-bold flex items-center justify-between">
-            <span>{isEn ? "TARGET FIELD" : "المجال المستهدف"}</span>
-            <span className="uppercase">{isEn ? "Energy / Hydrogen" : "الطاقة / الهيدروجين"}</span>
-          </div>
-        </div>
-
-        {/* Investment Pillar */}
-        <div className="bg-white rounded-sm shadow-md border border-gold-border border-l-4 border-emerald-deep p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-3 text-emerald-deep mb-4">
-              <div className="p-2 bg-emerald-deep/5 rounded-lg text-emerald-deep">
-                <Landmark className="w-5 h-5 text-gold-deep" />
-              </div>
-              <h4 className="font-serif font-bold text-base text-slate-vip">
-                {isEn ? "Strategic Investments" : "الاستثمارات السيادية والموانئ"}
-              </h4>
-            </div>
-            <p className="text-sm text-gray-600 leading-relaxed font-sans font-medium">
-              {isEn ? country.strategicInsights.investmentsEn : country.strategicInsights.investmentsAr}
-            </p>
-          </div>
-          <div className="border-t border-gray-100 pt-4 mt-6 text-xs font-mono text-emerald-light font-bold flex items-center justify-between">
-            <span>{isEn ? "INSTRUMENT" : "الآلية الاستثمارية"}</span>
-            <span className="uppercase">{isEn ? "Sovereign / Ports" : "سيادي / موانئ وطرق"}</span>
-          </div>
-        </div>
-
-        {/* Knowledge Pillar */}
-        <div className="bg-white rounded-sm shadow-md border border-gold-border border-l-4 border-emerald-deep p-6 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-3 text-emerald-deep mb-4">
-              <div className="p-2 bg-emerald-deep/5 rounded-lg text-emerald-deep">
-                <Lightbulb className="w-5 h-5 text-gold-deep" />
-              </div>
-              <h4 className="font-serif font-bold text-base text-slate-vip">
-                {isEn ? "Knowledge Exchange" : "تبادل الخبرات والعلوم"}
-              </h4>
-            </div>
-            <p className="text-sm text-gray-600 leading-relaxed font-sans font-medium">
-              {isEn ? country.strategicInsights.knowledgeEn : country.strategicInsights.knowledgeAr}
-            </p>
-          </div>
-          <div className="border-t border-gray-100 pt-4 mt-6 text-xs font-mono text-emerald-light font-bold flex items-center justify-between">
-            <span>{isEn ? "FOCUS TYPE" : "نوع نقل المعرفة"}</span>
-            <span className="uppercase">{isEn ? "Tech Transfer" : "نقل التكنولوجيا"}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Flagship Bilateral Collaboration Scenario Builder */}
-      <div className="bg-white rounded-sm shadow-md border-l-4 border-gold-deep p-6 md:p-8 relative" id="flagship-bilateral-builder">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 border-b border-gray-100 pb-4">
-          <div>
-            <span className="text-xs font-bold font-mono tracking-widest text-emerald-deep bg-gold-bg border border-gold-border/60 px-2.5 py-1 rounded">
+      <section className="bg-white rounded-sm shadow-md border border-gold-border border-l-4 border-gold-deep overflow-hidden" id="flagship-bilateral-builder">
+        <div className="p-6 md:p-7 border-b border-gray-100 flex flex-col xl:flex-row xl:items-start xl:justify-between gap-5">
+          <div className="space-y-3 max-w-3xl">
+            <span className="inline-flex text-xs font-bold font-mono tracking-widest text-emerald-deep bg-gold-bg border border-gold-border/60 px-2.5 py-1 rounded-sm uppercase">
               {isEn ? "RECOMMENDED BILATERAL INITIATIVE" : "المبادرة الاستراتيجية المقترحة للوفد الثنائي"}
             </span>
-            <h3 className="font-serif font-bold text-xl text-slate-vip mt-2">
+            <h3 className="font-serif font-bold text-2xl text-slate-vip leading-tight">
               {isEn ? bilateralCase.titleEn : bilateralCase.titleAr}
             </h3>
+            <p className="text-sm text-gray-600 leading-6">
+              {isEn ? bilateralCase.descEn : bilateralCase.descAr}
+            </p>
           </div>
-          <div className="flex items-center gap-1.5 bg-emerald-deep text-white px-3 py-1 text-xs rounded-full font-bold">
+          <div className="flex items-center gap-1.5 bg-emerald-deep text-white px-3 py-1.5 text-xs rounded-sm font-bold shrink-0">
             <ArrowRightLeft className="w-3.5 h-3.5" />
             <span>{isEn ? "UAE Core Alignment" : "توافق وطني إماراتي"}</span>
           </div>
         </div>
 
-        {/* Breakdown details */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="bilateral-alignment-details">
-          <div className="bg-gold-bg/30 p-5 rounded-sm border border-gold-border">
-            <h4 className="text-sm font-bold text-slate-vip/80 mb-2 uppercase tracking-wide">
-              {isEn ? "Strategic Scope & Decarbonization Roadmap" : "نطاق العمل الاستراتيجي وخارطة الطريق"}
-            </h4>
-            <p className="text-sm text-gray-700 leading-relaxed">
-              {isEn ? bilateralCase.descEn : bilateralCase.descAr}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0" id="bilateral-alignment-details">
+          <div className="lg:col-span-5 p-6 md:p-7 bg-gold-bg/30 border-b lg:border-b-0 lg:border-r border-gold-border">
+            <p className="text-[10px] uppercase tracking-widest font-mono font-black text-gold-deep">
+              {isEn ? "Expected Impact" : "الأثر المتوقع"}
             </p>
-          </div>
-
-          <div className="bg-[#F0F5F2] p-5 rounded-sm border border-emerald-deep/25">
-            <h4 className="text-sm font-bold text-emerald-deep mb-2 uppercase tracking-wide">
-              {isEn ? "Expected Economic & Logistic Impact" : "الأثر اللوجستي والاقتصادي المتوقع"}
-            </h4>
-            <p className="text-sm text-gray-700 leading-relaxed font-medium">
+            <p className="text-base md:text-lg text-slate-vip font-serif font-bold leading-7 mt-2">
               {isEn ? bilateralCase.impactEn : bilateralCase.impactAr}
             </p>
           </div>
+
+          <div className="lg:col-span-7 p-6 md:p-7">
+            <p className="text-[10px] uppercase tracking-widest font-mono font-black text-emerald-deep mb-4">
+              {isEn ? "Priority Actions" : "الأولويات التنفيذية"}
+            </p>
+            <div className="space-y-3">
+              {actionItems.map((item, index) => (
+                <div key={index} className="flex items-start gap-3">
+                  <span className="h-6 w-6 rounded-sm bg-emerald-deep text-white flex items-center justify-center text-[10px] font-mono font-black shrink-0">
+                    {index + 1}
+                  </span>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest font-mono font-black text-slate-vip">
+                      {isEn ? item.labelEn : item.labelAr}
+                    </p>
+                    <p className="text-sm text-gray-700 leading-6 font-medium mt-0.5">{item.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Action Propose Section */}
-        <div className="mt-6 p-4 bg-gold-bg border-l-4 border-gold-deep rounded-sm flex items-start gap-3" id="briefing-action-point">
+        <div className="mx-6 md:mx-7 mb-6 md:mb-7 p-4 bg-[#F8F8F6] border border-gold-border border-l-4 border-gold-deep rounded-sm flex items-start gap-3" id="briefing-action-point">
           <ShieldAlert className="w-5 h-5 text-gold-deep shrink-0 mt-0.5" />
           <div>
             <span className="font-bold text-xs uppercase tracking-wider text-slate-vip block">
@@ -186,7 +211,69 @@ export default function StrategicInsightsView({ country, language }: StrategicIn
             </p>
           </div>
         </div>
-      </div>
+      </section>
+
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4" id="three-pillars-strategic-grid">
+        {insightCards.map((insight) => {
+          const InsightIcon = insight.Icon;
+          const bullets = getInsightBullets(insight.text);
+          const isExpanded = expandedInsightId === insight.id;
+
+          return (
+            <article key={insight.id} className="bg-white rounded-sm shadow-md border border-gold-border border-t-4 border-t-emerald-deep p-5 flex flex-col min-h-[260px]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-9 w-9 bg-emerald-deep/5 rounded-sm text-gold-deep flex items-center justify-center shrink-0">
+                    <InsightIcon className="w-5 h-5" />
+                  </div>
+                  <h4 className="font-serif font-bold text-base text-slate-vip leading-5">
+                    {isEn ? insight.titleEn : insight.titleAr}
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setExpandedInsightId(isExpanded ? null : insight.id)}
+                  className="h-8 w-8 rounded-sm border border-gold-border text-gold-deep hover:bg-gold-bg flex items-center justify-center cursor-pointer shrink-0"
+                  aria-label={isEn ? `Toggle ${insight.titleEn} details` : `تبديل تفاصيل ${insight.titleAr}`}
+                >
+                  <ChevronDown className="w-4 h-4 transition-transform" style={{ transform: isExpanded ? "rotate(180deg)" : "none" }} />
+                </button>
+              </div>
+
+              <p className="text-sm text-gray-700 leading-6 mt-4 font-medium">
+                {getInsightSummary(insight.text)}
+              </p>
+
+              <div className="mt-4 space-y-2 flex-1">
+                {bullets.length > 0 ? bullets.map((bullet, index) => (
+                  <div key={index} className="flex items-start gap-2">
+                    <CheckSquare className="w-3.5 h-3.5 text-emerald-deep shrink-0 mt-1" />
+                    <p className="text-xs text-gray-600 leading-5 line-clamp-2">{bullet}</p>
+                  </div>
+                )) : (
+                  <div className="flex items-start gap-2">
+                    <CheckSquare className="w-3.5 h-3.5 text-emerald-deep shrink-0 mt-1" />
+                    <p className="text-xs text-gray-600 leading-5">{getInsightSummary(insight.text, 130)}</p>
+                  </div>
+                )}
+              </div>
+
+              {isExpanded && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <p className="text-xs text-gray-600 leading-6">
+                    {normalizeInsightText(insight.text)}
+                  </p>
+                </div>
+              )}
+
+              <div className="border-t border-gray-100 pt-3 mt-4 text-[10px] font-mono text-emerald-light font-black flex items-center justify-between gap-3 uppercase">
+                <span>{isEn ? insight.metaLabelEn : insight.metaLabelAr}</span>
+                <span className="text-right">{isEn ? insight.metaValueEn : insight.metaValueAr}</span>
+              </div>
+            </article>
+          );
+        })}
+      </section>
 
     </div>
   );

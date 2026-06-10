@@ -780,20 +780,17 @@ export default function App() {
         {/* TOP LEVEL CABINET BILATERAL SUMMIT & MEETING SCHEDULER REMOVED FROM MAIN INLINE ROW GRID TO OVERLAY PORTAL TRIGGERED VIA HEADER */}
 
         <section className="bg-white rounded-sm shadow-md border border-gold-border overflow-hidden" id="intelligence-hub-strip">
-          <div className="bg-slate-vip px-4 py-3 flex flex-col xl:flex-row xl:items-center gap-3">
-            <div className="flex items-center gap-2 shrink-0 min-w-[210px]">
+          <div className="px-4 py-3 flex flex-col xl:flex-row xl:items-center gap-3">
+            <div className="flex items-center gap-2 shrink-0 min-w-[190px]">
               <Cpu className="w-4 h-4 text-gold-deep" />
               <div>
-                <p className="text-xs uppercase font-mono tracking-widest text-gray-100 font-extrabold">
+                <p className="text-xs uppercase font-mono tracking-widest text-slate-vip font-extrabold">
                   {isEn ? "Intelligence Hub" : "قنوات البحث الفني"}
-                </p>
-                <p className="text-[10px] text-gray-400">
-                  {isEn ? "Workspace modules" : "وحدات مساحة العمل"}
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2 flex-1" id="navigation-rail-buttons">
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-1.5 flex-1" id="navigation-rail-buttons">
               {workspaceTabItems.map((item) => {
                 const TabIcon = item.Icon;
                 const isActiveTab = activeTab === item.code;
@@ -805,10 +802,10 @@ export default function App() {
                       setActiveTab(item.code);
                       setCurrentStep(item.step);
                     }}
-                    className={`min-h-12 px-3 py-2 rounded-sm border text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                    className={`min-h-11 px-3 py-2 rounded-sm border-b-2 text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
                       isActiveTab
-                        ? "bg-gold-bg text-emerald-deep border-gold-deep shadow-sm"
-                        : "bg-white/5 text-gray-100 border-white/10 hover:bg-white/10"
+                        ? "bg-gold-bg text-emerald-deep border-gold-deep"
+                        : "bg-white text-gray-600 border-transparent hover:bg-[#F8F8F6] hover:text-slate-vip"
                     }`}
                   >
                     <span className="flex items-center gap-2 min-w-0">
