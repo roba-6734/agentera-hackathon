@@ -928,6 +928,8 @@ type NeonCountryIntelligenceRow = {
   created_at: string | Date | null;
   updated_at: string | Date | null;
   profile_json: unknown;
+  macro_economics: unknown;
+  hub_last_updated: string | Date | null;
 };
 
 type VectorContextRecord = {
@@ -988,39 +990,42 @@ type VoiceTranscriptionResult = {
 };
 
 const NEON_COUNTRY_INTELLIGENCE_TABLE = "country_intelligence_profiles";
+const NEON_COUNTRY_INTELLIGENCE_HUB_TABLE = "country_intelligence_hub";
 const NEON_COUNTRY_SELECT_COLUMNS = [
-  "id",
-  "hub_country_id",
-  "country_name",
-  "iso_code",
-  "overview",
-  "government_structure",
-  "political_context",
-  "economic_context",
-  "energy_context",
-  "infrastructure_context",
-  "sustainability_context",
-  "national_priorities",
-  "uae_bilateral_context",
-  "strategic_relevance_to_uae",
-  "key_opportunities",
-  "key_risks",
-  "key_sectors",
-  "executive_summary",
-  "rag_summary",
-  "rag_keywords",
-  "source_notes",
-  "source_coverage",
-  "available_layers",
-  "missing_layers",
-  "confidence_score",
-  "profile_status",
-  "ai_generated",
-  "ai_generated_facts",
-  "method",
-  "created_at",
-  "updated_at",
-  "profile_json",
+  "p.id",
+  "p.hub_country_id",
+  "p.country_name",
+  "p.iso_code",
+  "p.overview",
+  "p.government_structure",
+  "p.political_context",
+  "p.economic_context",
+  "p.energy_context",
+  "p.infrastructure_context",
+  "p.sustainability_context",
+  "p.national_priorities",
+  "p.uae_bilateral_context",
+  "p.strategic_relevance_to_uae",
+  "p.key_opportunities",
+  "p.key_risks",
+  "p.key_sectors",
+  "p.executive_summary",
+  "p.rag_summary",
+  "p.rag_keywords",
+  "p.source_notes",
+  "p.source_coverage",
+  "p.available_layers",
+  "p.missing_layers",
+  "p.confidence_score",
+  "p.profile_status",
+  "p.ai_generated",
+  "p.ai_generated_facts",
+  "p.method",
+  "p.created_at",
+  "p.updated_at",
+  "p.profile_json",
+  "h.macro_economics AS macro_economics",
+  "h.last_updated AS hub_last_updated",
 ].join(", ");
 
 let neonSqlCache: NeonQueryFunction<false, false> | null | undefined;
@@ -1248,6 +1253,55 @@ function normalizedNumberOrNull(value: unknown): number | null {
   return null;
 }
 
+function parseUsdAmount(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  if (typeof value !== "string") return null;
+
+  const normalized = value.trim();
+  if (!normalized) return null;
+
+  const match = normalized.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+
+  const parsed = Number(match[0]);
+  if (!Number.isFinite(parsed)) return null;
+
+  const lower = normalized.toLowerCase();
+  if (lower.includes("trillion")) return parsed * 1_000_000_000_000;
+  if (lower.includes("billion")) return parsed * 1_000_000_000;
+  if (lower.includes("million")) return parsed * 1_000_000;
+
+  return parsed;
+}
+
+function formatUsdGdpFromMacroEconomics(macroEconomics: Record<string, any>, language: "en" | "ar" = "en"): string | undefined {
+  const rawGdp = getFlexibleObjectValue(macroEconomics, "gdp")
+    ?? getFlexibleObjectValue(macroEconomics, "nominalGdp")
+    ?? getFlexibleObjectValue(macroEconomics, "nominal_gdp")
+    ?? getFlexibleObjectValue(macroEconomics, "gdpUsd")
+    ?? getFlexibleObjectValue(macroEconomics, "gdp_usd");
+
+  const gdpUsd = parseUsdAmount(rawGdp);
+  if (gdpUsd === null) {
+    return compactJsonValue(rawGdp, 180);
+  }
+
+  const absoluteGdp = Math.abs(gdpUsd);
+  const useTrillion = absoluteGdp >= 1_000_000_000_000;
+  const scaledValue = useTrillion ? gdpUsd / 1_000_000_000_000 : gdpUsd / 1_000_000_000;
+  const year = normalizeShortText(getFlexibleObjectValue(macroEconomics, "year"), "", 24);
+  const formattedValue = scaledValue.toLocaleString("en-US", {
+    maximumFractionDigits: Math.abs(scaledValue) >= 100 ? 1 : 2,
+  });
+
+  if (language === "ar") {
+    return `${formattedValue} ${useTrillion ? "تريليون" : "مليار"} دولار أمريكي${year ? ` (${year})` : ""}`;
+  }
+
+  return `$${formattedValue} ${useTrillion ? "Trillion" : "Billion"} USD${year ? ` (${year})` : ""}`;
+}
+
 function buildNeonIntelligenceSections(row: NeonCountryIntelligenceRow): Record<string, Record<string, any>> {
   return {
     overview: textSection(row.overview),
@@ -1271,6 +1325,7 @@ function buildNeonIntelligenceSections(row: NeonCountryIntelligenceRow): Record<
     availableLayers: parseJsonRecord(row.available_layers),
     missingLayers: parseJsonRecord(row.missing_layers),
     profileJson: parseJsonRecord(row.profile_json),
+    macroEconomics: parseJsonRecord(row.macro_economics),
   };
 }
 
@@ -1308,6 +1363,8 @@ function serializeNeonCountryRow(row: NeonCountryIntelligenceRow): Record<string
     created_at: timestampToIso(row.created_at) || null,
     updated_at: timestampToIso(row.updated_at) || null,
     profile_json: parseJsonRecord(row.profile_json),
+    macro_economics: parseJsonRecord(row.macro_economics),
+    hub_last_updated: timestampToIso(row.hub_last_updated) || null,
   };
 }
 
@@ -1318,6 +1375,7 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
   const isoCode = normalizeShortText(row.iso_code, "", 3).toUpperCase();
   const countryId = normalizeCountryId(countryName) || normalizeCountryId(isoCode) || String(row.id);
   const updatedAt = timestampToIso(row.updated_at);
+  const hubLastUpdated = timestampToIso(row.hub_last_updated);
   const createdAt = timestampToIso(row.created_at);
   const confidenceScore = normalizedNumberOrNull(row.confidence_score);
   const opportunitiesText = compactJsonValue(row.key_opportunities, 900);
@@ -1325,7 +1383,7 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
   const sectorsText = compactJsonValue(row.key_sectors, 900);
 
   const countrySources = [profileJson, sections.overview, sections.governmentStructure, sections.politicalContext];
-  const macroSources = [profileJson, sections.economicContext];
+  const macroSources = [sections.macroEconomics, profileJson, sections.economicContext];
   const energySources = [profileJson, sections.energyContext, sections.keySectors];
   const infrastructureSources = [profileJson, sections.infrastructureContext, sections.keySectors];
   const sustainabilitySources = [profileJson, sections.sustainabilityContext, sections.keySectors];
@@ -1409,7 +1467,7 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
       ], 700),
     },
     indicators: {
-      gdp: pickFirstJsonTextFromSources(macroSources, [
+      gdp: formatUsdGdpFromMacroEconomics(sections.macroEconomics) || pickFirstJsonTextFromSources(macroSources, [
         ["indicators", "gdp"],
         ["gdp"],
         ["nominalGdp"],
@@ -1419,7 +1477,8 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
         ["grossDomesticProduct"],
         ["gross_domestic_product"],
       ], 180),
-      gdpAr: pickFirstJsonTextFromSources(macroSources, [["indicators", "gdpAr"], ["gdpAr"], ["gdp_ar"], ["nominalGdpAr"], ["nominal_gdp_ar"]], 180),
+      gdpAr: formatUsdGdpFromMacroEconomics(sections.macroEconomics, "ar")
+        || pickFirstJsonTextFromSources(macroSources, [["indicators", "gdpAr"], ["gdpAr"], ["gdp_ar"], ["nominalGdpAr"], ["nominal_gdp_ar"]], 180),
       growth: pickFirstJsonTextFromSources(macroSources, [
         ["indicators", "growth"],
         ["growth"],
@@ -1629,6 +1688,7 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
       countryName,
       isoCode,
       lastUpdated: updatedAt,
+      hubLastUpdated,
       createdAt,
       profileStatus: normalizeShortText(row.profile_status, "", 80),
       confidenceScore,
@@ -1648,12 +1708,16 @@ async function fetchNeonCountryProfile(countryId: string, rawCountry: string): P
   const requestedIso = requestedCountry.replace(/[^a-zA-Z]/g, "").slice(0, 3);
   const rows = await sql.query(
     `SELECT ${NEON_COUNTRY_SELECT_COLUMNS}
-     FROM ${NEON_COUNTRY_INTELLIGENCE_TABLE}
-     WHERE trim(both '-' from regexp_replace(replace(lower(country_name), '&', 'and'), '[^a-z0-9]+', '-', 'g')) = $1
-        OR lower(country_name) = lower($2)
-        OR lower(iso_code) = lower($2)
-        OR lower(iso_code) = lower($3)
-     ORDER BY country_name ASC
+     FROM ${NEON_COUNTRY_INTELLIGENCE_TABLE} p
+     LEFT JOIN ${NEON_COUNTRY_INTELLIGENCE_HUB_TABLE} h
+       ON h.id = p.hub_country_id
+       OR lower(h.country_name) = lower(p.country_name)
+       OR lower(h.iso_code) = lower(p.iso_code)
+     WHERE trim(both '-' from regexp_replace(replace(lower(p.country_name), '&', 'and'), '[^a-z0-9]+', '-', 'g')) = $1
+        OR lower(p.country_name) = lower($2)
+        OR lower(p.iso_code) = lower($2)
+        OR lower(p.iso_code) = lower($3)
+     ORDER BY p.country_name ASC
      LIMIT 1`,
     [countryId, requestedCountry, requestedIso || countryId]
   ) as NeonCountryIntelligenceRow[];
@@ -1668,11 +1732,36 @@ async function fetchAllNeonCountryProfiles(): Promise<NeonCountryIntelligenceRow
   const limit = Math.min(Math.floor(getPositiveNumberEnv("NEON_COUNTRY_LIMIT", 500)), 2000);
   return await sql.query(
     `SELECT ${NEON_COUNTRY_SELECT_COLUMNS}
-     FROM ${NEON_COUNTRY_INTELLIGENCE_TABLE}
-     ORDER BY country_name ASC
+     FROM ${NEON_COUNTRY_INTELLIGENCE_TABLE} p
+     LEFT JOIN ${NEON_COUNTRY_INTELLIGENCE_HUB_TABLE} h
+       ON h.id = p.hub_country_id
+       OR lower(h.country_name) = lower(p.country_name)
+       OR lower(h.iso_code) = lower(p.iso_code)
+     ORDER BY p.country_name ASC
      LIMIT $1`,
     [limit]
   ) as NeonCountryIntelligenceRow[];
+}
+
+async function fetchNeonCountryHubMacroEconomics(countryId: string, rawCountry: string): Promise<Record<string, any>> {
+  const sql = getNeonSql();
+  if (!sql) return {};
+
+  const requestedCountry = normalizeShortText(rawCountry, countryId, 160);
+  const requestedIso = requestedCountry.replace(/[^a-zA-Z]/g, "").slice(0, 3);
+  const rows = await sql.query(
+    `SELECT h.macro_economics
+     FROM ${NEON_COUNTRY_INTELLIGENCE_HUB_TABLE} h
+     WHERE trim(both '-' from regexp_replace(replace(lower(h.country_name), '&', 'and'), '[^a-z0-9]+', '-', 'g')) = $1
+        OR lower(h.country_name) = lower($2)
+        OR lower(h.iso_code) = lower($2)
+        OR lower(h.iso_code) = lower($3)
+     ORDER BY h.country_name ASC
+     LIMIT 1`,
+    [countryId, requestedCountry, requestedIso || countryId]
+  ) as Array<{ macro_economics: unknown }>;
+
+  return parseJsonRecord(rows[0]?.macro_economics);
 }
 
 async function getNeonDatabaseStatus(): Promise<{
@@ -2359,6 +2448,37 @@ async function loadAllCountryProfiles(): Promise<Record<string, any>> {
   }
 
   return mergedCountries;
+}
+
+function buildUaeComparisonIndicator(macroEconomics: Record<string, any> = {}): any {
+  return {
+    nameEn: "United Arab Emirates (UAE)",
+    nameAr: "دولة الإمارات العربية المتحدة",
+    flag: "🇦🇪",
+    gdp: formatUsdGdpFromMacroEconomics(macroEconomics) || "$504 Billion (USD)",
+    gdpAr: formatUsdGdpFromMacroEconomics(macroEconomics, "ar") || "504 مليار دولار أمريكي",
+    growth: "3.7%",
+    energyMix: "Natural Gas (55%), Solar & Clean Nuclear (42%), Oil & Clean Coal (3%)",
+    energyMixAr: "غاز طبيعي (55%)، طاقة شمسية ونووية نظيفة (42%)، نفط وفحم نظيف (3%)",
+    infrastructureIndex: "96.5/100 (Global Top Rank on Roads & Ports)",
+    infrastructureIndexAr: "96.5/100 (مرتبة رائدة عالمياً في جودة الطرق والموانئ)",
+    environmentalRank: "Net Zero Strategic Initiative 2050 Active",
+    environmentalRankAr: "مبادرة الحياد المناخي 2050 نشطة كلياً",
+    competitivenessRank: "Top 10th globally",
+    competitivenessRankAr: "ضمن أفضل 10 دول تنافسية عالمياً",
+    cooperationAgreementEn: "Host of COP28, Global Green Corridor Champion",
+    cooperationAgreementAr: "مستضيف مؤتمر الأطراف COP28 ورائد الممرات العالمية الخضراء",
+  };
+}
+
+async function loadUaeComparisonIndicator(): Promise<any> {
+  try {
+    const macroEconomics = await fetchNeonCountryHubMacroEconomics("united-arab-emirates", "United Arab Emirates");
+    return buildUaeComparisonIndicator(macroEconomics);
+  } catch (error) {
+    console.warn("[Neon] Could not load UAE macro_economics from country_intelligence_hub. Using comparison fallback.", error);
+    return buildUaeComparisonIndicator();
+  }
 }
 
 function tokenizeQuery(value: string): string[] {
@@ -3765,26 +3885,13 @@ app.get("/api/advisor/database-status", async (req, res) => {
 
 // Compare countries endpoint
 app.get("/api/advisor/compare", async (req, res) => {
-  const countries = await loadAllCountryProfiles();
+  const [countries, uae] = await Promise.all([
+    loadAllCountryProfiles(),
+    loadUaeComparisonIndicator(),
+  ]);
 
   res.json({
-    uae: {
-      nameEn: "United Arab Emirates (UAE)",
-      nameAr: "دولة الإمارات العربية المتحدة",
-      flag: "🇦🇪",
-      gdp: "$504 Billion (USD)",
-      gdpAr: "504 مليار دولار أمريكي",
-      growth: "3.7%",
-      energyMix: "Natural Gas (55%), Solar & Clean Nuclear (42%), Oil & Clean Coal (3%)",
-      energyMixAr: "غاز طبيعي (55%)، طاقة شمسية ونووية نظيفة (42%)، نفط وفحم نظيف (3%)",
-      infrastructureIndex: "96.5/100 (Global Top Rank on Roads & Ports)",
-      infrastructureIndexAr: "96.5/100 (مرتبة رائدة عالمياً في جودة الطرق والموانئ)",
-      environmentalRank: "Net Zero Strategic Initiative 2050 Active",
-      environmentalRankAr: "مبادرة الحياد المناخي 2050 نشطة كلياً",
-      competitivenessRank: "Top 10th globally",
-      cooperationAgreementEn: "Host of COP28, Global Green Corridor Champion",
-      cooperationAgreementAr: "مستضيف مؤتمر الأطراف COP28 ورائد الممرات العالمية الخضراء",
-    },
+    uae,
     countries
   });
 });
