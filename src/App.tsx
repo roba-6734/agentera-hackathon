@@ -117,7 +117,7 @@ export default function App() {
           if (briefData.success) {
             setAiBriefingText(briefData.aiBriefing.rawText);
             setBriefingSource(briefData.source || "gemini-strategic-ai");
-            setActiveCountry(combinedCountries["brazil"] || briefData.countryData);
+            setActiveCountry(briefData.countryData || combinedCountries["brazil"]);
           }
         }
       } catch (err) {
@@ -155,12 +155,7 @@ export default function App() {
         setAiBriefingText(data.aiBriefing.rawText);
         setBriefingSource(data.source || "gemini-strategic-ai");
         if (data.countryData) {
-          const fsDetailedRecord = activeIndex[targetCountry];
-          if (fsDetailedRecord && fsDetailedRecord.profile && fsDetailedRecord.sectors) {
-            setActiveCountry(fsDetailedRecord);
-          } else {
-            setActiveCountry(data.countryData);
-          }
+          setActiveCountry(data.countryData);
         }
         
         if (meetingObjective.trim()) {

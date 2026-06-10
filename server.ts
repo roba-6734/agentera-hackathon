@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
@@ -16,10 +17,16 @@ app.use(express.json());
 let aiClient: GoogleGenAI | null = null;
 
 type GeminiGenerationResult = { text: string; modelUsed: string };
+type TranslationMetadata = {
+  provider: "deepl" | "none";
+  targetLanguage: string;
+  translatedFields: number;
+};
 
 const DEFAULT_GEMINI_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
 const geminiResponseCache = new Map<string, { result: GeminiGenerationResult; expiresAt: number }>();
 const pendingGeminiRequests = new Map<string, Promise<GeminiGenerationResult>>();
+const deeplTranslationCache = new Map<string, { text: string; expiresAt: number }>();
 let geminiQuotaCooldownUntil = 0;
 
 function getPositiveNumberEnv(name: string, fallback: number): number {
@@ -105,6 +112,87 @@ function getGeminiClient(): GoogleGenAI | null {
     });
   }
   return aiClient;
+}
+
+function getDeepLApiUrl(): string {
+  if (process.env.DEEPL_API_URL) {
+    return process.env.DEEPL_API_URL;
+  }
+
+  const apiKey = process.env.DEEPL_API_KEY || "";
+  return apiKey.endsWith(":fx")
+    ? "https://api-free.deepl.com/v2/translate"
+    : "https://api.deepl.com/v2/translate";
+}
+
+function getCacheHash(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+async function translateTextsWithDeepL(texts: string[], targetLanguage = "AR"): Promise<string[]> {
+  const apiKey = process.env.DEEPL_API_KEY;
+  if (!apiKey) {
+    return texts;
+  }
+
+  const cacheTtlMs = getPositiveNumberEnv("DEEPL_CACHE_TTL_MS", 24 * 60 * 60 * 1000);
+  const results = [...texts];
+  const missingIndexes: number[] = [];
+  const missingTexts: string[] = [];
+
+  texts.forEach((text, index) => {
+    const normalizedText = (text || "").trim();
+    if (!normalizedText) {
+      results[index] = text;
+      return;
+    }
+
+    const cacheKey = getCacheHash(`${targetLanguage}:${normalizedText}`);
+    const cached = deeplTranslationCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      results[index] = cached.text;
+      return;
+    }
+
+    missingIndexes.push(index);
+    missingTexts.push(normalizedText);
+  });
+
+  const maxBatchSize = getPositiveNumberEnv("DEEPL_BATCH_SIZE", 40);
+  for (let offset = 0; offset < missingTexts.length; offset += maxBatchSize) {
+    const batchTexts = missingTexts.slice(offset, offset + maxBatchSize);
+    const batchIndexes = missingIndexes.slice(offset, offset + maxBatchSize);
+
+    const response = await fetch(getDeepLApiUrl(), {
+      method: "POST",
+      headers: {
+        Authorization: `DeepL-Auth-Key ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: batchTexts,
+        source_lang: "EN",
+        target_lang: targetLanguage,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`DeepL translation failed with status ${response.status}`);
+    }
+
+    const parsed = await response.json();
+    const translations = parsed.translations || [];
+    translations.forEach((translation: any, batchIndex: number) => {
+      const translatedText = translation?.text || batchTexts[batchIndex];
+      const resultIndex = batchIndexes[batchIndex];
+      const cacheKey = getCacheHash(`${targetLanguage}:${batchTexts[batchIndex]}`);
+
+      results[resultIndex] = translatedText;
+      deeplTranslationCache.set(cacheKey, { text: translatedText, expiresAt: Date.now() + cacheTtlMs });
+    });
+  }
+
+  return results;
 }
 
 // Structured mock/benchmark strategic intelligence database representing verified historical profiles
@@ -626,6 +714,541 @@ const prebuiltCountries: Record<string, any> = {
   }
 };
 
+type FirestoreConfig = {
+  projectId: string;
+  apiKey: string;
+  firestoreDatabaseId?: string;
+};
+
+type VectorContextRecord = {
+  id: string;
+  countryId?: string;
+  section?: string;
+  titleEn?: string;
+  titleAr?: string;
+  textEn?: string;
+  textAr?: string;
+  tags?: string[];
+  sourceUrl?: string;
+  score?: number;
+};
+
+let firestoreConfigCache: FirestoreConfig | null | undefined;
+
+function normalizeCountryId(value: string): string {
+  return (value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function loadFirestoreConfig(): FirestoreConfig | null {
+  if (firestoreConfigCache !== undefined) {
+    return firestoreConfigCache;
+  }
+
+  try {
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    const parsedConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    if (!parsedConfig.projectId || !parsedConfig.apiKey) {
+      firestoreConfigCache = null;
+      return firestoreConfigCache;
+    }
+
+    firestoreConfigCache = {
+      projectId: parsedConfig.projectId,
+      apiKey: parsedConfig.apiKey,
+      firestoreDatabaseId: parsedConfig.firestoreDatabaseId || "(default)",
+    };
+    return firestoreConfigCache;
+  } catch (error) {
+    console.warn("[Standard DB] Firebase applet config unavailable. Falling back to local standby data.", error);
+    firestoreConfigCache = null;
+    return firestoreConfigCache;
+  }
+}
+
+function getFirestoreDocumentsBaseUrl(config: FirestoreConfig): string {
+  const databaseId = encodeURIComponent(config.firestoreDatabaseId || "(default)");
+  return `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/${databaseId}/documents`;
+}
+
+function firestoreValueToJs(value: any): any {
+  if (!value || typeof value !== "object") return undefined;
+  if ("stringValue" in value) return value.stringValue;
+  if ("integerValue" in value) return Number(value.integerValue);
+  if ("doubleValue" in value) return Number(value.doubleValue);
+  if ("booleanValue" in value) return Boolean(value.booleanValue);
+  if ("timestampValue" in value) return value.timestampValue;
+  if ("nullValue" in value) return null;
+  if ("arrayValue" in value) return (value.arrayValue.values || []).map(firestoreValueToJs);
+  if ("mapValue" in value) {
+    return Object.fromEntries(
+      Object.entries(value.mapValue.fields || {}).map(([key, nestedValue]) => [key, firestoreValueToJs(nestedValue)])
+    );
+  }
+  if ("referenceValue" in value) return value.referenceValue;
+  if ("bytesValue" in value) return value.bytesValue;
+  if ("geoPointValue" in value) return value.geoPointValue;
+  return undefined;
+}
+
+function firestoreDocumentToJs(document: any): any {
+  const data = Object.fromEntries(
+    Object.entries(document?.fields || {}).map(([key, value]) => [key, firestoreValueToJs(value)])
+  );
+  const id = document?.name?.split("/").pop();
+  return { id: data.id || id, ...data };
+}
+
+async function fetchFirestoreDocument(collectionId: string, documentId: string): Promise<any | null> {
+  const config = loadFirestoreConfig();
+  if (!config) return null;
+
+  const url = `${getFirestoreDocumentsBaseUrl(config)}/${collectionId}/${encodeURIComponent(documentId)}?key=${config.apiKey}`;
+  const response = await fetch(url);
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`Firestore document read failed (${collectionId}/${documentId}): ${response.status}`);
+  }
+
+  return firestoreDocumentToJs(await response.json());
+}
+
+async function fetchFirestoreCollection(collectionId: string, pageSize = 200): Promise<any[]> {
+  const config = loadFirestoreConfig();
+  if (!config) return [];
+
+  const url = `${getFirestoreDocumentsBaseUrl(config)}/${collectionId}?pageSize=${pageSize}&key=${config.apiKey}`;
+  const response = await fetch(url);
+  if (response.status === 404) return [];
+  if (!response.ok) {
+    throw new Error(`Firestore collection read failed (${collectionId}): ${response.status}`);
+  }
+
+  const parsed = await response.json();
+  return (parsed.documents || []).map(firestoreDocumentToJs);
+}
+
+async function queryFirestoreCollectionByCountry(collectionId: string, countryId: string, limit = 50): Promise<any[]> {
+  const config = loadFirestoreConfig();
+  if (!config) return [];
+
+  const url = `${getFirestoreDocumentsBaseUrl(config)}:runQuery?key=${config.apiKey}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "countryId" },
+            op: "EQUAL",
+            value: { stringValue: countryId },
+          },
+        },
+        limit,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Firestore vector query failed (${collectionId}/${countryId}): ${response.status}`);
+  }
+
+  const parsed = await response.json();
+  return parsed
+    .map((row: any) => row.document ? firestoreDocumentToJs(row.document) : null)
+    .filter(Boolean);
+}
+
+function buildGenericCountryData(rawCountry: string, normalizedCountry: string) {
+  const formattedName = (rawCountry || normalizedCountry || "country")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+  return {
+    id: normalizedCountry,
+    nameEn: formattedName,
+    nameAr: rawCountry || formattedName,
+    flag: "🌐",
+    profile: {
+      overviewEn: `Bilateral portfolio for ${formattedName}. Presenting diplomatic overview, strategic initiatives, and mutual growth pathways with the UAE.`,
+      overviewAr: `ملف مخصص ودراسة واعدة لـ ${formattedName}. تشمل استعراض الجاهزية اللوجستية والتكاملات الثنائية مع دولة الإمارات.`,
+      governmentEn: "Government structure and regional alignment details.",
+      governmentAr: "تفاصيل الهيكل الحكومي والمواءمة في اللجان الاستراتيجية المشتركة.",
+      leadershipEn: `Dignitary representatives of ${formattedName}.`,
+      leadershipAr: `تمثيل وفد دولة ${formattedName}.`
+    },
+    indicators: {
+      gdp: "Dynamic Evaluation ($Billion USD)",
+      gdpAr: "قيد التقييم الفيدرالي",
+      growth: "2.1%",
+      gdpPerCapita: "Dynamic Scale",
+      energyMix: "Clean Transition Active, Solar & Wind targets progressing",
+      energyMixAr: "تحول طاقة نشط، مشاريع شمسية ورياح قيد اللجان",
+      infrastructureIndex: "Evaluated (High capability)",
+      environmentalRank: "Under Review",
+      competitivenessRank: "Highly Competitive",
+      cooperationAgreementEn: "Active Strategic Partnership Initiative",
+      cooperationAgreementAr: "شراكة متبادلة مستمرة وإطار تنسيقي نشط"
+    },
+    sectors: {
+      energyEn: "Clean energy grids, renewable targets and solar capacity potential.",
+      energyAr: "شبكات طاقة ومصادر إنتاج شمسية ورياح واعدة.",
+      infrastructureEn: "Strategic maritime shipping lanes and digital port connectivity.",
+      infrastructureAr: "ممرات وبنى ملاحة بحرية تدعم تدفق المنتجات الثنائية.",
+      sustainabilityEn: "Net Zero carbon targets alignment and climate strategies.",
+      sustainabilityAr: "اتفاق مواءمة الحياد الكربوني والاستشارات البيئية المشتركة."
+    },
+    strategicInsights: {
+      partnershipsEn: "High yield renewable corridors and smart logistics integration.",
+      partnershipsAr: "تمويلات مشتركة وطاقة مصدرية متبادلة ومجالس ابتكار.",
+      investmentsEn: "Direct foreign trade initiatives and trade support framework.",
+      investmentsAr: "استثمارات متبادلة وممرات تنمية وتسهيلات لوجستية ثنائية.",
+      knowledgeEn: "Knowledge sharing pipelines and smart technology transfer.",
+      knowledgeAr: "تبادل المخرجات المعرفية وبراءات تكنولوجيا كفاءة التشغيل."
+    },
+    predictive: {
+      marketsEn: "Clean energy transition scaling and market growth indices.",
+      marketsAr: "فرص تنقيل الوقود والأمونيا النظيفة وتحديث الأسواق المحلية.",
+      risksEn: "Regulatory alignment steps. Mitigation via sovereign framework agreements.",
+      risksAr: "تفادي المعيقات عبر الاتفاقيات والبروتوكولات الشاملة المعتمدة.",
+      proposalsEn: `Establish a UAE-${formattedName} Strategic Infrastructure Corridor.`,
+      proposalsAr: `إطلاق مشروع الممرات الرقمية المشتركة بين الإمارات و ${formattedName}.`
+    }
+  };
+}
+
+function deepMergeCountryData(baseData: any, overrideData: any): any {
+  if (!overrideData || typeof overrideData !== "object") return baseData;
+  const merged = { ...baseData };
+
+  for (const [key, value] of Object.entries(overrideData)) {
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value)) {
+      merged[key] = value;
+      continue;
+    }
+    if (typeof value === "object" && typeof merged[key] === "object" && !Array.isArray(merged[key])) {
+      merged[key] = deepMergeCountryData(merged[key], value);
+      continue;
+    }
+    merged[key] = value;
+  }
+
+  return merged;
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function getNestedString(source: any, pathSegments: string[]): string | undefined {
+  const value = pathSegments.reduce((current, segment) => current?.[segment], source);
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function setNestedValue(source: any, pathSegments: string[], value: string) {
+  const lastSegment = pathSegments[pathSegments.length - 1];
+  const parent = pathSegments.slice(0, -1).reduce((current, segment) => {
+    if (!current[segment] || typeof current[segment] !== "object") {
+      current[segment] = {};
+    }
+    return current[segment];
+  }, source);
+
+  parent[lastSegment] = value;
+}
+
+async function translateCountryDataForLanguage(
+  countryData: any,
+  vectorContext: VectorContextRecord[],
+  language: "en" | "ar"
+): Promise<{ countryData: any; vectorContext: VectorContextRecord[]; translation: TranslationMetadata }> {
+  if (language !== "ar") {
+    return {
+      countryData,
+      vectorContext,
+      translation: { provider: "none", targetLanguage: language, translatedFields: 0 },
+    };
+  }
+
+  const localizedCountry = cloneJson(countryData);
+  const localizedVectorContext = cloneJson(vectorContext);
+  const tasks: Array<{ text: string; apply: (translatedText: string) => void }> = [];
+
+  const queueCountryField = (englishPath: string[], arabicPath: string[]) => {
+    const englishText = getNestedString(localizedCountry, englishPath);
+    const existingArabicText = getNestedString(localizedCountry, arabicPath);
+    if (!englishText || existingArabicText) return;
+
+    tasks.push({
+      text: englishText,
+      apply: (translatedText) => setNestedValue(localizedCountry, arabicPath, translatedText),
+    });
+  };
+
+  [
+    [["nameEn"], ["nameAr"]],
+    [["profile", "overviewEn"], ["profile", "overviewAr"]],
+    [["profile", "governmentEn"], ["profile", "governmentAr"]],
+    [["profile", "leadershipEn"], ["profile", "leadershipAr"]],
+    [["indicators", "gdp"], ["indicators", "gdpAr"]],
+    [["indicators", "energyMix"], ["indicators", "energyMixAr"]],
+    [["indicators", "infrastructureIndex"], ["indicators", "infrastructureIndexAr"]],
+    [["indicators", "environmentalRank"], ["indicators", "environmentalRankAr"]],
+    [["indicators", "competitivenessRank"], ["indicators", "competitivenessRankAr"]],
+    [["indicators", "cooperationAgreementEn"], ["indicators", "cooperationAgreementAr"]],
+    [["sectors", "energyEn"], ["sectors", "energyAr"]],
+    [["sectors", "infrastructureEn"], ["sectors", "infrastructureAr"]],
+    [["sectors", "sustainabilityEn"], ["sectors", "sustainabilityAr"]],
+    [["strategicInsights", "partnershipsEn"], ["strategicInsights", "partnershipsAr"]],
+    [["strategicInsights", "investmentsEn"], ["strategicInsights", "investmentsAr"]],
+    [["strategicInsights", "knowledgeEn"], ["strategicInsights", "knowledgeAr"]],
+    [["predictive", "marketsEn"], ["predictive", "marketsAr"]],
+    [["predictive", "risksEn"], ["predictive", "risksAr"]],
+    [["predictive", "proposalsEn"], ["predictive", "proposalsAr"]],
+  ].forEach(([englishPath, arabicPath]) => queueCountryField(englishPath, arabicPath));
+
+  localizedVectorContext.forEach((record) => {
+    if (record.titleEn && !record.titleAr) {
+      tasks.push({
+        text: record.titleEn,
+        apply: (translatedText) => {
+          record.titleAr = translatedText;
+        },
+      });
+    }
+    if (record.textEn && !record.textAr) {
+      tasks.push({
+        text: record.textEn,
+        apply: (translatedText) => {
+          record.textAr = translatedText;
+        },
+      });
+    }
+  });
+
+  if (tasks.length === 0) {
+    return {
+      countryData: localizedCountry,
+      vectorContext: localizedVectorContext,
+      translation: { provider: "none", targetLanguage: "ar", translatedFields: 0 },
+    };
+  }
+
+  try {
+    const translatedTexts = await translateTextsWithDeepL(tasks.map((task) => task.text), "AR");
+    translatedTexts.forEach((translatedText, index) => tasks[index].apply(translatedText));
+
+    return {
+      countryData: localizedCountry,
+      vectorContext: localizedVectorContext,
+      translation: { provider: "deepl", targetLanguage: "ar", translatedFields: translatedTexts.length },
+    };
+  } catch (error) {
+    console.warn("[DeepL] Translation unavailable. Returning available database language fields.", error);
+    return {
+      countryData: localizedCountry,
+      vectorContext: localizedVectorContext,
+      translation: { provider: "none", targetLanguage: "ar", translatedFields: 0 },
+    };
+  }
+}
+
+async function loadCountryProfile(countryId: string, rawCountry: string): Promise<{ countryData: any; source: string }> {
+  const localBase = prebuiltCountries[countryId] || buildGenericCountryData(rawCountry, countryId);
+
+  try {
+    const standardDbRecord = await fetchFirestoreDocument("countries", countryId);
+    if (standardDbRecord) {
+      return {
+        countryData: deepMergeCountryData(localBase, standardDbRecord),
+        source: "standard-database",
+      };
+    }
+  } catch (error) {
+    console.warn(`[Standard DB] Could not read country profile '${countryId}'. Using local standby profile.`, error);
+  }
+
+  return {
+    countryData: localBase,
+    source: prebuiltCountries[countryId] ? "local-standby-database" : "generated-standby-profile",
+  };
+}
+
+async function loadAllCountryProfiles(): Promise<Record<string, any>> {
+  const mergedCountries = { ...prebuiltCountries };
+
+  try {
+    const standardDbCountries = await fetchFirestoreCollection("countries");
+    standardDbCountries.forEach((countryRecord) => {
+      const countryId = normalizeCountryId(countryRecord.id || countryRecord.nameEn);
+      if (!countryId) return;
+      const localBase = prebuiltCountries[countryId] || buildGenericCountryData(countryRecord.nameEn || countryId, countryId);
+      mergedCountries[countryId] = deepMergeCountryData(localBase, { ...countryRecord, id: countryId });
+    });
+  } catch (error) {
+    console.warn("[Standard DB] Could not load Firestore countries collection. Serving local standby index.", error);
+  }
+
+  return mergedCountries;
+}
+
+function tokenizeQuery(value: string): string[] {
+  return Array.from(
+    new Set(
+      value
+        .toLowerCase()
+        .replace(/[^a-z0-9\u0600-\u06ff]+/g, " ")
+        .split(/\s+/)
+        .filter((token) => token.length > 2)
+    )
+  );
+}
+
+function scoreVectorRecord(record: VectorContextRecord, queryText: string, language: "en" | "ar"): number {
+  const terms = tokenizeQuery(queryText);
+  if (terms.length === 0) return 1;
+
+  const searchableText = [
+    record.section,
+    record.titleEn,
+    record.titleAr,
+    record.textEn,
+    record.textAr,
+    ...(record.tags || []),
+  ].join(" ").toLowerCase();
+
+  const matchCount = terms.reduce((count, term) => count + (searchableText.includes(term) ? 1 : 0), 0);
+  const preferredText = language === "ar" ? record.textAr : record.textEn;
+  return matchCount + (preferredText ? 0.25 : 0);
+}
+
+async function loadCountryVectorContext(
+  countryData: any,
+  question: string | undefined,
+  language: "en" | "ar"
+): Promise<VectorContextRecord[]> {
+  const vectorCollectionId = process.env.VECTOR_CONTEXT_COLLECTION || "countryVectors";
+  const countryId = normalizeCountryId(countryData.id || countryData.nameEn);
+
+  try {
+    const records = await queryFirestoreCollectionByCountry(vectorCollectionId, countryId, 50);
+    const queryText = [
+      countryData.nameEn,
+      countryData.nameAr,
+      question,
+      countryData.sectors?.energyEn,
+      countryData.sectors?.infrastructureEn,
+      countryData.strategicInsights?.partnershipsEn,
+      countryData.predictive?.marketsEn,
+    ].filter(Boolean).join(" ");
+
+    return records
+      .map((record) => ({ ...record, score: scoreVectorRecord(record, queryText, language) }))
+      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .slice(0, getPositiveNumberEnv("VECTOR_CONTEXT_LIMIT", 6));
+  } catch (error) {
+    console.warn(`[Vector DB] Could not load vector context for '${countryId}'. Continuing with standard database profile.`, error);
+    return [];
+  }
+}
+
+function renderVectorSignals(vectorContext: VectorContextRecord[], language: "en" | "ar"): string {
+  if (vectorContext.length === 0) return "";
+
+  const isAr = language === "ar";
+  const bullets = vectorContext
+    .map((record) => {
+      const title = isAr ? (record.titleAr || record.titleEn || record.section) : (record.titleEn || record.titleAr || record.section);
+      const text = isAr ? (record.textAr || record.textEn) : (record.textEn || record.textAr);
+      return `* **${title || (isAr ? "إشارة سياقية" : "Context signal")}:** ${text || ""}`;
+    })
+    .filter((line) => line.trim().length > 6)
+    .join("\n");
+
+  if (!bullets) return "";
+  return isAr
+    ? `\n\n**إشارات قاعدة المتجهات وسياق الملفات الداعمة:**\n${bullets}`
+    : `\n\n**Vector Database Intelligence Signals:**\n${bullets}`;
+}
+
+function renderDatabaseBriefing(
+  countryData: any,
+  vectorContext: VectorContextRecord[],
+  language: "en" | "ar",
+  question?: string
+): string {
+  if (language === "ar") {
+    const ar = {
+      name: countryData.nameAr || countryData.nameEn,
+      overview: countryData.profile?.overviewAr || countryData.profile?.overviewEn,
+      government: countryData.profile?.governmentAr || countryData.profile?.governmentEn,
+      leadership: countryData.profile?.leadershipAr || countryData.profile?.leadershipEn,
+      energy: countryData.sectors?.energyAr || countryData.sectors?.energyEn,
+      infrastructure: countryData.sectors?.infrastructureAr || countryData.sectors?.infrastructureEn,
+      sustainability: countryData.sectors?.sustainabilityAr || countryData.sectors?.sustainabilityEn,
+      partnerships: countryData.strategicInsights?.partnershipsAr || countryData.strategicInsights?.partnershipsEn,
+      investments: countryData.strategicInsights?.investmentsAr || countryData.strategicInsights?.investmentsEn,
+      knowledge: countryData.strategicInsights?.knowledgeAr || countryData.strategicInsights?.knowledgeEn,
+      markets: countryData.predictive?.marketsAr || countryData.predictive?.marketsEn,
+      risks: countryData.predictive?.risksAr || countryData.predictive?.risksEn,
+      proposals: countryData.predictive?.proposalsAr || countryData.predictive?.proposalsEn,
+    };
+
+    return `### مستشار الإحاطة الاستراتيجية لجمهورية ${ar.name}
+
+**رؤية عامة والجاهزية البدنية والتكنولوجية:**
+${ar.overview}
+
+**الهيكل القيادي وصناعة القرار الفوري:**
+يقود الدولة حالياً ${ar.leadership} وبصفتها شريكاً لوزارة الطاقة والبنية التحتية بدولة الإمارات، فإن التعاون معها يسير في مستويات استراتيجية متكاملة.
+
+**القطاع اللوجستي وقطاع الطاقة:**
+* **الطاقة:** ${ar.energy}
+* **البنية التحتية:** ${ar.infrastructure}
+* **الاستدامة:** ${ar.sustainability}
+
+**فرص الشراكة الفورية والاستثمار:**
+* ${ar.partnerships}
+* ${ar.investments}
+* ${ar.knowledge}${renderVectorSignals(vectorContext, language)}
+
+**الذكاء التنبؤي وتوصيات وفد الدولة:**
+* **الأسواق الناشئة:** ${ar.markets}
+* **المخاطر المحسوبة:** ${ar.risks}
+* **المبادرة الإماراتية المقترحة:** ${ar.proposals}${question ? `\n\n**تركيز السؤال:** ${question}` : ""}`;
+  }
+
+  return `### Executive Strategic Advisory Brief for ${countryData.nameEn}
+
+**Overview & Structural Readiness:**
+${countryData.profile.overviewEn}
+
+**Leadership Structure & Key Decision Makers:**
+The country is governed under the ${countryData.profile.governmentEn} Led actively by ${countryData.profile.leadershipEn}.
+
+**Energy & Infrastructure Sectors:**
+* **Energy:** ${countryData.sectors.energyEn}
+* **Infrastructure:** ${countryData.sectors.infrastructureEn}
+* **Sustainability:** ${countryData.sectors.sustainabilityEn}
+
+**Priority Strategic Partnerships & Immediate Investments:**
+* ${countryData.strategicInsights.partnershipsEn}
+* ${countryData.strategicInsights.investmentsEn}
+* ${countryData.strategicInsights.knowledgeEn}${renderVectorSignals(vectorContext, language)}
+
+**Predictive Intelligence & Diplomatic Recommendations:**
+* **Emerging Markets:** ${countryData.predictive.marketsEn}
+* **Calculated Risks:** ${countryData.predictive.risksEn}
+* **Proposed UAE Initiative:** ${countryData.predictive.proposalsEn}${question ? `\n\n**Question Focus:** ${question}` : ""}`;
+}
+
 // Robust retry and fallback generator for Gemini API content generation
 async function callGeminiWithRetryAndFallback(
   gClient: any,
@@ -713,184 +1336,54 @@ async function callGeminiWithRetryAndFallback(
   }
 }
 
-// Strategic Advisory generator using Gemini
+// Strategic Advisory generator using standard database + vector database context
 app.post("/api/advisor/brief", async (req, res) => {
-  const { country, question, language, forceAi } = req.body;
-
-  const currentLang = language || "en";
-  const normalizedCountry = (country || "").toLowerCase();
-
-  // Retrieve fallback data
-  let fallbackData = prebuiltCountries[normalizedCountry];
-  if (!fallbackData) {
-    const formattedName = country.charAt(0).toUpperCase() + country.slice(1);
-    fallbackData = {
-      id: normalizedCountry,
-      nameEn: formattedName,
-      nameAr: country, // Keep original or format
-      flag: "🌐",
-      profile: {
-        overviewEn: `Bilateral portfolio for ${formattedName}. Presenting diplomatic overview, strategic initiatives, and mutual growth pathways with the UAE.`,
-        overviewAr: `ملف مخصص ودراسة واعدة لـ ${formattedName}. تشمل استعراض الجاهزية اللوجستية والتكاملات الثنائية مع دولة الإمارات.`,
-        governmentEn: "Government structure and regional alignment details.",
-        governmentAr: "تفاصيل الهيكل الحكومي والمواءمة في اللجان الاستراتيجية المشتركة.",
-        leadershipEn: `Dignitary representatives of ${formattedName}.`,
-        leadershipAr: `تمثيل وفد دولة ${formattedName}.`
-      },
-      indicators: {
-        gdp: "Dynamic Evaluation ($Billion USD)",
-        gdpAr: "قيد التقييم الفيدرالي",
-        growth: "2.1%",
-        gdpPerCapita: "Dynamic Scale",
-        energyMix: "Clean Transition Active, Solar & Wind targets progressing",
-        energyMixAr: "تحول طاقة نشط، مشاريع شمسية ورياح قيد اللجان",
-        infrastructureIndex: "Evaluated (High capability)",
-        environmentalRank: "Under Review",
-        competitivenessRank: "Highly Competitive",
-        cooperationAgreementEn: "Active Strategic Partnership Initiative",
-        cooperationAgreementAr: "شراكة متبادلة مستمرة وإطار تنسيقي نشط"
-      },
-      sectors: {
-        energyEn: "Clean energy grids, renewable targets and solar capacity potential.",
-        energyAr: "شبكات طاقة ومصادر إنتاج شمسية ورياح واعدة.",
-        infrastructureEn: "Strategic maritime shipping lanes and digital port connectivity.",
-        infrastructureAr: "ممرات وبنى ملاحة بحرية تدعم تدفق المنتجات الثنائية.",
-        sustainabilityEn: "Net Zero carbon targets alignment and climate strategies.",
-        sustainabilityAr: "اتفاق مواءمة الحياد الكربوني والاستشارات البيئية المشتركة."
-      },
-      strategicInsights: {
-        partnershipsEn: "High yield renewable corridors and smart logistics integration.",
-        partnershipsAr: "تمويلات مشتركة وطاقة مصدرية متبادلة ومجالس ابتكار.",
-        investmentsEn: "Direct foreign trade initiatives and trade support framework.",
-        investmentsAr: "استثمارات متبادلة وممرات تنمية وتسهيلات لوجستية ثنائية.",
-        knowledgeEn: "Knowledge sharing pipelines and smart technology transfer.",
-        knowledgeAr: "تبادل المخرجات المعرفية وبراءات تكنولوجيا كفاءة التشغيل."
-      },
-      predictive: {
-        marketsEn: "Clean energy transition scaling and market growth indices.",
-        marketsAr: "فرص تنقيل الوقود والأمونيا النظيفة وتحديث الأسواق المحلية.",
-        risksEn: "Regulatory alignment steps. Mitigation via sovereign framework agreements.",
-        risksAr: "تفادي المعيقات عبر الاتفاقيات والبروتوكولات الشاملة المعتمدة.",
-        proposalsEn: `Establish a UAE-${formattedName} Strategic Infrastructure Corridor.`,
-        proposalsAr: `إطلاق مشروع الممرات الرقمية المشتركة بين الإمارات و ${formattedName}.`
-      }
-    };
-  }
-
-  const gClient = getGeminiClient();
-
-  if (!gClient) {
-    // If no client (no API key configured), return the premium high-fidelity prebuilt database
-    // This maintains excellent, instant system performance and respects local capabilities.
-    return res.json({
-      success: true,
-      source: "local-intelligence-system",
-      country: fallbackData.nameEn,
-      countryData: fallbackData,
-      aiBriefing: {
-        rawText: currentLang === "ar"
-          ? `### مستشار الإحاطة الاستراتيجية لجمهورية ${fallbackData.nameAr}
-
-**رؤية عامة والجاهزية البدنية والتكنولوجية:**
-${fallbackData.profile.overviewAr}
-
-**الهيكل القيادي وصناعة القرار الفوري:**
-يقود الدولة حالياً ${fallbackData.profile.leadershipAr} وبصفته الشريك الرئيسي لوزارة الطاقة والبنية التحتية بدولة الإمارات، فإن التعاون معهم يسير في مستويات استراتيجية متكاملة.
-
-**القطاع اللوجستي وقطاع الطاقة:**
-${fallbackData.sectors.energyAr}
-
-**فرص الشراكة الفورية والاستثمار:**
-* ${fallbackData.strategicInsights.partnershipsAr}
-* ${fallbackData.strategicInsights.investmentsAr}
-* ${fallbackData.strategicInsights.knowledgeAr}
-
-**الذكاء التنبؤي وتوصيات وفد الدولة:**
-${fallbackData.predictive.proposalsAr}`
-          : `### Executive Strategic Advisory Brief for ${fallbackData.nameEn}
-
-**Overview & Structural Readiness:**
-${fallbackData.profile.overviewEn}
-
-**Leadership Structure & Key Decision Makers:**
-The country is governed under the ${fallbackData.profile.governmentEn} Led actively by ${fallbackData.profile.leadershipEn}.
-
-**Energy & Infrastructure Sectors:**
-${fallbackData.sectors.energyEn}
-
-**Priority Strategic Partnerships & Immediate Investments:**
-* ${fallbackData.strategicInsights.partnershipsEn}
-* ${fallbackData.strategicInsights.investmentsEn}
-* ${fallbackData.strategicInsights.knowledgeEn}
-
-**Predictive Intelligence & Diplomatic Recommendations:**
-* **Emerging Markets:** ${fallbackData.predictive.marketsEn}
-* **Calculated Risks:** ${fallbackData.predictive.risksEn}
-* **Proposed UAE Initiative:** ${fallbackData.predictive.proposalsEn}`
-      }
-    });
-  }
+  const { country, question, language } = req.body;
+  const currentLang: "en" | "ar" = language === "ar" ? "ar" : "en";
+  const normalizedCountry = normalizeCountryId(country || "brazil");
 
   try {
-    // Elegant system instruction describing the persona of a senior strategic digital advisor for UAE high officials at the Ministry of Energy and Infrastructure
-    const systemInstruction = `You are a Senior Strategic Digital Advisor powered by AI, serving UAE Leadership (Ministers, Undersecretaries, and Cabinet representatives) at the Ministry of Energy and Infrastructure (MOEI).
-Your primary role is to deliver precise, high-level, decision-ready intelligence, actionable diplomatic recommendations, and key talking points to prepare UAE dignitaries for international delegation visits and bilateral sessions in less than 15 minutes.
-Ensure your tone is highly professional, respectful, concise, and structured for quick executive reading (bullet-pointed, well-sectioned). Avoid generic search-engine style definitions. Be specific on Energy, Infrastructure, Sustainability, Carbon-neutral corridors, and Advanced Logistics (smart ports, shipping).
-Language requested currently is: ${currentLang}. Please provide the draft in ${currentLang === "ar" ? "Arabic first, with professional diplomatic vocabulary" : "Executive English with exact figures"}.`;
-
-    let prompt = `Provide an Executive Strategic Advisory Briefing for UAE leadership preparing for a bilateral meeting regarding ${fallbackData.nameEn}.`;
-    if (question) {
-      prompt += ` Specifically analyze and answer this question/query: "${question}"`;
-    }
-
-    const { text: aiText, modelUsed } = await callGeminiWithRetryAndFallback(gClient, systemInstruction, prompt);
+    const { countryData, source } = await loadCountryProfile(normalizedCountry, country || normalizedCountry);
+    const vectorContext = await loadCountryVectorContext(countryData, question, currentLang);
+    const localized = await translateCountryDataForLanguage(countryData, vectorContext, currentLang);
 
     return res.json({
       success: true,
-      source: "gemini-strategic-ai",
-      modelUsed,
-      country: fallbackData.nameEn,
-      countryData: fallbackData,
+      source: vectorContext.length > 0 ? `${source}+vector-database` : source,
+      dataSources: {
+        standardDatabase: source,
+        vectorDatabase: {
+          collection: process.env.VECTOR_CONTEXT_COLLECTION || "countryVectors",
+          matches: vectorContext.length,
+        },
+        translation: localized.translation,
+      },
+      country: localized.countryData.nameEn,
+      countryData: localized.countryData,
       aiBriefing: {
-        rawText: aiText
+        rawText: renderDatabaseBriefing(localized.countryData, localized.vectorContext, currentLang, question)
       }
     });
-
   } catch (error: any) {
-    if (error?.status === "RESOURCE_EXHAUSTED" || error?.message?.includes("quota") || error?.statusCode === 429 || `${error}`.includes("429")) {
-      console.log("Cabinet AI System Notice: Live Gemini API quota limit reached (429). Seamlessly engaging high-fidelity standby security data models.");
-    } else {
-      console.log("Cabinet AI System Notice: Live Gemini API communication paused. Engaging fallback layers. Reason:", error?.message || error);
-    }
-    // Gracefully fallback to high fidelity database if API fails
+    console.log("Cabinet data system notice: database context unavailable. Engaging local standby profile.", error?.message || error);
+    const fallbackData = prebuiltCountries[normalizedCountry] || buildGenericCountryData(country || normalizedCountry, normalizedCountry);
+    const localizedFallback = await translateCountryDataForLanguage(fallbackData, [], currentLang);
+
     return res.json({
       success: true,
-      source: "local-fallback-secured",
-      country: fallbackData.nameEn,
-      countryData: fallbackData,
+      source: "local-standby-database",
+      dataSources: {
+        standardDatabase: "local-standby-database",
+        vectorDatabase: {
+          collection: process.env.VECTOR_CONTEXT_COLLECTION || "countryVectors",
+          matches: 0,
+        },
+        translation: localizedFallback.translation,
+      },
+      country: localizedFallback.countryData.nameEn,
+      countryData: localizedFallback.countryData,
       aiBriefing: {
-        rawText: currentLang === "ar"
-          ? `### دليل استراتيجي مؤمن (نظام محلي - تعذر الاتصال بالمستشار الحي)
-
-**رؤية عامة والجاهزية البدنية:**
-${fallbackData.profile.overviewAr}
-
-**فرص الاستثمار المتبادل:**
-${fallbackData.strategicInsights.investmentsAr}
-
-**المبادرات وخطط الاستعجال:**
-${fallbackData.sectors.energyAr}`
-          : `### Strategic Advisory Secured (Local Repository Fallback due to API connectivity)
-
-**Overview & Infrastructure Status:**
-${fallbackData.profile.overviewEn}
-
-**Strategic Bilateral Agreements:**
-${fallbackData.sectors.energyEn}
-
-**Proposed Action Points:**
-* ${fallbackData.strategicInsights.partnershipsEn}
-* ${fallbackData.strategicInsights.investmentsEn}`
+        rawText: renderDatabaseBriefing(localizedFallback.countryData, [], currentLang, question)
       }
     });
   }
@@ -1327,7 +1820,9 @@ ${rawData}`;
 });
 
 // Compare countries endpoint
-app.get("/api/advisor/compare", (req, res) => {
+app.get("/api/advisor/compare", async (req, res) => {
+  const countries = await loadAllCountryProfiles();
+
   res.json({
     uae: {
       nameEn: "United Arab Emirates (UAE)",
@@ -1346,7 +1841,7 @@ app.get("/api/advisor/compare", (req, res) => {
       cooperationAgreementEn: "Host of COP28, Global Green Corridor Champion",
       cooperationAgreementAr: "مستضيف مؤتمر الأطراف COP28 ورائد الممرات العالمية الخضراء",
     },
-    countries: prebuiltCountries
+    countries
   });
 });
 

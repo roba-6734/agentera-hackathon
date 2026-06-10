@@ -46,6 +46,17 @@ service cloud.firestore {
         && data.time is string && data.time.size() <= 32;
     }
 
+    // Vector Context Validation Helper
+    function isValidVectorContext(data) {
+      return data.countryId is string && data.countryId.size() <= 128
+        && (data.section == null || (data.section is string && data.section.size() <= 80))
+        && (data.titleEn == null || (data.titleEn is string && data.titleEn.size() <= 180))
+        && (data.titleAr == null || (data.titleAr is string && data.titleAr.size() <= 180))
+        && (data.textEn == null || (data.textEn is string && data.textEn.size() <= 4000))
+        && (data.textAr == null || (data.textAr is string && data.textAr.size() <= 4000))
+        && (data.sourceUrl == null || (data.sourceUrl is string && data.sourceUrl.size() <= 1000));
+    }
+
     match /countries/{countryId} {
       allow read: if true;
       allow create: if isSignedIn() 
@@ -70,6 +81,17 @@ service cloud.firestore {
         && incoming().id == existing().id
         && isValidMeeting(incoming());
       allow delete: if isSignedIn() && isValidId(meetingId);
+    }
+
+    match /countryVectors/{chunkId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && isValidId(chunkId)
+        && isValidVectorContext(incoming());
+      allow update: if isSignedIn()
+        && isValidId(chunkId)
+        && isValidVectorContext(incoming());
+      allow delete: if isSignedIn() && isValidId(chunkId);
     }
   }
 }
