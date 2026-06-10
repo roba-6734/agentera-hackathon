@@ -198,6 +198,105 @@ export default function BriefingGenerator({
     }
   ];
 
+  const formatPptxFileName = (name: string) => {
+    const safeName = name
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+
+    return `${safeName || "strategic-briefing"}-deck.pptx`;
+  };
+
+  const trimSlideText = (value: string, maxLength = 220) => {
+    return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
+  };
+
+  const handleExportToPptx = async () => {
+    setPrintError(null);
+
+    try {
+      const pptx = new pptxgen();
+      pptx.layout = "LAYOUT_WIDE";
+      pptx.author = "UAE Digital Strategic Advisor";
+      pptx.company = "Ministry of Energy and Infrastructure";
+      pptx.subject = `${country.nameEn} strategic briefing`;
+      pptx.title = `${country.nameEn} Strategic Preparation`;
+
+      slides.forEach((deckSlide, index) => {
+        const slide = pptx.addSlide();
+        const title = isEn ? deckSlide.titleEn : deckSlide.titleAr;
+        const bullets = isEn ? deckSlide.bulletsEn : deckSlide.bulletsAr;
+        const align = language === "ar" ? "right" : "left";
+
+        slide.background = { color: "16211C" };
+        slide.addText(isEn ? "UAE DIGITAL STRATEGIC ADVISOR" : "المستشار الرقمي الاستراتيجي", {
+          x: 0.55,
+          y: 0.3,
+          w: 8.5,
+          h: 0.28,
+          fontFace: "Aptos",
+          fontSize: 8,
+          bold: true,
+          color: "C5A85A",
+          charSpacing: 1.2,
+        });
+        slide.addText(`${index + 1} / ${slides.length}`, {
+          x: 11.7,
+          y: 0.3,
+          w: 0.95,
+          h: 0.28,
+          fontFace: "Aptos",
+          fontSize: 9,
+          bold: true,
+          color: "C5A85A",
+          align: "right",
+        });
+        slide.addText(title, {
+          x: 0.85,
+          y: 1.15,
+          w: 11.6,
+          h: 0.8,
+          fontFace: "Aptos Display",
+          fontSize: 28,
+          bold: true,
+          color: "C5A85A",
+          align,
+          fit: "shrink",
+        });
+        slide.addText(bullets.map((bullet) => `• ${trimSlideText(bullet)}`).join("\n"), {
+          x: 1.05,
+          y: 2.35,
+          w: 11.1,
+          h: 3.05,
+          fontFace: "Aptos",
+          fontSize: 17,
+          breakLine: false,
+          color: "F3F4F6",
+          valign: "middle",
+          fit: "shrink",
+          paraSpaceAfter: 10,
+          align,
+        });
+        slide.addText(isEn ? country.nameEn : country.nameAr, {
+          x: 0.85,
+          y: 6.65,
+          w: 5.5,
+          h: 0.32,
+          fontFace: "Aptos",
+          fontSize: 10,
+          bold: true,
+          color: "C5A85A",
+          align,
+        });
+      });
+
+      await pptx.writeFile({ fileName: formatPptxFileName(country.nameEn) });
+    } catch (error) {
+      console.error("PPTX export failed:", error);
+      setPrintError(isEn ? "PPTX export failed. Please try again." : "تعذر تصدير ملف العرض التقديمي. يرجى المحاولة مرة أخرى.");
+    }
+  };
+
   const handleExportToPdf = () => {
     setPrintError(null);
     try {

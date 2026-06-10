@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Header from "./components/Header";
 import IntelligenceProfile from "./components/IntelligenceProfile";
 import StrategicInsightsView from "./components/StrategicInsightsView";
@@ -67,9 +67,15 @@ export default function App() {
 
   // Meeting objective and search initializer state
   const [meetingObjective, setMeetingObjective] = useState("");
+  const initialLoadStartedRef = useRef(false);
 
   // Initialize and load default comparison values
   useEffect(() => {
+    if (initialLoadStartedRef.current) {
+      return;
+    }
+    initialLoadStartedRef.current = true;
+
     async function loadInitialDatabase() {
       try {
         const resp = await fetch("/api/advisor/compare");

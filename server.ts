@@ -3,16 +3,92 @@ import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import { createHash } from "crypto";
 
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 app.use(express.json());
 
 // Initialize Gemini SDK with telemetry header as required in SKILL.md
 let aiClient: GoogleGenAI | null = null;
+
+type GeminiGenerationResult = { text: string; modelUsed: string };
+
+const DEFAULT_GEMINI_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+const geminiResponseCache = new Map<string, { result: GeminiGenerationResult; expiresAt: number }>();
+const pendingGeminiRequests = new Map<string, Promise<GeminiGenerationResult>>();
+let geminiQuotaCooldownUntil = 0;
+
+function getPositiveNumberEnv(name: string, fallback: number): number {
+  const rawValue = process.env[name];
+  if (!rawValue) return fallback;
+
+  const parsedValue = Number(rawValue);
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : fallback;
+}
+
+function getConfiguredGeminiModels(): string[] {
+  const configuredModels = [
+    process.env.GEMINI_MODEL,
+    ...(process.env.GEMINI_FALLBACK_MODELS || "").split(","),
+    ...DEFAULT_GEMINI_MODELS,
+  ];
+
+  return Array.from(
+    new Set(
+      configuredModels
+        .map((model) => model?.trim())
+        .filter((model): model is string => Boolean(model))
+    )
+  );
+}
+
+function buildGeminiCacheKey(systemInstruction: string, prompt: string, models: string[]): string {
+  return createHash("sha256")
+    .update(JSON.stringify({ models, systemInstruction, prompt }))
+    .digest("hex");
+}
+
+function getGeminiErrorStatusCode(err: any): number | undefined {
+  const statusCode = err?.statusCode || err?.status || err?.code;
+  if (typeof statusCode === "number") return statusCode;
+  if (typeof statusCode === "string" && /^\d+$/.test(statusCode)) return Number(statusCode);
+  return undefined;
+}
+
+function isGeminiQuotaError(err: any): boolean {
+  const errMsg = (err?.message || `${err}`).toLowerCase();
+  return (
+    getGeminiErrorStatusCode(err) === 429 ||
+    err?.status === "RESOURCE_EXHAUSTED" ||
+    errMsg.includes("resource_exhausted") ||
+    errMsg.includes("quota") ||
+    errMsg.includes("rate limit") ||
+    errMsg.includes("exhausted")
+  );
+}
+
+function isGeminiRetriableError(err: any): boolean {
+  const errMsg = (err?.message || `${err}`).toLowerCase();
+  return (
+    getGeminiErrorStatusCode(err) === 503 ||
+    err?.status === "UNAVAILABLE" ||
+    errMsg.includes("temporary") ||
+    errMsg.includes("demand")
+  );
+}
+
+function createQuotaCooldownError(): Error {
+  const remainingMs = Math.max(0, geminiQuotaCooldownUntil - Date.now());
+  const error = new Error(`Gemini quota cooldown active for ${Math.ceil(remainingMs / 1000)}s.`);
+  (error as any).statusCode = 429;
+  (error as any).status = "RESOURCE_EXHAUSTED";
+  return error;
+}
+
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
@@ -554,67 +630,87 @@ const prebuiltCountries: Record<string, any> = {
 async function callGeminiWithRetryAndFallback(
   gClient: any,
   systemInstruction: string,
-  prompt: string
-): Promise<{ text: string; modelUsed: string }> {
-  // Ordered sequence of robust text models per guidelines: gemini-3.5-flash is preferred first
-  const modelsToTry = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+  prompt: string,
+  options: { cacheTtlMs?: number; maxOutputTokens?: number } = {}
+): Promise<GeminiGenerationResult> {
+  const modelsToTry = getConfiguredGeminiModels();
   const maxRetriesPerModel = 2;
-  let lastError: any = null;
+  const cacheTtlMs = options.cacheTtlMs ?? getPositiveNumberEnv("GEMINI_CACHE_TTL_MS", 5 * 60 * 1000);
+  const cacheKey = buildGeminiCacheKey(systemInstruction, prompt, modelsToTry);
+  const cachedResult = geminiResponseCache.get(cacheKey);
 
-  for (const model of modelsToTry) {
-    for (let tryIndex = 0; tryIndex < maxRetriesPerModel; tryIndex++) {
-      try {
-        console.log(`[Gemini API] Attempting generation with model ${model} (try ${tryIndex + 1}/${maxRetriesPerModel})...`);
-        const response = await gClient.models.generateContent({
-          model: model,
-          contents: prompt,
-          config: {
-            systemInstruction,
-            temperature: 0.3,
+  if (cachedResult && cachedResult.expiresAt > Date.now()) {
+    console.log("[Gemini API] Serving cached generation for repeated prompt.");
+    return cachedResult.result;
+  }
+
+  if (pendingGeminiRequests.has(cacheKey)) {
+    console.log("[Gemini API] Reusing in-flight generation for repeated prompt.");
+    return pendingGeminiRequests.get(cacheKey)!;
+  }
+
+  if (geminiQuotaCooldownUntil > Date.now()) {
+    console.log("[Gemini API] Quota cooldown active. Returning local fallback without another live call.");
+    throw createQuotaCooldownError();
+  }
+
+  const generationPromise = (async (): Promise<GeminiGenerationResult> => {
+    let lastError: any = null;
+
+    for (const model of modelsToTry) {
+      for (let tryIndex = 0; tryIndex < maxRetriesPerModel; tryIndex++) {
+        try {
+          console.log(`[Gemini API] Attempting generation with model ${model} (try ${tryIndex + 1}/${maxRetriesPerModel})...`);
+          const response = await gClient.models.generateContent({
+            model,
+            contents: prompt,
+            config: {
+              systemInstruction,
+              temperature: 0.3,
+              ...(options.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
+            }
+          });
+
+          if (response && response.text) {
+            const result = { text: response.text, modelUsed: model };
+            console.log(`[Gemini API] Successfully generated content using model: ${model}`);
+            geminiResponseCache.set(cacheKey, { result, expiresAt: Date.now() + cacheTtlMs });
+            return result;
           }
-        });
+        } catch (err: any) {
+          lastError = err;
 
-        if (response && response.text) {
-          console.log(`[Gemini API] Successfully generated content using model: ${model}`);
-          return { text: response.text, modelUsed: model };
-        }
-      } catch (err: any) {
-        lastError = err;
-        const errMsg = err?.message || `${err}`;
-        const isQuotaErr = errMsg.includes("exhausted") || 
-                           errMsg.includes("quota") || 
-                           errMsg.includes("429") || 
-                           errMsg.includes("limit") ||
-                           err?.status === "RESOURCE_EXHAUSTED" ||
-                           err?.statusCode === 429;
+          if (isGeminiQuotaError(err)) {
+            const cooldownMs = getPositiveNumberEnv("GEMINI_QUOTA_COOLDOWN_MS", 60 * 1000);
+            geminiQuotaCooldownUntil = Date.now() + cooldownMs;
+            console.log(`[Gemini API] Quota limit reached (429 / RESOURCE_EXHAUSTED). Cooling down live Gemini calls for ${Math.ceil(cooldownMs / 1000)}s.`);
+            throw err;
+          }
 
-        if (isQuotaErr) {
-          console.log("[Gemini API] Quota limit reached (429 / RESOURCE_EXHAUSTED). Skipping retries to engage local standby data immediately.");
-          throw err;
-        }
+          console.log(`[Gemini API] Note: Managed transition using model ${model} on try ${tryIndex + 1}: ${err?.message || err}`);
 
-        // Detect transient errors like high demand (503) or temporary outages
-        const isRetriable = errMsg.includes("503") || 
-                            errMsg.includes("temporary") || 
-                            errMsg.includes("demand") ||
-                            err?.status === "UNAVAILABLE" ||
-                            err?.statusCode === 503;
-        
-        console.log(`[Gemini API] Note: Managed transition using model ${model} on try ${tryIndex + 1}: ${errMsg}`);
-
-        if (isRetriable && tryIndex < maxRetriesPerModel - 1) {
-          const delay = (tryIndex + 1) * 800;
-          console.log(`[Gemini API] Transient retriable error. Waiting ${delay}ms before next retry...`);
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        } else {
-          // Fail fast out of this model and try the next configured fallback model
-          break;
+          if (isGeminiRetriableError(err) && tryIndex < maxRetriesPerModel - 1) {
+            const delay = (tryIndex + 1) * 800;
+            console.log(`[Gemini API] Transient retriable error. Waiting ${delay}ms before next retry...`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          } else {
+            // Fail fast out of this model and try the next configured fallback model.
+            break;
+          }
         }
       }
     }
-  }
 
-  throw lastError || new Error("All configured Gemini models failed.");
+    throw lastError || new Error("All configured Gemini models failed.");
+  })();
+
+  pendingGeminiRequests.set(cacheKey, generationPromise);
+
+  try {
+    return await generationPromise;
+  } finally {
+    pendingGeminiRequests.delete(cacheKey);
+  }
 }
 
 // Strategic Advisory generator using Gemini
