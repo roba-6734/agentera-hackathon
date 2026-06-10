@@ -1,18 +1,26 @@
 import React from "react";
-import { Globe, Award, Calendar } from "lucide-react";
+import { Globe, Award, Calendar, LogOut, UserRound } from "lucide-react";
 import majlisLogo from "../../assets/images/majlis-ai-logo.png";
+import { AppRole } from "../types";
 
 interface HeaderProps {
   language: "en" | "ar";
   setLanguage: (lang: "en" | "ar") => void;
   selectedCountryNameEn: string;
   selectedCountryNameAr: string;
-  isDeveloperMode: boolean;
-  setIsDeveloperMode: (val: boolean) => void;
-  onOpenCalendar: () => void;
+  onOpenCalendar?: () => void;
+  sessionDisplayName: string;
+  sessionRole: AppRole;
+  onLogout: () => void;
 }
 
-export default function Header({ language, setLanguage, selectedCountryNameEn, selectedCountryNameAr, isDeveloperMode, setIsDeveloperMode, onOpenCalendar }: HeaderProps) {
+export default function Header({ language, setLanguage, selectedCountryNameEn, selectedCountryNameAr, onOpenCalendar, sessionDisplayName, sessionRole, onLogout }: HeaderProps) {
+  const roleLabel = {
+    developer: language === "en" ? "Developer" : "مطوّر",
+    staff: language === "en" ? "Staff" : "فريق العمل",
+    executive: language === "en" ? "Executive" : "قيادي",
+  }[sessionRole];
+  const isExecutive = sessionRole === "executive";
 
   return (
     <header className="bg-white relative border-b border-gold-border text-slate-vip overflow-hidden shadow-sm" id="moei-executive-header">
@@ -39,7 +47,9 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-deep animate-pulse"></span>
                 <span className="text-[10px] uppercase font-mono tracking-widest text-[#C5A059] font-bold">
-                  {language === "en" ? "Cabinet Strategic Resource" : "مورد استراتيجي للمجلس"}
+                  {isExecutive
+                    ? language === "en" ? "Executive Briefing Resource" : "مورد الإحاطة القيادية"
+                    : language === "en" ? "Staff Strategic Resource" : "مورد استراتيجي لفريق العمل"}
                 </span>
                 <span className="text-[9px] px-1.5 py-0.5 bg-[#F0F0EE] text-slate-vip rounded border border-gold-border font-mono font-bold">
                   SECURE v2.5
@@ -49,7 +59,9 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
                 {language === "en" ? "Majlis AI" : "مجلس AI"}
               </h1>
               <p className="text-xs text-gray-500 font-medium tracking-wide">
-                {language === "en" ? "Decision-Ready Intelligence for UAE Leadership" : "استخبارات جاهزة للقرار لقيادة دولة الإمارات"}
+                {isExecutive
+                  ? language === "en" ? "Concise Briefings for UAE Leadership" : "إحاطات موجزة لقيادة دولة الإمارات"
+                  : language === "en" ? "Decision-Ready Intelligence for UAE Leadership" : "استخبارات جاهزة للقرار لقيادة دولة الإمارات"}
               </p>
             </div>
           </div>
@@ -62,7 +74,9 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
               <Award className="w-4 h-4 text-emerald-deep" />
               <div className="text-left font-sans">
                 <p className="text-[9px] text-gray-500 uppercase tracking-widest block leading-none">
-                  {language === "en" ? "Active Consult" : "الاستشاري النشط"}
+                  {isExecutive
+                    ? language === "en" ? "Briefing Target" : "هدف الإحاطة"
+                    : language === "en" ? "Active Consult" : "الاستشاري النشط"}
                 </p>
                 <p className="text-xs font-bold font-mono text-slate-vip mt-0.5">
                   {language === "en" ? `Targeting: ${selectedCountryNameEn}` : `المستهدف: ${selectedCountryNameAr}`}
@@ -70,28 +84,39 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
               </div>
             </div>
 
-            {/* Real-time Developer Terminal Button */}
-            <button
-              onClick={() => setIsDeveloperMode(!isDeveloperMode)}
-              className={`font-semibold font-mono text-xs tracking-wide px-3.5 py-2.5 rounded shadow-sm transition-all flex items-center gap-2 border cursor-pointer ${
-                isDeveloperMode 
-                  ? "bg-emerald-deep text-white border-emerald-accent/20 hover:bg-[#067242]" 
-                  : "bg-slate-vip text-[#C5A059] border-gold-border hover:bg-slate-vip/90"
-              }`}
-              id="header-terminal-toggle-btn"
-            >
-              <span>{isDeveloperMode ? (language === "en" ? "🖥️ Console Active" : "🖥️ وحدة التحكم نشطة") : (language === "en" ? "🛠️ Developer Console" : "🛠️ وحدة المطور")}</span>
-            </button>
-
             {/* Cabinet Portfolio Schedule Calendar Toggle Button */}
+            {!isExecutive && onOpenCalendar && (
+              <button
+                onClick={onOpenCalendar}
+                className="bg-[#FAF8F5] hover:bg-gold-bg text-slate-vip border border-gold-border font-semibold font-mono text-xs tracking-wide px-3.5 py-2.5 rounded shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+                id="header-calendar-toggle-btn"
+                title={language === "en" ? "Bilateral Schedule Calendar" : "مفكرة المواعيد الثنائية"}
+              >
+                <Calendar className="w-4 h-4 text-emerald-deep" />
+                <span>{language === "en" ? "Portfolio Schedule" : "المواعيد والوفود"}</span>
+              </button>
+            )}
+
+            <div className="bg-[#F8F8F6] rounded-md border border-gold-border flex items-center gap-2 shadow-xs px-3 py-2.5" id="header-session-badge">
+              <UserRound className="w-4 h-4 text-emerald-deep" />
+              <div className="min-w-0">
+                <span className="text-[10px] max-w-[120px] truncate font-mono font-bold text-slate-vip block leading-none">
+                  {sessionDisplayName}
+                </span>
+                <span className="text-[8px] uppercase tracking-widest text-gray-500 font-mono font-bold block mt-1 leading-none">
+                  {roleLabel}
+                </span>
+              </div>
+            </div>
+
             <button
-              onClick={onOpenCalendar}
-              className="bg-[#FAF8F5] hover:bg-gold-bg text-slate-vip border border-gold-border font-semibold font-mono text-xs tracking-wide px-3.5 py-2.5 rounded shadow-sm transition-all flex items-center gap-2 cursor-pointer"
-              id="header-calendar-toggle-btn"
-              title={language === "en" ? "Bilateral Schedule Calendar" : "مفكرة المواعيد الثنائية"}
+              onClick={onLogout}
+              className="bg-white hover:bg-red-50 text-slate-vip hover:text-red-700 border border-gold-border font-semibold font-mono text-xs tracking-wide px-3.5 py-2.5 rounded shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+              id="header-switch-account-btn"
+              title={language === "en" ? "Switch Account" : "تبديل الحساب"}
             >
-              <Calendar className="w-4 h-4 text-emerald-deep" />
-              <span>{language === "en" ? "Portfolio Schedule" : "المواعيد والوفود"}</span>
+              <LogOut className="w-4 h-4" />
+              <span>{language === "en" ? "Switch Account" : "تبديل الحساب"}</span>
             </button>
 
             {/* Bilingual Switcher Toggle Button */}

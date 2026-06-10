@@ -434,9 +434,10 @@ export default function DeveloperDashboard({ language, countriesCount, onRefresh
         <div className="flex items-center gap-3">
           <button 
             onClick={onClose}
-            className="px-4 py-2 bg-transparent text-gray-400 hover:text-white border border-[#2C2C26] hover:bg-[#2C2C26] transition-all text-xs font-mono font-bold rounded cursor-pointer"
+            className="px-4 py-2 bg-transparent text-gray-400 hover:text-white border border-[#2C2C26] hover:bg-[#2C2C26] transition-all text-xs font-mono font-bold rounded cursor-pointer flex items-center gap-2"
           >
-            {isEn ? "← Back to Cabinet View" : "← العودة لغرفة المجلس"}
+            <LogOut className="w-3.5 h-3.5" />
+            <span>{isEn ? "Switch Account" : "تبديل الحساب"}</span>
           </button>
         </div>
       </div>

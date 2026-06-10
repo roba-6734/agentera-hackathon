@@ -81,6 +81,16 @@ export interface UaeIndicator {
 
 export type activeTabCode = "passport" | "strategic" | "briefing" | "compare" | "chat" | "predictive" | "database";
 
+export type AppRole = "developer" | "staff" | "executive";
+
+export interface AppSession {
+  role: AppRole;
+  displayName: string;
+  email: string;
+  authMode: "signin" | "signup";
+  issuedAt: string;
+}
+
 export interface UserJourneyStep {
   step: number;
   titleEn: string;
