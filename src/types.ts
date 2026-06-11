@@ -101,6 +101,100 @@ export interface UaeIndicator {
   cooperationAgreementAr: string;
 }
 
+export interface BriefingReferenceFact {
+  label: string;
+  value: string;
+  context?: string;
+  source?: string;
+  year?: string;
+}
+
+export interface BriefingLeadershipContact {
+  role: string;
+  name: string;
+  note?: string;
+}
+
+export interface BriefingSectorScorecardItem {
+  sector: string;
+  currentBaseline: string;
+  policyTarget: string;
+  uaeAngle: string;
+}
+
+export interface BriefingOpportunityItem {
+  title: string;
+  detail: string;
+  priority?: "Critical" | "High" | "Medium" | "Low";
+}
+
+export interface BriefingRiskItem {
+  risk: string;
+  mitigation: string;
+}
+
+export interface BriefingExecutiveSummaryArtifact {
+  title: string;
+  overview: string;
+  structuralReadiness: string;
+  leadership: string;
+  energyInfrastructureSectors: {
+    energy: string;
+    infrastructure: string;
+    sustainability: string;
+  };
+  priorityPartnerships: string[];
+  predictiveIntelligence: {
+    emergingMarkets: string;
+    calculatedRisks: string;
+    proposedUaeInitiative: string;
+  };
+  decisionFocus: string;
+}
+
+export interface BriefingTalkingPoint {
+  title: string;
+  point: string;
+  ask?: string;
+  evidence?: string;
+  riskNote?: string;
+}
+
+export interface BriefingOnePagerArtifact {
+  title: string;
+  subtitle: string;
+  country: string;
+  strategicPriority: "Critical" | "High" | "Medium" | "Low";
+  lastUpdated: string;
+  uaeRelevance: string;
+  fastFacts: BriefingReferenceFact[];
+  leadership: BriefingLeadershipContact[];
+  sectorScorecard: BriefingSectorScorecardItem[];
+  opportunityMap: BriefingOpportunityItem[];
+  risks: BriefingRiskItem[];
+  actions90Days: string[];
+  strategicRecommendation: string;
+}
+
+export interface BriefingSlideArtifact {
+  title: string;
+  subtitle?: string;
+  bullets: string[];
+  speakerNote?: string;
+  visualHint?: string;
+}
+
+export interface BriefingArtifacts {
+  generatedAt: string;
+  country: string;
+  language: "en" | "ar";
+  executiveSummary: BriefingExecutiveSummaryArtifact;
+  talkingPoints: BriefingTalkingPoint[];
+  onePager: BriefingOnePagerArtifact;
+  slides: BriefingSlideArtifact[];
+  sourceNotes: string[];
+}
+
 export type activeTabCode = "passport" | "strategic" | "briefing" | "compare" | "chat" | "predictive" | "database" | "debrief";
 
 export type AppRole = "developer" | "staff" | "executive";

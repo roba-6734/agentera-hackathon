@@ -8,6 +8,13 @@ import { createHash } from "crypto";
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import type {
   AppRole,
+  BriefingArtifacts,
+  BriefingOpportunityItem,
+  BriefingReferenceFact,
+  BriefingRiskItem,
+  BriefingSectorScorecardItem,
+  BriefingSlideArtifact,
+  BriefingTalkingPoint,
   MeetingActionItem,
   MeetingActionPriority,
   MeetingActionStatus,
@@ -1050,6 +1057,11 @@ type N8NAdvisorWorkflowResult = {
   structured?: any;
 };
 
+type N8NBriefingWorkflowResult = {
+  rawText?: string;
+  structured?: any;
+};
+
 type VoiceTranscriptionProvider = "openai" | "mock";
 
 type VoiceTranscriptionResult = {
@@ -2006,7 +2018,7 @@ function normalizeMeetingActionItems(value: unknown): MeetingActionItem[] {
   }
 
   return value
-    .map((item) => {
+    .map((item): MeetingActionItem => {
       const source = item && typeof item === "object" ? item as any : {};
       return {
         id: normalizeShortText(source.id, "", 120) || undefined,
@@ -2805,6 +2817,487 @@ The country is governed under the ${countryData.profile.governmentEn} Led active
 * **Proposed UAE Initiative:** ${countryData.predictive.proposalsEn}${question ? `\n\n**Question Focus:** ${question}` : ""}`;
 }
 
+function normalizeGeneratedBriefingDate(value?: unknown): string {
+  const candidate = normalizeShortText(value, "", 80);
+  return candidate || new Date().toISOString().slice(0, 10);
+}
+
+function coerceBriefingPriority(value: unknown): "Critical" | "High" | "Medium" | "Low" {
+  const normalized = normalizeShortText(value, "", 40).toLowerCase();
+  if (normalized === "critical") return "Critical";
+  if (normalized === "medium") return "Medium";
+  if (normalized === "low") return "Low";
+  return "High";
+}
+
+function coerceBriefingText(value: unknown, fallback: string, maxLength = 900): string {
+  return normalizeShortText(value, fallback, maxLength) || fallback;
+}
+
+function coerceBriefingStringArray(value: unknown, fallback: string[], maxItems: number, maxLength = 360): string[] {
+  const items = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/\r?\n|;/)
+      : [];
+
+  const normalized = items
+    .map((item) => coerceBriefingText(
+      typeof item === "string"
+        ? item.replace(/^\s*[-*]\s*/, "")
+        : item?.title || item?.point || item?.detail || item?.text || compactJsonValue(item, maxLength),
+      "",
+      maxLength
+    ))
+    .filter(Boolean)
+    .slice(0, maxItems);
+
+  return normalized.length > 0 ? normalized : fallback.slice(0, maxItems);
+}
+
+function makeBriefingFact(label: string, value: unknown, context = "", source = "Country intelligence profile", year = ""): BriefingReferenceFact | null {
+  const cleanValue = coerceBriefingText(value, "", 160);
+  if (!cleanValue) return null;
+
+  return {
+    label,
+    value: cleanValue,
+    ...(context ? { context } : {}),
+    ...(source ? { source } : {}),
+    ...(year ? { year } : {}),
+  };
+}
+
+function buildLocalBriefingArtifacts(
+  countryData: any,
+  vectorContext: VectorContextRecord[],
+  meetingMemory: MeetingRecord[],
+  language: "en" | "ar",
+  question?: string
+): BriefingArtifacts {
+  const isAr = language === "ar";
+  const countryName = isAr ? (countryData.nameAr || countryData.nameEn) : countryData.nameEn;
+  const overview = coerceBriefingText(
+    isAr ? (countryData.profile?.overviewAr || countryData.profile?.overviewEn) : countryData.profile?.overviewEn,
+    `${countryName} is a priority bilateral partner for UAE energy and infrastructure engagement.`,
+    900
+  );
+  const government = coerceBriefingText(
+    isAr ? (countryData.profile?.governmentAr || countryData.profile?.governmentEn) : countryData.profile?.governmentEn,
+    isAr ? "هيكل حكومي مركزي قابل للتنسيق المؤسسي." : "Government structure suitable for institutional coordination.",
+    420
+  );
+  const leadership = coerceBriefingText(
+    isAr ? (countryData.profile?.leadershipAr || countryData.profile?.leadershipEn) : countryData.profile?.leadershipEn,
+    isAr ? "Key national leadership and sector ministers should be confirmed before the meeting." : "Key national leadership and sector ministers should be confirmed before the meeting.",
+    420
+  );
+  const energy = coerceBriefingText(isAr ? (countryData.sectors?.energyAr || countryData.sectors?.energyEn) : countryData.sectors?.energyEn, "", 640);
+  const infrastructure = coerceBriefingText(isAr ? (countryData.sectors?.infrastructureAr || countryData.sectors?.infrastructureEn) : countryData.sectors?.infrastructureEn, "", 640);
+  const sustainability = coerceBriefingText(isAr ? (countryData.sectors?.sustainabilityAr || countryData.sectors?.sustainabilityEn) : countryData.sectors?.sustainabilityEn, "", 640);
+  const partnerships = coerceBriefingText(isAr ? (countryData.strategicInsights?.partnershipsAr || countryData.strategicInsights?.partnershipsEn) : countryData.strategicInsights?.partnershipsEn, "", 700);
+  const investments = coerceBriefingText(isAr ? (countryData.strategicInsights?.investmentsAr || countryData.strategicInsights?.investmentsEn) : countryData.strategicInsights?.investmentsEn, "", 700);
+  const knowledge = coerceBriefingText(isAr ? (countryData.strategicInsights?.knowledgeAr || countryData.strategicInsights?.knowledgeEn) : countryData.strategicInsights?.knowledgeEn, "", 700);
+  const markets = coerceBriefingText(isAr ? (countryData.predictive?.marketsAr || countryData.predictive?.marketsEn) : countryData.predictive?.marketsEn, "", 600);
+  const risks = coerceBriefingText(isAr ? (countryData.predictive?.risksAr || countryData.predictive?.risksEn) : countryData.predictive?.risksEn, "", 600);
+  const proposals = coerceBriefingText(isAr ? (countryData.predictive?.proposalsAr || countryData.predictive?.proposalsEn) : countryData.predictive?.proposalsEn, "", 600);
+
+  const fastFacts = [
+    makeBriefingFact(isAr ? "الناتج المحلي الاجمالي" : "GDP", isAr ? countryData.indicators?.gdpAr : countryData.indicators?.gdp, "", "Country profile"),
+    makeBriefingFact(isAr ? "النمو" : "GDP growth", countryData.indicators?.growth, "", "Country profile"),
+    makeBriefingFact(isAr ? "نصيب الفرد" : "GDP per capita", countryData.indicators?.gdpPerCapita, "", "Country profile"),
+    makeBriefingFact(isAr ? "مزيج الطاقة" : "Energy mix", isAr ? countryData.indicators?.energyMixAr : countryData.indicators?.energyMix, "", "Country profile"),
+    makeBriefingFact(isAr ? "البنية التحتية" : "Infrastructure index", countryData.indicators?.infrastructureIndex, "", "Country profile"),
+    makeBriefingFact(isAr ? "البيئة" : "Environmental rank", countryData.indicators?.environmentalRank, "", "Country profile"),
+    makeBriefingFact(isAr ? "التنافسية" : "Competitiveness", countryData.indicators?.competitivenessRank, "", "Country profile"),
+    makeBriefingFact(isAr ? "اطار التعاون" : "Cooperation framework", isAr ? countryData.indicators?.cooperationAgreementAr : countryData.indicators?.cooperationAgreementEn, "", "Country profile"),
+    makeBriefingFact(isAr ? "اشارات قاعدة المتجهات" : "Vector context", String(vectorContext.length), isAr ? "عدد المقاطع الداعمة المسترجعة" : "Retrieved supporting sections", NEON_JSONB_CONTEXT_SOURCE),
+    makeBriefingFact(isAr ? "ذاكرة الاجتماعات" : "Meeting memory", String(meetingMemory.length), isAr ? "سجلات مؤسسية مرتبطة" : "Related institutional records", "meeting_records"),
+  ].filter((fact): fact is BriefingReferenceFact => Boolean(fact)).slice(0, 10);
+
+  const sectorScorecard: BriefingSectorScorecardItem[] = [
+    {
+      sector: isAr ? "الطاقة" : "Energy",
+      currentBaseline: energy,
+      policyTarget: coerceBriefingText(countryData.indicators?.energyMix, isAr ? "تأكيد مسار التحول الطاقي." : "Confirm energy transition trajectory.", 260),
+      uaeAngle: isAr ? "ربط فرص الشبكات والطاقة النظيفة والاستثمار." : "Link grid, clean power, and investment opportunities.",
+    },
+    {
+      sector: isAr ? "البنية التحتية واللوجستيات" : "Infrastructure and Logistics",
+      currentBaseline: infrastructure,
+      policyTarget: isAr ? "تحديد الممرات والموانئ والمناطق الصناعية ذات الاولوية." : "Identify priority corridors, ports, and industrial zones.",
+      uaeAngle: isAr ? "تفعيل خبرة الموانئ والممرات الذكية في الامارات." : "Apply UAE port, corridor, and smart logistics capability.",
+    },
+    {
+      sector: isAr ? "الاستدامة" : "Sustainability",
+      currentBaseline: sustainability,
+      policyTarget: isAr ? "مواءمة الالتزامات المناخية مع مشاريع قابلة للتمويل." : "Translate climate commitments into financeable projects.",
+      uaeAngle: isAr ? "ربط التمويل السيادي والتقنية والتنفيذ." : "Connect sovereign finance, technology, and delivery.",
+    },
+  ];
+
+  const opportunityMap: BriefingOpportunityItem[] = [
+    { title: isAr ? "الشراكات الاستراتيجية" : "Strategic partnerships", detail: partnerships, priority: "High" },
+    { title: isAr ? "الاستثمارات الفورية" : "Immediate investments", detail: investments, priority: "High" },
+    { title: isAr ? "تبادل المعرفة" : "Knowledge exchange", detail: knowledge, priority: "Medium" },
+  ];
+
+  const riskItems: BriefingRiskItem[] = [
+    { risk: risks, mitigation: isAr ? "اعتماد مسار حكومي واضح ومالك متابعة واحد لكل مبادرة." : "Use a clear government channel and one accountable owner per initiative." },
+    { risk: isAr ? "تباين البيانات او قدم بعض المؤشرات." : "Some indicators may require final source validation.", mitigation: isAr ? "تثبيت مصادر الارقام في الملحق قبل اي توقيع رسمي." : "Lock source references in an annex before any formal signing." },
+  ];
+
+  const actions90Days = isAr
+    ? [
+        `تشكيل فريق عمل اماراتي مع ${countryName}.`,
+        "اختيار ثلاثة مشاريع قابلة للتنفيذ في الطاقة والبنية التحتية واللوجستيات.",
+        "تحديد الوزارات والشركات السيادية المالكة لكل مسار.",
+        "اعداد مذكرة تمويل وتنفيذ مختصرة للقيادة.",
+      ]
+    : [
+        `Convene a UAE-${countryName} energy and infrastructure working group.`,
+        "Select three bankable pilots across energy, infrastructure, and logistics.",
+        "Map counterpart ministries, sovereign funds, and delivery companies.",
+        "Prepare a short financing and execution note for leadership review.",
+      ];
+
+  const title = isAr ? `موجز استشاري استراتيجي حول ${countryName}` : `Executive Strategic Advisory Brief for ${countryName}`;
+  const decisionFocus = coerceBriefingText(question, proposals || investments || overview, 420);
+
+  const talkingPoints: BriefingTalkingPoint[] = [
+    {
+      title: isAr ? "الافتتاح الدبلوماسي" : "Strategic opening",
+      point: isAr ? `تقديم دولة الامارات كشريك تنفيذي مستقر مع ${countryName}.` : `Position the UAE as a stable, execution-oriented partner for ${countryName}.`,
+      ask: proposals,
+      evidence: partnerships,
+    },
+    {
+      title: isAr ? "الطاقة والتحول" : "Energy transition",
+      point: energy,
+      ask: isAr ? "طلب تحديد مشروع طاقة واحد قابل للتمويل السريع." : "Ask for one fast-track energy project suitable for financing.",
+    },
+    {
+      title: isAr ? "الممرات واللوجستيات" : "Corridors and logistics",
+      point: infrastructure,
+      ask: isAr ? "اقتراح مسار تنفيذي للموانئ والمناطق اللوجستية." : "Propose a delivery path for ports and logistics zones.",
+    },
+    {
+      title: isAr ? "المخاطر والمتابعة" : "Risk and follow-up",
+      point: risks,
+      ask: isAr ? "تعيين جهة متابعة رسمية وجدول عمل لمدة 90 يوما." : "Assign a formal follow-up owner and 90-day action calendar.",
+      riskNote: risks,
+    },
+  ];
+
+  const slides: BriefingSlideArtifact[] = [
+    {
+      title,
+      subtitle: isAr ? "الهدف والرسالة الافتتاحية" : "Objective and opening posture",
+      bullets: [overview, decisionFocus, proposals].filter(Boolean).slice(0, 3),
+      speakerNote: isAr ? "ابدأ بالمصلحة المشتركة ثم انتقل الى الطلب التنفيذي." : "Open with shared interest, then move to the executable ask.",
+      visualHint: "Country flag, UAE line, corridor map",
+    },
+    {
+      title: isAr ? "الحقائق السريعة" : "Fast reference facts",
+      bullets: fastFacts.slice(0, 5).map((fact) => `${fact.label}: ${fact.value}`),
+      visualHint: "Metric tiles",
+    },
+    {
+      title: isAr ? "خريطة الفرص" : "Opportunity map",
+      bullets: opportunityMap.map((item) => `${item.title}: ${item.detail}`).slice(0, 3),
+      visualHint: "Three-column opportunity grid",
+    },
+    {
+      title: isAr ? "المخاطر وخطوات 90 يوما" : "Risks and 90-day actions",
+      bullets: [...riskItems.map((item) => `${item.risk} | ${item.mitigation}`), ...actions90Days].slice(0, 5),
+      visualHint: "Risk matrix plus action strip",
+    },
+  ];
+
+  return {
+    generatedAt: new Date().toISOString(),
+    country: countryName,
+    language,
+    executiveSummary: {
+      title,
+      overview,
+      structuralReadiness: overview,
+      leadership: `${government} ${leadership}`.trim(),
+      energyInfrastructureSectors: {
+        energy,
+        infrastructure,
+        sustainability,
+      },
+      priorityPartnerships: [partnerships, investments, knowledge].filter(Boolean),
+      predictiveIntelligence: {
+        emergingMarkets: markets,
+        calculatedRisks: risks,
+        proposedUaeInitiative: proposals,
+      },
+      decisionFocus,
+    },
+    talkingPoints,
+    onePager: {
+      title: isAr ? `ملف صفحة واحدة: ${countryName}` : `${countryName} Strategic One-Pager`,
+      subtitle: isAr ? "لوحة مرجعية تنفيذية للقيادة" : "Executive reference infographic",
+      country: countryName,
+      strategicPriority: "High",
+      lastUpdated: normalizeGeneratedBriefingDate(),
+      uaeRelevance: partnerships || proposals || overview,
+      fastFacts,
+      leadership: [
+        { role: isAr ? "الحكومة" : "Government", name: government },
+        { role: isAr ? "القيادة" : "Leadership", name: leadership },
+      ],
+      sectorScorecard,
+      opportunityMap,
+      risks: riskItems,
+      actions90Days,
+      strategicRecommendation: proposals || investments || decisionFocus,
+    },
+    slides,
+    sourceNotes: [
+      "country_intelligence_profiles",
+      vectorContext.length > 0 ? NEON_JSONB_CONTEXT_SOURCE : "no-vector-context",
+      meetingMemory.length > 0 ? "meeting_records" : "no-meeting-memory",
+    ],
+  };
+}
+
+function renderBriefingArtifactsMarkdown(artifacts: BriefingArtifacts): string {
+  const summary = artifacts.executiveSummary;
+  const sectors = summary.energyInfrastructureSectors;
+  const predictive = summary.predictiveIntelligence;
+
+  return `### ${summary.title}
+
+**Overview & Structural Readiness:**
+${summary.overview}
+
+**Leadership Structure & Key Decision Makers:**
+${summary.leadership}
+
+**Energy & Infrastructure Sectors:**
+* **Energy:** ${sectors.energy}
+* **Infrastructure:** ${sectors.infrastructure}
+* **Sustainability:** ${sectors.sustainability}
+
+**Priority Strategic Partnerships & Immediate Investments:**
+${summary.priorityPartnerships.map((item) => `* ${item}`).join("\n")}
+
+**Predictive Intelligence & Diplomatic Recommendations:**
+* **Emerging Markets:** ${predictive.emergingMarkets}
+* **Calculated Risks:** ${predictive.calculatedRisks}
+* **Proposed UAE Initiative:** ${predictive.proposedUaeInitiative}
+
+**Decision Focus:**
+${summary.decisionFocus}`;
+}
+
+function coerceBriefingFacts(value: unknown, fallback: BriefingReferenceFact[]): BriefingReferenceFact[] {
+  const source = Array.isArray(value) ? value : [];
+  const facts = source
+    .map((item): BriefingReferenceFact | null => {
+      if (typeof item === "string") {
+        return makeBriefingFact("Fact", item);
+      }
+      if (!item || typeof item !== "object") return null;
+      return makeBriefingFact(
+        coerceBriefingText((item as any).label || (item as any).name || (item as any).metric, "Fact", 80),
+        (item as any).value,
+        coerceBriefingText((item as any).context || (item as any).note, "", 180),
+        coerceBriefingText((item as any).source, "", 140),
+        coerceBriefingText((item as any).year || (item as any).date, "", 80)
+      );
+    })
+    .filter((fact): fact is BriefingReferenceFact => Boolean(fact))
+    .slice(0, 12);
+
+  return facts.length > 0 ? facts : fallback;
+}
+
+function coerceBriefingLeadership(value: unknown, fallback: BriefingArtifacts["onePager"]["leadership"]): BriefingArtifacts["onePager"]["leadership"] {
+  const source = Array.isArray(value) ? value : [];
+  const contacts = source
+    .map((item): BriefingArtifacts["onePager"]["leadership"][number] | null => {
+      if (typeof item === "string") {
+        return { role: "Decision maker", name: coerceBriefingText(item, "", 220) };
+      }
+      if (!item || typeof item !== "object") return null;
+      const role = coerceBriefingText((item as any).role || (item as any).title, "Decision maker", 120);
+      const name = coerceBriefingText((item as any).name || (item as any).person || (item as any).office, "", 220);
+      if (!name) return null;
+      const note = coerceBriefingText((item as any).note || (item as any).context, "", 180);
+      return { role, name, ...(note ? { note } : {}) };
+    })
+    .filter((item): item is BriefingArtifacts["onePager"]["leadership"][number] => Boolean(item))
+    .slice(0, 8);
+
+  return contacts.length > 0 ? contacts : fallback;
+}
+
+function coerceSectorScorecard(value: unknown, fallback: BriefingSectorScorecardItem[]): BriefingSectorScorecardItem[] {
+  const source = Array.isArray(value) ? value : [];
+  const items = source
+    .map((item): BriefingSectorScorecardItem | null => {
+      if (!item || typeof item !== "object") return null;
+      return {
+        sector: coerceBriefingText((item as any).sector || (item as any).name, "Sector", 100),
+        currentBaseline: coerceBriefingText((item as any).currentBaseline || (item as any).baseline || (item as any).current, "", 360),
+        policyTarget: coerceBriefingText((item as any).policyTarget || (item as any).target, "", 260),
+        uaeAngle: coerceBriefingText((item as any).uaeAngle || (item as any).uaeOpportunity || (item as any).angle, "", 260),
+      };
+    })
+    .filter((item): item is BriefingSectorScorecardItem => Boolean(item && item.currentBaseline))
+    .slice(0, 6);
+
+  return items.length > 0 ? items : fallback;
+}
+
+function coerceOpportunityMap(value: unknown, fallback: BriefingOpportunityItem[]): BriefingOpportunityItem[] {
+  const source = Array.isArray(value) ? value : [];
+  const items = source
+    .map((item): BriefingOpportunityItem | null => {
+      if (typeof item === "string") {
+        return { title: "Opportunity", detail: coerceBriefingText(item, "", 360), priority: "High" as const };
+      }
+      if (!item || typeof item !== "object") return null;
+      const detail = coerceBriefingText((item as any).detail || (item as any).description || (item as any).point, "", 420);
+      if (!detail) return null;
+      return {
+        title: coerceBriefingText((item as any).title || (item as any).name, "Opportunity", 120),
+        detail,
+        priority: coerceBriefingPriority((item as any).priority),
+      };
+    })
+    .filter((item): item is BriefingOpportunityItem => Boolean(item))
+    .slice(0, 8);
+
+  return items.length > 0 ? items : fallback;
+}
+
+function coerceRiskItems(value: unknown, fallback: BriefingRiskItem[]): BriefingRiskItem[] {
+  const source = Array.isArray(value) ? value : [];
+  const items = source
+    .map((item) => {
+      if (typeof item === "string") {
+        return { risk: coerceBriefingText(item, "", 260), mitigation: "Assign a single owner and confirm the path with counterpart institutions." };
+      }
+      if (!item || typeof item !== "object") return null;
+      const risk = coerceBriefingText((item as any).risk || (item as any).title || (item as any).issue, "", 280);
+      const mitigation = coerceBriefingText((item as any).mitigation || (item as any).response || (item as any).action, "", 320);
+      if (!risk) return null;
+      return { risk, mitigation: mitigation || "Confirm mitigation path before formal commitment." };
+    })
+    .filter((item): item is BriefingRiskItem => Boolean(item))
+    .slice(0, 6);
+
+  return items.length > 0 ? items : fallback;
+}
+
+function coerceTalkingPoints(value: unknown, fallback: BriefingTalkingPoint[]): BriefingTalkingPoint[] {
+  const source = Array.isArray(value) ? value : [];
+  const points = source
+    .map((item): BriefingTalkingPoint | null => {
+      if (typeof item === "string") {
+        return { title: "Talking point", point: coerceBriefingText(item, "", 420) };
+      }
+      if (!item || typeof item !== "object") return null;
+      const point = coerceBriefingText((item as any).point || (item as any).body || (item as any).message, "", 460);
+      if (!point) return null;
+      return {
+        title: coerceBriefingText((item as any).title || (item as any).header, "Talking point", 120),
+        point,
+        ask: coerceBriefingText((item as any).ask, "", 260) || undefined,
+        evidence: coerceBriefingText((item as any).evidence || (item as any).fact, "", 260) || undefined,
+        riskNote: coerceBriefingText((item as any).riskNote || (item as any).risk, "", 260) || undefined,
+      };
+    })
+    .filter((item): item is BriefingTalkingPoint => Boolean(item))
+    .slice(0, 8);
+
+  return points.length > 0 ? points : fallback;
+}
+
+function coerceBriefingSlides(value: unknown, fallback: BriefingSlideArtifact[]): BriefingSlideArtifact[] {
+  const source = Array.isArray(value) ? value : [];
+  const slides = source
+    .map((item): BriefingSlideArtifact | null => {
+      if (!item || typeof item !== "object") return null;
+      const title = coerceBriefingText((item as any).title || (item as any).heading, "", 120);
+      const bullets = coerceBriefingStringArray((item as any).bullets || (item as any).points, [], 6, 220);
+      if (!title || bullets.length === 0) return null;
+      return {
+        title,
+        subtitle: coerceBriefingText((item as any).subtitle, "", 140) || undefined,
+        bullets,
+        speakerNote: coerceBriefingText((item as any).speakerNote || (item as any).note, "", 280) || undefined,
+        visualHint: coerceBriefingText((item as any).visualHint || (item as any).visual, "", 160) || undefined,
+      };
+    })
+    .filter((item): item is BriefingSlideArtifact => Boolean(item))
+    .slice(0, 8);
+
+  return slides.length > 0 ? slides : fallback;
+}
+
+function normalizeBriefingArtifacts(candidate: any, fallback: BriefingArtifacts): BriefingArtifacts {
+  const source = candidate && typeof candidate === "object" ? candidate : {};
+  const executiveSource = source.executiveSummary || source.executive_summary || {};
+  const onePagerSource = source.onePager || source.one_pager || source.infographic || {};
+  const fallbackSummary = fallback.executiveSummary;
+  const fallbackOnePager = fallback.onePager;
+
+  const executiveSummary = {
+    title: coerceBriefingText(executiveSource.title, fallbackSummary.title, 180),
+    overview: coerceBriefingText(executiveSource.overview, fallbackSummary.overview, 900),
+    structuralReadiness: coerceBriefingText(executiveSource.structuralReadiness || executiveSource.structural_readiness, fallbackSummary.structuralReadiness, 900),
+    leadership: coerceBriefingText(executiveSource.leadership, fallbackSummary.leadership, 700),
+    energyInfrastructureSectors: {
+      energy: coerceBriefingText(executiveSource.energyInfrastructureSectors?.energy || executiveSource.energy, fallbackSummary.energyInfrastructureSectors.energy, 700),
+      infrastructure: coerceBriefingText(executiveSource.energyInfrastructureSectors?.infrastructure || executiveSource.infrastructure, fallbackSummary.energyInfrastructureSectors.infrastructure, 700),
+      sustainability: coerceBriefingText(executiveSource.energyInfrastructureSectors?.sustainability || executiveSource.sustainability, fallbackSummary.energyInfrastructureSectors.sustainability, 700),
+    },
+    priorityPartnerships: coerceBriefingStringArray(
+      executiveSource.priorityPartnerships || executiveSource.priority_partnerships,
+      fallbackSummary.priorityPartnerships,
+      6,
+      500
+    ),
+    predictiveIntelligence: {
+      emergingMarkets: coerceBriefingText(executiveSource.predictiveIntelligence?.emergingMarkets || executiveSource.emergingMarkets, fallbackSummary.predictiveIntelligence.emergingMarkets, 500),
+      calculatedRisks: coerceBriefingText(executiveSource.predictiveIntelligence?.calculatedRisks || executiveSource.calculatedRisks, fallbackSummary.predictiveIntelligence.calculatedRisks, 500),
+      proposedUaeInitiative: coerceBriefingText(executiveSource.predictiveIntelligence?.proposedUaeInitiative || executiveSource.proposedUaeInitiative, fallbackSummary.predictiveIntelligence.proposedUaeInitiative, 500),
+    },
+    decisionFocus: coerceBriefingText(executiveSource.decisionFocus || executiveSource.decision_focus, fallbackSummary.decisionFocus, 500),
+  };
+
+  return {
+    generatedAt: normalizeGeneratedBriefingDate(source.generatedAt || source.generated_at || fallback.generatedAt),
+    country: coerceBriefingText(source.country, fallback.country, 120),
+    language: source.language === "ar" ? "ar" : fallback.language,
+    executiveSummary,
+    talkingPoints: coerceTalkingPoints(source.talkingPoints || source.talking_points, fallback.talkingPoints),
+    onePager: {
+      title: coerceBriefingText(onePagerSource.title, fallbackOnePager.title, 180),
+      subtitle: coerceBriefingText(onePagerSource.subtitle, fallbackOnePager.subtitle, 220),
+      country: coerceBriefingText(onePagerSource.country, fallbackOnePager.country, 120),
+      strategicPriority: coerceBriefingPriority(onePagerSource.strategicPriority || onePagerSource.strategic_priority || fallbackOnePager.strategicPriority),
+      lastUpdated: normalizeGeneratedBriefingDate(onePagerSource.lastUpdated || onePagerSource.last_updated || fallbackOnePager.lastUpdated),
+      uaeRelevance: coerceBriefingText(onePagerSource.uaeRelevance || onePagerSource.uae_relevance, fallbackOnePager.uaeRelevance, 600),
+      fastFacts: coerceBriefingFacts(onePagerSource.fastFacts || onePagerSource.fast_facts, fallbackOnePager.fastFacts),
+      leadership: coerceBriefingLeadership(onePagerSource.leadership, fallbackOnePager.leadership),
+      sectorScorecard: coerceSectorScorecard(onePagerSource.sectorScorecard || onePagerSource.sector_scorecard, fallbackOnePager.sectorScorecard),
+      opportunityMap: coerceOpportunityMap(onePagerSource.opportunityMap || onePagerSource.opportunity_map, fallbackOnePager.opportunityMap),
+      risks: coerceRiskItems(onePagerSource.risks, fallbackOnePager.risks),
+      actions90Days: coerceBriefingStringArray(onePagerSource.actions90Days || onePagerSource.actions_90_days, fallbackOnePager.actions90Days, 6, 260),
+      strategicRecommendation: coerceBriefingText(onePagerSource.strategicRecommendation || onePagerSource.strategic_recommendation, fallbackOnePager.strategicRecommendation, 500),
+    },
+    slides: coerceBriefingSlides(source.slides, fallback.slides),
+    sourceNotes: coerceBriefingStringArray(source.sourceNotes || source.source_notes, fallback.sourceNotes, 8, 180),
+  };
+}
+
 function compactAdvisorText(value: unknown, fallback = "", maxLength = 320): string {
   const normalized = normalizeShortText(value, fallback, maxLength + 80);
   if (normalized.length <= maxLength) return normalized;
@@ -3243,6 +3736,65 @@ function extractStructuredFromN8NResponse(value: any, depth = 0): any | undefine
   return undefined;
 }
 
+function isBriefingArtifactRecord(value: any): boolean {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && (value.executiveSummary || value.executive_summary)
+    && (value.onePager || value.one_pager || value.infographic)
+    && (value.slides || value.talkingPoints || value.talking_points)
+  );
+}
+
+function extractBriefingArtifactsFromN8NResponse(value: any, depth = 0): any | undefined {
+  if (depth > N8N_MAX_RESPONSE_DEPTH) return undefined;
+
+  if (typeof value === "string") {
+    const parsed = parseJsonLikeString(value);
+    return parsed === undefined ? undefined : extractBriefingArtifactsFromN8NResponse(parsed, depth + 1);
+  }
+
+  if (!value || typeof value !== "object") return undefined;
+
+  if (Array.isArray(value)) {
+    return value.map((item) => extractBriefingArtifactsFromN8NResponse(item, depth + 1)).find(Boolean);
+  }
+
+  if (isBriefingArtifactRecord(value)) return value;
+
+  const directCandidates = [
+    value.briefingArtifacts,
+    value.briefing_artifacts,
+    value.artifacts,
+    value.structured,
+    value.aiBriefing?.structured,
+    value.aiBriefing?.briefingArtifacts,
+    value.data?.briefingArtifacts,
+    value.data?.structured,
+    value.json?.briefingArtifacts,
+    value.json?.structured,
+  ];
+
+  for (const candidate of directCandidates) {
+    const found = extractBriefingArtifactsFromN8NResponse(candidate, depth + 1);
+    if (found) return found;
+  }
+
+  for (const key of N8N_CONTAINER_FIELD_KEYS) {
+    if (!hasOwnRecordKey(value, key)) continue;
+    const found = extractBriefingArtifactsFromN8NResponse(value[key], depth + 1);
+    if (found) return found;
+  }
+
+  for (const [key, candidate] of Object.entries(value)) {
+    if (!/(brief|artifact|structured|result|output|body|payload|json|data)/i.test(key)) continue;
+    const found = extractBriefingArtifactsFromN8NResponse(candidate, depth + 1);
+    if (found) return found;
+  }
+
+  return undefined;
+}
+
 async function callN8NAdvisorWorkflow(payload: any): Promise<N8NAdvisorWorkflowResult | null> {
   const webhookUrl = process.env.N8N_CHAT_WEBHOOK_URL?.trim();
   if (!webhookUrl || webhookUrl === "MY_N8N_CHAT_WEBHOOK_URL") {
@@ -3281,6 +3833,52 @@ async function callN8NAdvisorWorkflow(payload: any): Promise<N8NAdvisorWorkflowR
       rawText,
       threadId: extractThreadIdFromN8NResponse(parsedResponse),
       structured: extractStructuredFromN8NResponse(parsedResponse) || findN8NAnswerRecord(parsedResponse),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function callN8NBriefingWorkflow(payload: any): Promise<N8NBriefingWorkflowResult | null> {
+  const webhookUrl = process.env.N8N_BRIEFING_WEBHOOK_URL?.trim();
+  if (!webhookUrl || webhookUrl === "MY_N8N_BRIEFING_WEBHOOK_URL") {
+    return null;
+  }
+
+  const controller = new AbortController();
+  const timeoutMs = getPositiveNumberEnv("N8N_BRIEFING_TIMEOUT_MS", getPositiveNumberEnv("N8N_CHAT_TIMEOUT_MS", 45000));
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const secret = process.env.N8N_BRIEFING_WEBHOOK_SECRET?.trim() || process.env.N8N_CHAT_WEBHOOK_SECRET?.trim();
+  if (secret) {
+    headers.Authorization = secret.toLowerCase().startsWith("bearer ") ? secret : `Bearer ${secret}`;
+    headers["X-Majlis-Webhook-Secret"] = secret;
+  }
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      throw new Error(`n8n briefing workflow returned ${response.status}: ${responseText.slice(0, 400)}`);
+    }
+
+    const parsedResponse = parseJsonValueFromText(responseText);
+    const structured = extractBriefingArtifactsFromN8NResponse(parsedResponse) || extractStructuredFromN8NResponse(parsedResponse);
+    const rawText = extractStringFromN8NResponse(parsedResponse);
+
+    if (!structured && !rawText) {
+      throw new Error("n8n briefing workflow response did not include supported briefing artifacts or text.");
+    }
+
+    return {
+      rawText,
+      structured,
     };
   } finally {
     clearTimeout(timeout);
@@ -3673,40 +4271,218 @@ app.post("/api/advisor/brief", async (req, res) => {
     const vectorContext = await loadCountryVectorContext(countryData, question, currentLang);
     const meetingMemory = await loadRecentMeetingMemoryForCountry(normalizedCountry, question);
     const localized = await translateCountryDataForLanguage(countryData, vectorContext, currentLang);
+    const dataSources = {
+      standardDatabase: source,
+      vectorDatabase: {
+        collection: NEON_JSONB_CONTEXT_SOURCE,
+        matches: vectorContext.length,
+      },
+      meetingMemory: {
+        collection: "meeting_records",
+        matches: meetingMemory.length,
+      },
+      translation: localized.translation,
+    };
+    const localArtifacts = buildLocalBriefingArtifacts(
+      localized.countryData,
+      localized.vectorContext,
+      meetingMemory,
+      currentLang,
+      question
+    );
+    const localRawText = renderBriefingArtifactsMarkdown(localArtifacts);
+    const renderedGroundingBrief = renderDatabaseBriefing(localized.countryData, localized.vectorContext, meetingMemory, currentLang, question);
+    const briefingPayload = {
+      event: "advisor.briefing.prepare",
+      version: "2026-06-11",
+      language: currentLang,
+      meetingObjective: normalizeShortText(question, "", 2000),
+      country: {
+        requested: country || normalizedCountry,
+        normalizedId: normalizeCountryId(localized.countryData.id || localized.countryData.nameEn),
+        nameEn: localized.countryData.nameEn,
+        nameAr: localized.countryData.nameAr,
+      },
+      context: {
+        countryProfile: localized.countryData,
+        vectorContext: sanitizeVectorContextForWorkflow(localized.vectorContext),
+        meetingMemory: sanitizeMeetingMemoryForWorkflow(meetingMemory),
+        renderedGroundingBrief,
+        dataSources,
+      },
+      responseContract: {
+        preferredFormat: "json",
+        requiredRoot: "briefingArtifacts",
+        guidance: [
+          "Return strict JSON only.",
+          "All visible text should be concise, executive-ready, and grounded in supplied country profile, vector context, and meeting memory.",
+          "Do not invent facts. If a fact is missing, omit it or mark it as requiring validation in sourceNotes.",
+          "The onePager object is an infographic data model. Keep labels short and values scan-friendly.",
+          "Slides should be 4-6 widescreen executive slides with 3-5 bullets each.",
+        ],
+        schema: {
+          briefingArtifacts: {
+            generatedAt: "ISO timestamp",
+            country: "string",
+            language: "en|ar",
+            executiveSummary: {
+              title: "string",
+              overview: "string",
+              structuralReadiness: "string",
+              leadership: "string",
+              energyInfrastructureSectors: {
+                energy: "string",
+                infrastructure: "string",
+                sustainability: "string",
+              },
+              priorityPartnerships: ["string"],
+              predictiveIntelligence: {
+                emergingMarkets: "string",
+                calculatedRisks: "string",
+                proposedUaeInitiative: "string",
+              },
+              decisionFocus: "string",
+            },
+            talkingPoints: [
+              {
+                title: "string",
+                point: "string",
+                ask: "string",
+                evidence: "string",
+                riskNote: "string",
+              },
+            ],
+            onePager: {
+              title: "string",
+              subtitle: "string",
+              country: "string",
+              strategicPriority: "Critical|High|Medium|Low",
+              lastUpdated: "string",
+              uaeRelevance: "string",
+              fastFacts: [
+                {
+                  label: "string",
+                  value: "string",
+                  context: "string",
+                  source: "string",
+                  year: "string",
+                },
+              ],
+              leadership: [
+                {
+                  role: "string",
+                  name: "string",
+                  note: "string",
+                },
+              ],
+              sectorScorecard: [
+                {
+                  sector: "string",
+                  currentBaseline: "string",
+                  policyTarget: "string",
+                  uaeAngle: "string",
+                },
+              ],
+              opportunityMap: [
+                {
+                  title: "string",
+                  detail: "string",
+                  priority: "Critical|High|Medium|Low",
+                },
+              ],
+              risks: [
+                {
+                  risk: "string",
+                  mitigation: "string",
+                },
+              ],
+              actions90Days: ["string"],
+              strategicRecommendation: "string",
+            },
+            slides: [
+              {
+                title: "string",
+                subtitle: "string",
+                bullets: ["string"],
+                speakerNote: "string",
+                visualHint: "string",
+              },
+            ],
+            sourceNotes: ["string"],
+          },
+        },
+      },
+      requestMeta: {
+        createdAt: new Date().toISOString(),
+        app: "majlis-ai",
+        channel: "briefing-tab-prefetch",
+      },
+    };
+
+    try {
+      const workflowResult = await callN8NBriefingWorkflow(briefingPayload);
+      if (workflowResult) {
+        const briefingArtifacts = normalizeBriefingArtifacts(workflowResult.structured, localArtifacts);
+        return res.json({
+          success: true,
+          source: [
+            "n8n-briefing-workflow",
+            source,
+            vectorContext.length > 0 ? "neon-jsonb-context" : "",
+            meetingMemory.length > 0 ? "meeting-memory" : "",
+          ].filter(Boolean).join("+"),
+          workflow: {
+            status: "n8n",
+            channel: "briefing-tab-prefetch",
+          },
+          dataSources,
+          country: localized.countryData.nameEn,
+          countryData: localized.countryData,
+          briefingArtifacts,
+          aiBriefing: {
+            rawText: workflowResult.rawText || renderBriefingArtifactsMarkdown(briefingArtifacts),
+            structured: briefingArtifacts,
+          }
+        });
+      }
+    } catch (error: any) {
+      console.warn("[n8n Briefing] Workflow unavailable. Returning local structured briefing.", error?.message || error);
+    }
 
     return res.json({
       success: true,
       source: [
+        "local-structured-briefing",
         source,
         vectorContext.length > 0 ? "neon-jsonb-context" : "",
         meetingMemory.length > 0 ? "meeting-memory" : "",
       ].filter(Boolean).join("+"),
-      dataSources: {
-        standardDatabase: source,
-        vectorDatabase: {
-          collection: NEON_JSONB_CONTEXT_SOURCE,
-          matches: vectorContext.length,
-        },
-        meetingMemory: {
-          collection: "meeting_records",
-          matches: meetingMemory.length,
-        },
-        translation: localized.translation,
+      workflow: {
+        status: "local-fallback",
+        channel: "briefing-tab-prefetch",
       },
+      dataSources,
       country: localized.countryData.nameEn,
       countryData: localized.countryData,
+      briefingArtifacts: localArtifacts,
       aiBriefing: {
-        rawText: renderDatabaseBriefing(localized.countryData, localized.vectorContext, meetingMemory, currentLang, question)
+        rawText: localRawText,
+        structured: localArtifacts,
       }
     });
   } catch (error: any) {
     console.log("Cabinet data system notice: database context unavailable. Engaging local standby profile.", error?.message || error);
     const fallbackData = prebuiltCountries[normalizedCountry] || buildGenericCountryData(country || normalizedCountry, normalizedCountry);
     const localizedFallback = await translateCountryDataForLanguage(fallbackData, [], currentLang);
+    const fallbackArtifacts = buildLocalBriefingArtifacts(localizedFallback.countryData, [], [], currentLang, question);
 
     return res.json({
       success: true,
       source: "local-standby-database",
+      workflow: {
+        status: "local-fallback",
+        channel: "briefing-tab-prefetch",
+      },
       dataSources: {
         standardDatabase: "local-standby-database",
         vectorDatabase: {
@@ -3721,8 +4497,10 @@ app.post("/api/advisor/brief", async (req, res) => {
       },
       country: localizedFallback.countryData.nameEn,
       countryData: localizedFallback.countryData,
+      briefingArtifacts: fallbackArtifacts,
       aiBriefing: {
-        rawText: renderDatabaseBriefing(localizedFallback.countryData, [], [], currentLang, question)
+        rawText: renderBriefingArtifactsMarkdown(fallbackArtifacts),
+        structured: fallbackArtifacts,
       }
     });
   }

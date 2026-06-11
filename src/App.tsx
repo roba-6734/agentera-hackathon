@@ -13,7 +13,7 @@ import StrategicSignalsMonitor from "./components/StrategicSignalsMonitor";
 import StrategicMeetingDebrief from "./components/StrategicMeetingDebrief";
 import CountryFlag from "./components/CountryFlag";
 import { apiFetch } from "./api";
-import { AppRole, AppSession, PrebuiltCountry, UaeIndicator, activeTabCode } from "./types";
+import { AppRole, AppSession, BriefingArtifacts, PrebuiltCountry, UaeIndicator, activeTabCode } from "./types";
 import { ShieldAlert, Layers, Award, Landmark, Eye, ArrowRight, FileText, CheckCircle2, Activity, Cpu, ChevronDown, Crown, Target, Sparkles, UsersRound, BrainCircuit, MessageCircle, X, Bot } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useGsapScrollCards } from "./hooks/useGsapScrollCards";
@@ -132,6 +132,7 @@ export default function App() {
 
   // Strategic AI briefing state loaded back and forth from server
   const [aiBriefingText, setAiBriefingText] = useState<string>("");
+  const [briefingArtifacts, setBriefingArtifacts] = useState<BriefingArtifacts | null>(null);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [briefingSource, setBriefingSource] = useState<string>("openai-strategic-ai");
 
@@ -193,6 +194,7 @@ export default function App() {
     if (!cleanTargetCountry) {
       setActiveCountry(null);
       setAiBriefingText("");
+      setBriefingArtifacts(null);
       setCurrentStep(1);
       return;
     }
@@ -225,6 +227,7 @@ export default function App() {
       const data = await resp.json();
       if (data.success) {
         setAiBriefingText(data.aiBriefing.rawText);
+        setBriefingArtifacts(data.briefingArtifacts || data.aiBriefing?.structured || null);
         setBriefingSource(data.source || "openai-strategic-ai");
         if (data.countryData) {
           setActiveCountry(data.countryData);
@@ -270,6 +273,7 @@ export default function App() {
     if (isChangingCountry) {
       setActiveCountry(null);
       setAiBriefingText("");
+      setBriefingArtifacts(null);
     }
     setCurrentStep(2); // Set workflow timeline stage to Step 2: Target country selected
   };
@@ -282,6 +286,7 @@ export default function App() {
     setSelectedCountryCode("");
     setActiveCountry(null);
     setAiBriefingText("");
+    setBriefingArtifacts(null);
     setActiveTab(nextSession.role === "executive" ? "briefing" : "passport");
     setCurrentStep(1);
     setIsChatOpen(false);
@@ -295,6 +300,7 @@ export default function App() {
     setSelectedCountryCode("");
     setActiveCountry(null);
     setAiBriefingText("");
+    setBriefingArtifacts(null);
     setBriefingSource("openai-strategic-ai");
     setIsChatOpen(false);
     setIsCalendarOpen(false);
@@ -411,6 +417,127 @@ export default function App() {
       : isEn
         ? "No target selected"
         : "لم يتم اختيار هدف";
+  const initializeCountryFromWidget = (code?: string) => {
+    const targetCountry = (code || selectedCountryCode).trim();
+    if (!targetCountry) {
+      return;
+    }
+
+    if (targetCountry !== selectedCountryCode || activeCountry?.id !== targetCountry) {
+      handleCountryPicked(targetCountry);
+    }
+    triggerSyncSearch(targetCountry);
+  };
+  const meetingTopicChips = [
+    {
+      labelEn: "Energy",
+      labelAr: "الطاقة",
+      valueEn: "Energy cooperation, grid resilience, and clean power partnerships",
+      valueAr: "التعاون في الطاقة ومرونة الشبكات وشراكات الطاقة النظيفة",
+    },
+    {
+      labelEn: "Infrastructure",
+      labelAr: "البنية التحتية",
+      valueEn: "Infrastructure corridors, ports, logistics, and project delivery",
+      valueAr: "ممرات البنية التحتية والموانئ واللوجستيات وتنفيذ المشاريع",
+    },
+    {
+      labelEn: "Investment",
+      labelAr: "الاستثمار",
+      valueEn: "Investment pipeline, sovereign partnerships, and priority projects",
+      valueAr: "مسار الاستثمار والشراكات السيادية والمشاريع ذات الأولوية",
+    },
+    {
+      labelEn: "Climate",
+      labelAr: "المناخ",
+      valueEn: "Climate alignment, sustainability commitments, and COP follow-through",
+      valueAr: "مواءمة المناخ والتزامات الاستدامة ومتابعة مخرجات مؤتمر الأطراف",
+    },
+  ];
+  const readinessItems = [
+    {
+      key: "country",
+      labelEn: "Target country",
+      labelAr: "الدولة المستهدفة",
+      detailEn: selectedCountryOption?.nameEn || "Pending",
+      detailAr: selectedCountryOption?.nameAr || "قيد الانتظار",
+      state: selectedCountryOption ? "complete" : "current",
+    },
+    {
+      key: "objective",
+      labelEn: "Meeting objective",
+      labelAr: "هدف الاجتماع",
+      detailEn: meetingObjective.trim() ? "Captured" : "Optional",
+      detailAr: meetingObjective.trim() ? "تم تسجيله" : "اختياري",
+      state: meetingObjective.trim() ? "complete" : selectedCountryOption ? "current" : "pending",
+    },
+    {
+      key: "profile",
+      labelEn: "Country profile",
+      labelAr: "ملف الدولة",
+      detailEn: activeCountry ? "Ready" : "Next",
+      detailAr: activeCountry ? "جاهز" : "التالي",
+      state: activeCountry ? "complete" : selectedCountryOption ? "current" : "pending",
+    },
+    {
+      key: "signals",
+      labelEn: "Signals review",
+      labelAr: "مراجعة المؤشرات",
+      detailEn: showSignalsPanel ? "Live" : "Available",
+      detailAr: showSignalsPanel ? "مباشر" : "متاح",
+      state: "complete",
+    },
+    {
+      key: "debrief",
+      labelEn: "Meeting debrief",
+      labelAr: "تحليل الاجتماع",
+      detailEn: "After meeting",
+      detailAr: "بعد الاجتماع",
+      state: "pending",
+    },
+  ];
+  const quickActionItems = [
+    {
+      key: "profile",
+      labelEn: "Generate profile",
+      labelAr: "توليد الملف",
+      Icon: FileText,
+      disabled: !selectedCountryOption || isGenerating,
+      onClick: () => initializeCountryFromWidget(selectedCountryOption?.code),
+    },
+    {
+      key: "schedule",
+      labelEn: "Schedule",
+      labelAr: "الجدول",
+      Icon: Award,
+      disabled: false,
+      onClick: () => setIsCalendarOpen(true),
+    },
+    {
+      key: "debrief",
+      labelEn: "Debrief",
+      labelAr: "التحليل",
+      Icon: BrainCircuit,
+      disabled: false,
+      onClick: () => {
+        setActiveTab("debrief");
+        setCurrentStep(7);
+      },
+    },
+    {
+      key: "advisor",
+      labelEn: "Ask AI",
+      labelAr: "اسأل الذكاء",
+      Icon: MessageCircle,
+      disabled: !activeCountry,
+      onClick: () => setIsChatOpen(true),
+    },
+  ];
+  const signalSummaryItems = [
+    { labelEn: "Energy", labelAr: "الطاقة", valueEn: "Grid watch", valueAr: "متابعة الشبكات" },
+    { labelEn: "Logistics", labelAr: "اللوجستيات", valueEn: "Corridor shifts", valueAr: "تحولات الممرات" },
+    { labelEn: "Diplomacy", labelAr: "الدبلوماسية", valueEn: "Regional posture", valueAr: "الموقف الإقليمي" },
+  ];
   const assistantPortalState = {
     titleEn: isGenerating
       ? "Compiling intelligence update"
@@ -1093,6 +1220,7 @@ export default function App() {
                       country={activeCountry}
                       language={language}
                       aiBriefingText={aiBriefingText}
+                      briefingArtifacts={briefingArtifacts}
                       isGenerating={isGenerating}
                       briefingSource={briefingSource}
                       meetingObjective={meetingObjective}
@@ -1129,69 +1257,54 @@ export default function App() {
                 <motion.div
                   key="empty-country"
                   {...workspacePanelMotion}
-                  className="workspace-empty-state bg-white rounded-sm shadow-md border border-gold-border p-5 md:p-6 text-left"
+                  className="workspace-empty-state text-left"
                   id="no-country-fallback"
                 >
-                  <div className="grid grid-cols-1 lg:grid-cols-[1.08fr_0.92fr] gap-4 md:gap-5 items-stretch">
-                    <div className="empty-country-primary rounded-lg border border-[#D8E0EF] bg-gradient-to-br from-white to-[#F6F8FC] p-5 md:p-6">
-                      <div className="flex items-start gap-4">
-                        <div className="h-12 w-12 rounded-lg bg-[#EEF2FF] text-gold-deep flex items-center justify-center shrink-0">
+                  <div className="widget-start-grid grid grid-cols-1 2xl:grid-cols-[minmax(0,1.08fr)_minmax(22rem,0.92fr)] gap-4">
+                    <section className="workflow-widget country-launcher-widget p-5 md:p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                        <div className="flex items-start gap-4 min-w-0">
+                          <div className="h-12 w-12 rounded-lg bg-[#EEF2FF] text-gold-deep flex items-center justify-center shrink-0">
                           <ShieldAlert className="w-6 h-6" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-emerald-deep">
+                              {selectedCountryOption
+                                ? isEn ? "Ready to initialize" : "جاهز للتحضير"
+                                : isEn ? "Country launcher" : "مشغل الدولة"}
+                            </p>
+                            <h3 className="text-xl md:text-2xl font-serif font-bold text-slate-vip mt-1">
+                              {selectedCountryOption
+                                ? isEn ? `Open ${selectedCountryOption.nameEn} profile` : `فتح ملف ${selectedCountryOption.nameAr}`
+                                : isEn ? "Country briefing workspace" : "مساحة إحاطة الدولة"}
+                            </h3>
+                            <p className="text-sm text-slate-500 mt-2 max-w-2xl">
+                              {isEn
+                                ? "Country context, meeting briefs, comparisons, forecasts, and debrief notes stay aligned in one workspace."
+                                : "يبقى سياق الدولة والإحاطات والمقارنات والتوقعات وملاحظات التحليل منسقة في مساحة واحدة."}
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-emerald-deep">
-                            {selectedCountryOption
-                              ? isEn ? "Ready to initialize" : "جاهز للتحضير"
-                              : isEn ? "Country profile first" : "ملف الدولة أولاً"}
-                          </p>
-                          <h3 className="text-xl md:text-2xl font-serif font-bold text-slate-vip mt-1">
-                            {selectedCountryOption
-                              ? isEn ? `Open ${selectedCountryOption.nameEn} profile` : `فتح ملف ${selectedCountryOption.nameAr}`
-                              : isEn ? "Country briefing workspace" : "مساحة إحاطة الدولة"}
-                          </h3>
-                          <p className="text-sm text-slate-500 mt-2 max-w-2xl">
-                            {isEn
-                              ? "Country context, meeting briefs, comparisons, forecasts, and debrief notes stay aligned in one workspace."
-                              : "يبقى سياق الدولة والإحاطات والمقارنات والتوقعات وملاحظات التحليل منسقة في مساحة واحدة."}
-                          </p>
-                        </div>
+
+                        {selectedCountryOption && (
+                          <span className="selected-country-badge">
+                            <CountryFlag
+                              flag={selectedCountryOption.flag}
+                              flagUrl={selectedCountryOption.flagUrl}
+                              countryName={isEn ? selectedCountryOption.nameEn : selectedCountryOption.nameAr}
+                              size="sm"
+                            />
+                            <span className="truncate">{isEn ? selectedCountryOption.nameEn : selectedCountryOption.nameAr}</span>
+                          </span>
+                        )}
                       </div>
 
-                      {selectedCountryOption && (
-                        <button
-                          type="button"
-                          onClick={() => triggerSyncSearch(selectedCountryOption.code)}
-                          disabled={isGenerating}
-                          className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-deep to-gold-deep px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-900/10 transition-all hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0 cursor-pointer"
-                        >
-                          <span>{isEn ? "Initialize selected country" : "تحضير الدولة المختارة"}</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="empty-country-suggestions rounded-lg border border-[#D8E0EF] bg-white/78 p-4 md:p-5">
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <div>
-                          <p className="text-xs font-bold text-emerald-deep">
-                            {isEn ? "Suggested starts" : "بدايات مقترحة"}
-                          </p>
-                          <p className="text-xs text-slate-500 mt-1">
-                            {isEn ? "Priority profiles" : "ملفات ذات أولوية"}
-                          </p>
-                        </div>
-                        <Target className="w-5 h-5 text-gold-deep shrink-0" />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-2.5">
+                      <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 2xl:grid-cols-1 gap-2.5">
                         {suggestedCountryOptions.map((option) => (
                           <button
                             key={option.code}
                             type="button"
-                            onClick={() => {
-                              handleCountryPicked(option.code);
-                              triggerSyncSearch(option.code);
-                            }}
+                            onClick={() => initializeCountryFromWidget(option.code)}
                             className="empty-country-suggestion-button group w-full rounded-lg border border-[#D8E0EF] bg-white px-3 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-gold-deep/45 hover:shadow-md cursor-pointer"
                           >
                             <span className="flex items-center justify-between gap-3">
@@ -1207,7 +1320,7 @@ export default function App() {
                                     {isEn ? option.nameEn : option.nameAr}
                                   </span>
                                   <span className="block text-xs text-slate-500">
-                                    {isEn ? "Country profile" : "ملف الدولة"}
+                                    {isEn ? "Priority profile" : "ملف ذو أولوية"}
                                   </span>
                                 </span>
                               </span>
@@ -1216,7 +1329,152 @@ export default function App() {
                           </button>
                         ))}
                       </div>
+
+                      <div className="mt-5 flex flex-col sm:flex-row gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => initializeCountryFromWidget(selectedCountryOption?.code)}
+                          disabled={!selectedCountryOption || isGenerating}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-deep to-gold-deep px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-900/10 transition-all hover:-translate-y-0.5 disabled:opacity-55 disabled:hover:translate-y-0 cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          <span>{isEn ? "Initialize selected country" : "تحضير الدولة المختارة"}</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab("debrief");
+                            setCurrentStep(7);
+                          }}
+                          className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#D8E0EF] bg-white px-4 py-2.5 text-sm font-bold text-emerald-deep transition-all hover:-translate-y-0.5 hover:border-gold-deep/45 hover:shadow-md cursor-pointer"
+                        >
+                          <BrainCircuit className="w-4 h-4" />
+                          <span>{isEn ? "Meeting debrief" : "تحليل الاجتماع"}</span>
+                        </button>
+                      </div>
+                    </section>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-1 gap-4">
+                      <section className="workflow-widget p-4 md:p-5">
+                        <div className="flex items-center gap-2">
+                          <Target className="w-4 h-4 text-gold-deep" />
+                          <h3 className="text-sm font-bold text-slate-vip">{isEn ? "Meeting setup" : "إعداد الاجتماع"}</h3>
+                        </div>
+                        <input
+                          type="text"
+                          value={meetingObjective}
+                          onChange={(event) => setMeetingObjective(event.target.value)}
+                          placeholder={isEn ? "Meeting objective" : "هدف الاجتماع"}
+                          className="meeting-setup-input mt-3 w-full rounded-lg border border-[#D8E0EF] bg-white px-3 py-2.5 text-sm text-slate-vip outline-none focus:border-gold-deep focus:ring-4 focus:ring-blue-900/10"
+                        />
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {meetingTopicChips.map((chip) => (
+                            <button
+                              key={chip.labelEn}
+                              type="button"
+                              onClick={() => setMeetingObjective(isEn ? chip.valueEn : chip.valueAr)}
+                              className="meeting-topic-chip"
+                            >
+                              {isEn ? chip.labelEn : chip.labelAr}
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="workflow-widget ai-recommendation-widget p-4 md:p-5">
+                        <div className="flex items-center gap-2">
+                          <BrainCircuit className="w-4 h-4 text-gold-deep" />
+                          <h3 className="text-sm font-bold text-slate-vip">{isEn ? "AI recommendation" : "توصية الذكاء"}</h3>
+                        </div>
+                        <p className="mt-3 text-sm text-slate-600 leading-6">
+                          {selectedCountryOption
+                            ? isEn
+                              ? `${selectedCountryOption.nameEn} is selected. Open the profile before moving into briefing or comparison.`
+                              : `تم اختيار ${selectedCountryOption.nameAr}. افتح الملف قبل الانتقال إلى الإحاطة أو المقارنة.`
+                            : isEn
+                              ? "Start with a priority country profile, then review live signals before preparing the briefing."
+                              : "ابدأ بملف دولة ذات أولوية، ثم راجع المؤشرات المباشرة قبل إعداد الإحاطة."}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => initializeCountryFromWidget(selectedCountryOption?.code || suggestedCountryOptions[0]?.code)}
+                          disabled={isGenerating || (!selectedCountryOption && suggestedCountryOptions.length === 0)}
+                          className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-[#EEF2FF] px-3.5 py-2 text-sm font-bold text-emerald-deep transition-all hover:-translate-y-0.5 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          <span>{selectedCountryOption ? isEn ? "Open profile" : "فتح الملف" : isEn ? "Start recommended" : "ابدأ المقترح"}</span>
+                        </button>
+                      </section>
                     </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-1 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] gap-4">
+                    <section className="workflow-widget p-4 md:p-5">
+                      <div className="flex items-center justify-between gap-3 mb-4">
+                        <div>
+                          <p className="text-xs font-bold text-emerald-deep">{isEn ? "Readiness checklist" : "قائمة الجاهزية"}</p>
+                          <h3 className="text-base font-bold text-slate-vip mt-1">{isEn ? "Preparation progress" : "تقدم التحضير"}</h3>
+                        </div>
+                        <CheckCircle2 className="w-5 h-5 text-gold-deep shrink-0" />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {readinessItems.map((item) => (
+                          <div key={item.key} className={`readiness-item readiness-item-${item.state}`}>
+                            <span className="readiness-dot">
+                              {item.state === "complete" && <CheckCircle2 className="w-3.5 h-3.5" />}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block text-sm font-bold text-slate-vip truncate">{isEn ? item.labelEn : item.labelAr}</span>
+                              <span className="block text-xs text-slate-500 truncate">{isEn ? item.detailEn : item.detailAr}</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="workflow-widget p-4 md:p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-bold text-emerald-deep">{isEn ? "Quick actions" : "إجراءات سريعة"}</p>
+                          <h3 className="text-base font-bold text-slate-vip mt-1">{isEn ? "Move to the next task" : "الانتقال للمهمة التالية"}</h3>
+                        </div>
+                        <Activity className="w-5 h-5 text-gold-deep shrink-0" />
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-2.5">
+                        {quickActionItems.map((item) => {
+                          const QuickIcon = item.Icon;
+                          return (
+                            <button
+                              key={item.key}
+                              type="button"
+                              onClick={item.onClick}
+                              disabled={item.disabled}
+                              className="quick-action-widget-button"
+                            >
+                              <QuickIcon className="w-4 h-4" />
+                              <span>{isEn ? item.labelEn : item.labelAr}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="signal-summary-widget mt-4 rounded-lg border border-[#D8E0EF] bg-[#F8FAFC] p-3">
+                        <div className="flex items-center justify-between gap-3 mb-2">
+                          <p className="text-xs font-bold text-slate-vip">{isEn ? "Signals summary" : "ملخص المؤشرات"}</p>
+                          <span className="text-[10px] font-bold text-emerald-deep">{isEn ? "Live" : "مباشر"}</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-1 gap-2">
+                          {signalSummaryItems.map((item) => (
+                            <div key={item.labelEn} className="signal-summary-row">
+                              <span className="font-bold text-slate-vip">{isEn ? item.labelEn : item.labelAr}</span>
+                              <span className="text-slate-500">{isEn ? item.valueEn : item.valueAr}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </section>
                   </div>
                 </motion.div>
               )}

@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import pptxgen from "pptxgenjs";
-import { PrebuiltCountry, UaeIndicator } from "../types";
+import { BriefingArtifacts, PrebuiltCountry, UaeIndicator } from "../types";
 import { FileText, Award, Layers, Volume2, ChevronLeft, ChevronRight, HelpCircle, ArrowRightLeft, FileCheck, Download, X, Printer, AlertTriangle } from "lucide-react";
+import CountryFlag from "./CountryFlag";
 
 interface BriefingGeneratorProps {
   country: PrebuiltCountry;
   language: "en" | "ar";
   aiBriefingText: string;
+  briefingArtifacts?: BriefingArtifacts | null;
   isGenerating: boolean;
   briefingSource?: string;
   meetingObjective?: string;
@@ -161,6 +163,7 @@ export default function BriefingGenerator({
   country,
   language,
   aiBriefingText,
+  briefingArtifacts,
   isGenerating,
   briefingSource,
   meetingObjective,
@@ -280,10 +283,22 @@ export default function BriefingGenerator({
     ],
   };
 
-  const currentTP = fallbackTalkingPoints[country.id] || fallbackTalkingPoints["brazil"];
+  const artifactTalkingPoints = briefingArtifacts?.talkingPoints?.length
+    ? briefingArtifacts.talkingPoints.map((point) => ({
+        headerEn: point.title,
+        headerAr: point.title,
+        pointEn: [point.point, point.ask ? `Ask: ${point.ask}` : "", point.evidence ? `Evidence: ${point.evidence}` : "", point.riskNote ? `Risk: ${point.riskNote}` : ""]
+          .filter(Boolean)
+          .join(" "),
+        pointAr: [point.point, point.ask ? `Ask: ${point.ask}` : "", point.evidence ? `Evidence: ${point.evidence}` : "", point.riskNote ? `Risk: ${point.riskNote}` : ""]
+          .filter(Boolean)
+          .join(" "),
+      }))
+    : null;
+  const currentTP = artifactTalkingPoints || fallbackTalkingPoints[country.id] || fallbackTalkingPoints["brazil"];
 
   // Modular slide configuration
-  const slides: Array<{ titleEn: string; titleAr: string; bulletsEn: string[]; bulletsAr: string[] }> = [
+  const fallbackSlides: Array<{ titleEn: string; titleAr: string; bulletsEn: string[]; bulletsAr: string[] }> = [
     {
       titleEn: "EXECUTIVE BILATERAL CORRIDOR STRUCTURE",
       titleAr: "هيكل الإحاطة والممر الثنائي المشترك",
@@ -341,6 +356,16 @@ export default function BriefingGenerator({
       ]
     }
   ];
+  const artifactSlides = briefingArtifacts?.slides?.length
+    ? briefingArtifacts.slides.map((slide) => ({
+        titleEn: slide.title,
+        titleAr: slide.title,
+        bulletsEn: slide.bullets,
+        bulletsAr: slide.bullets,
+      }))
+    : null;
+  const slides = artifactSlides || fallbackSlides;
+  const onePagerArtifact = briefingArtifacts?.onePager;
 
   const formatPptxFileName = (name: string) => {
     const safeName = name
@@ -1354,6 +1379,67 @@ export default function BriefingGenerator({
     setCurrentSlideIndex((prev) => (prev - 1 + slides.length) % slides.length);
   };
 
+  const fallbackOnePagerFastFacts = [
+    { label: isEn ? "GDP" : "الناتج المحلي", value: isEn ? country.indicators.gdp : country.indicators.gdpAr, context: isEn ? "Country profile" : "ملف الدولة" },
+    { label: isEn ? "Growth" : "النمو", value: country.indicators.growth, context: isEn ? "Annual indicator" : "مؤشر سنوي" },
+    { label: isEn ? "Energy mix" : "مزيج الطاقة", value: isEn ? country.indicators.energyMix : country.indicators.energyMixAr, context: isEn ? "Power system" : "نظام الطاقة" },
+    { label: isEn ? "Infrastructure" : "البنية التحتية", value: country.indicators.infrastructureIndex, context: isEn ? "Benchmark" : "مؤشر" },
+    { label: isEn ? "Competitiveness" : "التنافسية", value: country.indicators.competitivenessRank, context: isEn ? "Position" : "الموقع" },
+    { label: isEn ? "Framework" : "اطار التعاون", value: isEn ? country.indicators.cooperationAgreementEn : country.indicators.cooperationAgreementAr, context: isEn ? "Bilateral" : "ثنائي" },
+  ].filter((fact) => fact.value);
+  const onePagerFastFacts = onePagerArtifact?.fastFacts?.length ? onePagerArtifact.fastFacts : fallbackOnePagerFastFacts;
+  const onePagerLeadership = onePagerArtifact?.leadership?.length
+    ? onePagerArtifact.leadership
+    : [
+        { role: isEn ? "Government" : "الحكومة", name: isEn ? country.profile.governmentEn : country.profile.governmentAr },
+        { role: isEn ? "Leadership" : "القيادة", name: isEn ? country.profile.leadershipEn : country.profile.leadershipAr },
+      ];
+  const onePagerSectorScorecard = onePagerArtifact?.sectorScorecard?.length
+    ? onePagerArtifact.sectorScorecard
+    : [
+        {
+          sector: isEn ? "Energy" : "الطاقة",
+          currentBaseline: isEn ? country.sectors.energyEn : country.sectors.energyAr,
+          policyTarget: isEn ? "Confirm bankable clean-energy priority." : "تأكيد أولوية طاقة نظيفة قابلة للتمويل.",
+          uaeAngle: isEn ? "Grid, storage, and clean power investment." : "استثمار الشبكات والتخزين والطاقة النظيفة.",
+        },
+        {
+          sector: isEn ? "Infrastructure" : "البنية التحتية",
+          currentBaseline: isEn ? country.sectors.infrastructureEn : country.sectors.infrastructureAr,
+          policyTarget: isEn ? "Map corridors and logistics bottlenecks." : "تحديد الممرات ونقاط الاختناق اللوجستية.",
+          uaeAngle: isEn ? "Ports, corridors, smart logistics." : "الموانئ والممرات واللوجستيات الذكية.",
+        },
+        {
+          sector: isEn ? "Sustainability" : "الاستدامة",
+          currentBaseline: isEn ? country.sectors.sustainabilityEn : country.sectors.sustainabilityAr,
+          policyTarget: isEn ? "Convert climate goals into projects." : "تحويل اهداف المناخ الى مشاريع.",
+          uaeAngle: isEn ? "Sovereign finance and execution." : "التمويل السيادي والتنفيذ.",
+        },
+      ];
+  const onePagerOpportunities = onePagerArtifact?.opportunityMap?.length
+    ? onePagerArtifact.opportunityMap
+    : [
+        { title: isEn ? "Partnerships" : "الشراكات", detail: isEn ? country.strategicInsights.partnershipsEn : country.strategicInsights.partnershipsAr, priority: "High" as const },
+        { title: isEn ? "Investments" : "الاستثمارات", detail: isEn ? country.strategicInsights.investmentsEn : country.strategicInsights.investmentsAr, priority: "High" as const },
+        { title: isEn ? "Knowledge" : "المعرفة", detail: isEn ? country.strategicInsights.knowledgeEn : country.strategicInsights.knowledgeAr, priority: "Medium" as const },
+      ];
+  const onePagerRisks = onePagerArtifact?.risks?.length
+    ? onePagerArtifact.risks
+    : [
+        {
+          risk: isEn ? country.predictive.risksEn : country.predictive.risksAr,
+          mitigation: isEn ? "Use government fast-track channels and assign one owner." : "استخدام قنوات حكومية سريعة وتعيين مالك متابعة واحد.",
+        },
+      ];
+  const onePagerActions = onePagerArtifact?.actions90Days?.length
+    ? onePagerArtifact.actions90Days
+    : [
+        isEn ? "Convene bilateral energy and infrastructure working group." : "تشكيل فريق عمل ثنائي للطاقة والبنية التحتية.",
+        isEn ? "Select three bankable pilot projects." : "اختيار ثلاثة مشاريع قابلة للتمويل.",
+        isEn ? "Prepare UAE financing and execution note." : "اعداد مذكرة تمويل وتنفيذ اماراتية.",
+      ];
+  const onePagerRecommendation = onePagerArtifact?.strategicRecommendation || (isEn ? country.predictive.proposalsEn : country.predictive.proposalsAr);
+
   return (
     <div className="space-y-6 animate-fade-in" id="briefing-generator-workspace">
       
@@ -1547,103 +1633,143 @@ export default function BriefingGenerator({
           </div>
         )}
 
-        {/* 3. ONE-PAGER MEMORANDUM */}
+        {/* 3. ONE-PAGER INFOGRAPHIC DATA RENDER */}
         {activeOutput === "one-pager" && (
-          <div className="p-8 md:p-12 space-y-6 text-slate-vip relative leading-relaxed" id="one-pager-section-content">
-            {/* Elegant luxury background element representing premium paper structure */}
-            <div className="absolute top-0 right-0 w-full h-2 bg-gradient-to-r from-gold-deep to-emerald-deep"></div>
-            
-            {/* Header elements matching MOEI standards */}
-            <div className="flex justify-between items-start border-b-2 border-slate-vip/20 pb-6" id="one-pager-memo-header">
-              <div className="space-y-1">
-                <p className="text-xs uppercase font-mono tracking-widest text-emerald-deep font-bold">
-                  {isEn ? "MINISTRY OF ENERGY & INFRASTRUCTURE" : "وزارة الطاقة والبنية التحتية"}
-                </p>
-                <p className="text-xs uppercase font-mono tracking-widest text-gold-deep font-bold">
-                  {isEn ? "UNITED ARAB EMIRATES" : "دولة الإمارات العربية المتحدة"}
-                </p>
-                <h3 className="text-2xl font-serif font-bold pt-1">
-                  {isEn ? "OFFICIAL STRATEGIC MEMORANDUM" : "مذكرة التوجيه اللوجستي والسياسي المستعجل"}
-                </h3>
-              </div>
-              <div className="text-right space-y-1" id="memo-security-badges">
-                <span className="inline-block bg-red-600 text-white font-mono font-bold text-[10px] uppercase tracking-widest px-3 py-1 rounded">
-                  {isEn ? "VIP CLASS / RESTRICTED" : "سرّي للغاية / للوفد العلوي"}
-                </span>
-                <p className="text-xs text-gray-400 font-mono">{isEn ? "REF: UAE-MOEI-83" : "رقم القيد: UAE-MOEI-83"}</p>
-              </div>
-            </div>
+          <div className="p-5 md:p-8 text-slate-vip relative leading-relaxed bg-[#F8F8F6]" id="one-pager-section-content">
+            <div className="absolute top-0 right-0 w-full h-2 bg-gradient-to-r from-[#C5A059] via-[#005A3C] to-[#475569]"></div>
 
-            {/* Form details */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-lg border border-gray-200 text-xs sm:text-sm font-sans" id="one-pager-memo-metadata-table">
-              <div>
-                <span className="text-gray-400 uppercase tracking-widest font-mono font-semibold block">{isEn ? "ACTIONABLE TO:" : "مرسل إلى:"}</span>
-                <span className="font-bold text-slate-vip">{isEn ? "Ministry Dignitaries / Undersecretaries" : "القيادة العليا وحقيبة الوفد"}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 uppercase tracking-widest font-mono font-semibold block">{isEn ? "DRAFTED BY:" : "صياغة:"}</span>
-                <span className="font-bold text-slate-vip">{isEn ? "Cabinet AI Strategic Advisor" : "مستشار الذكاء الاصطناعي للملف القيادي"}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 uppercase tracking-widest font-mono font-semibold block">{isEn ? "DATE OF BRIEF:" : "التاريخ:"}</span>
-                <span className="font-bold text-slate-vip font-mono">June 9, 2026</span>
-              </div>
-              <div>
-                <span className="text-gray-400 uppercase tracking-widest font-mono font-semibold block">{isEn ? "SUBJECT COMPLIANCE:" : "شأن الملف الثنائي:"}</span>
-                <span className="font-bold text-emerald-deep font-serif">{country.nameEn} Profile</span>
-              </div>
-            </div>
-
-            {/* Core memorandum sections */}
-            <div className="space-y-4 text-xs sm:text-sm md:text-base" id="one-pager-memo-body-paragraphs">
-              <div>
-                <h4 className="font-serif font-bold text-slate-vip border-b border-gray-100 pb-1 mb-1.5 uppercase tracking-wide">
-                  {isEn ? "1. STRATEGIC JUSTIFICATION" : "أولاً: الدوافع السيادية واللوجستية المشتركة"}
-                </h4>
-                <p className="text-gray-700 leading-relaxed text-justify">
-                  {isEn ? country.profile.overviewEn : country.profile.overviewAr}
-                </p>
-              </div>
-
-              <div>
-                <h4 className="font-serif font-bold text-slate-vip border-b border-gray-100 pb-1 mb-1.5 uppercase tracking-wide">
-                  {isEn ? "2. IMMODERATE SECTOR TARGETS" : "ثانياً: مجمعات ومواقع المبادرة الحيوية"}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-sans text-xs">
-                  <div className="bg-gold-bg/15 p-3 rounded border border-gold-border/40">
-                    <span className="font-bold block text-emerald-deep mb-1">{isEn ? "ENERGY PROSPECT" : "آفاق وتفاهمات قطاع الطاقة"}</span>
-                    <span>{isEn ? country.sectors.energyEn : country.sectors.energyAr}</span>
+            <div className="bg-white border border-gray-200 shadow-sm p-5 md:p-6 space-y-5">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 border-b border-gray-200 pb-5" id="one-pager-infographic-header">
+                <div className="space-y-2 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="lg" />
+                    <span className="text-[10px] uppercase font-mono tracking-widest text-emerald-deep font-black">
+                      {isEn ? "Executive Infographic One-Pager" : "صفحة معلومات تنفيذية واحدة"}
+                    </span>
                   </div>
-                  <div className="bg-gold-bg/15 p-3 rounded border border-gold-border/40">
-                    <span className="font-bold block text-emerald-deep mb-1">{isEn ? "PORT LOGISTICS" : "أرصفة وشحن البنية التحتية"}</span>
-                    <span>{isEn ? country.sectors.infrastructureEn : country.sectors.infrastructureAr}</span>
+                  <h3 className="text-2xl md:text-3xl font-serif font-bold text-slate-vip leading-tight">
+                    {onePagerArtifact?.title || (isEn ? `${country.nameEn} Strategic One-Pager` : `ملف استراتيجي موجز: ${country.nameAr}`)}
+                  </h3>
+                  <p className="text-sm text-gray-600 max-w-4xl">
+                    {onePagerArtifact?.subtitle || (isEn ? "Fast reference for executive briefing, diplomatic positioning, and immediate UAE action." : "مرجع سريع للإحاطة القيادية والتموضع الدبلوماسي والخطوات الإماراتية الفورية.")}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 min-w-[220px] text-xs">
+                  <div className="border border-gold-border bg-gold-bg/25 p-3 rounded">
+                    <span className="block text-[9px] uppercase font-mono tracking-widest text-gray-500 font-bold">{isEn ? "Priority" : "الأولوية"}</span>
+                    <span className="block text-lg font-serif font-bold text-emerald-deep">{onePagerArtifact?.strategicPriority || "High"}</span>
                   </div>
-                  <div className="bg-gold-bg/15 p-3 rounded border border-gold-border/40">
-                    <span className="font-bold block text-emerald-deep mb-1">{isEn ? "SUSTAINABLE TARGETS" : "نظم الاستدامة المتبادلة"}</span>
-                    <span>{isEn ? country.sectors.sustainabilityEn : country.sectors.sustainabilityAr}</span>
+                  <div className="border border-gray-200 bg-slate-50 p-3 rounded">
+                    <span className="block text-[9px] uppercase font-mono tracking-widest text-gray-500 font-bold">{isEn ? "Updated" : "التحديث"}</span>
+                    <span className="block text-sm font-mono font-bold text-slate-vip">{onePagerArtifact?.lastUpdated || "Current"}</span>
                   </div>
                 </div>
               </div>
 
-              <div>
-                <h4 className="font-serif font-bold text-slate-vip border-b border-gray-100 pb-1 mb-1.5 uppercase tracking-wide">
-                  {isEn ? "3. OFFICIAL ADVICE SUMMARY" : "ثالثاً: ملخص توصيات وحوكمة الموقف الإماراتي"}
-                </h4>
-                <p className="text-gray-700 leading-relaxed text-justify">
-                  {isEn ? country.strategicInsights.investmentsEn : country.strategicInsights.investmentsAr} {isEn ? country.predictive.proposalsEn : country.predictive.proposalsAr}
-                </p>
-              </div>
-            </div>
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+                <section className="xl:col-span-4 space-y-3">
+                  <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep">{isEn ? "Fast Facts" : "حقائق سريعة"}</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {onePagerFastFacts.slice(0, 10).map((fact, index) => (
+                      <div key={`${fact.label}-${index}`} className="bg-white border border-gray-200 rounded p-3 min-h-[92px]">
+                        <p className="text-[9px] uppercase tracking-widest font-mono font-bold text-gray-500 truncate">{fact.label}</p>
+                        <p className="text-base font-serif font-bold text-slate-vip leading-tight mt-1">{fact.value}</p>
+                        {(fact.context || fact.source || fact.year) && (
+                          <p className="text-[10px] text-gray-500 mt-1 leading-4 line-clamp-2">{[fact.context, fact.year, fact.source].filter(Boolean).join(" | ")}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
 
-            {/* Signature Area */}
-            <div className="pt-8 border-t border-gray-200 flex justify-between items-center text-xs text-gray-400" id="one-pager-memo-signatures">
-              <div>
-                <p className="font-semibold uppercase font-mono tracking-widest text-emerald-deep">{isEn ? "UAE DIGITAL STRATEGIC ADVISOR" : "مستشار الذكاء الاصطناعي للملف الدبلوماسي"}</p>
-                <p>{isEn ? "ELECTRONIC SEAL REGISTERED" : "الختم الفيدرالي الإلكتروني المعتمد"}</p>
+                <section className="xl:col-span-5 space-y-3">
+                  <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep">{isEn ? "Sector Scorecard" : "بطاقة القطاعات"}</h4>
+                  <div className="overflow-hidden border border-gray-200 rounded">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-vip text-white">
+                        <tr>
+                          <th className="p-2 text-left font-mono uppercase tracking-wider">{isEn ? "Sector" : "القطاع"}</th>
+                          <th className="p-2 text-left font-mono uppercase tracking-wider">{isEn ? "Baseline" : "الوضع"}</th>
+                          <th className="p-2 text-left font-mono uppercase tracking-wider">{isEn ? "UAE Angle" : "زاوية الإمارات"}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {onePagerSectorScorecard.slice(0, 4).map((item, index) => (
+                          <tr key={`${item.sector}-${index}`} className="border-t border-gray-200 bg-white align-top">
+                            <td className="p-2 font-bold text-emerald-deep">{item.sector}</td>
+                            <td className="p-2 text-gray-700 leading-5">{item.currentBaseline}</td>
+                            <td className="p-2 text-gray-700 leading-5">{item.uaeAngle}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="bg-[#F1F5F9] border-l-4 border-[#475569] p-3 rounded-sm">
+                    <p className="text-[10px] uppercase tracking-widest font-mono font-black text-[#475569]">{isEn ? "UAE Relevance" : "صلة الملف بالامارات"}</p>
+                    <p className="text-sm text-slate-vip leading-6 mt-1">{onePagerArtifact?.uaeRelevance || (isEn ? country.strategicInsights.partnershipsEn : country.strategicInsights.partnershipsAr)}</p>
+                  </div>
+                </section>
+
+                <section className="xl:col-span-3 space-y-3">
+                  <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep">{isEn ? "Leadership" : "القيادة"}</h4>
+                  <div className="space-y-2">
+                    {onePagerLeadership.slice(0, 4).map((leader, index) => (
+                      <div key={`${leader.role}-${index}`} className="bg-white border border-gray-200 rounded p-3">
+                        <p className="text-[9px] uppercase tracking-widest font-mono font-bold text-gray-500">{leader.role}</p>
+                        <p className="text-sm font-bold text-slate-vip mt-1">{leader.name}</p>
+                        {leader.note && <p className="text-[10px] text-gray-500 mt-1">{leader.note}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </section>
               </div>
-              <div className="right-signature text-right">
-                <span className="font-serif font-semibold italic text-slate-vip block h-8">{isEn ? "MOEI Cabinet" : "حقيبة وزارة الطاقة والبنية التحتية"}</span>
-                <span className="h-0.5 bg-gray-200 w-24 block"></span>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <section className="lg:col-span-1 bg-white border border-gray-200 rounded p-4">
+                  <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep mb-3">{isEn ? "Opportunity Map" : "خريطة الفرص"}</h4>
+                  <div className="space-y-3">
+                    {onePagerOpportunities.slice(0, 4).map((opportunity, index) => (
+                      <div key={`${opportunity.title}-${index}`} className="border-l-2 border-gold-deep pl-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-serif font-bold text-slate-vip">{opportunity.title}</p>
+                          {opportunity.priority && <span className="text-[9px] font-mono font-black text-emerald-deep bg-gold-bg/50 px-1.5 py-0.5 rounded">{opportunity.priority}</span>}
+                        </div>
+                        <p className="text-xs text-gray-600 leading-5 mt-1">{opportunity.detail}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="lg:col-span-1 bg-white border border-gray-200 rounded p-4">
+                  <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep mb-3">{isEn ? "Risk And Mitigation" : "المخاطر والمعالجة"}</h4>
+                  <div className="space-y-3">
+                    {onePagerRisks.slice(0, 3).map((risk, index) => (
+                      <div key={`${risk.risk}-${index}`} className="bg-amber-50 border border-amber-100 rounded p-3">
+                        <p className="text-xs font-bold text-amber-900 leading-5">{risk.risk}</p>
+                        <p className="text-[11px] text-amber-800 leading-5 mt-1">{risk.mitigation}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="lg:col-span-1 bg-slate-vip text-white rounded p-4">
+                  <h4 className="text-xs uppercase tracking-widest font-mono font-black text-gold-deep mb-3">{isEn ? "90-Day Actions" : "خطوات 90 يوما"}</h4>
+                  <ol className="space-y-2">
+                    {onePagerActions.slice(0, 5).map((action, index) => (
+                      <li key={`${action}-${index}`} className="flex gap-2 text-xs leading-5">
+                        <span className="h-5 w-5 shrink-0 rounded bg-gold-deep text-slate-vip font-mono font-black flex items-center justify-center text-[10px]">{index + 1}</span>
+                        <span>{action}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              </div>
+
+              <div className="bg-emerald-deep text-white p-4 rounded-sm border-l-4 border-gold-deep">
+                <p className="text-[10px] uppercase tracking-widest font-mono font-black text-gold-deep">{isEn ? "Strategic Recommendation" : "التوصية الاستراتيجية"}</p>
+                <p className="text-sm md:text-base leading-6 mt-1 font-semibold">{onePagerRecommendation}</p>
               </div>
             </div>
           </div>
