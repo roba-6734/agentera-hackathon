@@ -146,13 +146,14 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
                 <h2 className="text-3xl sm:text-5xl font-serif font-bold text-slate-vip leading-tight break-words">
                   {isEn ? (
                     <>
-                      Select your <span className="auth-gradient-text">Majlis AI</span> access role.
+                      Select your <span className="auth-gradient-text">Majlis AI</span>{" "}
+                      <span className="auth-title-tail">access role.</span>
                     </>
                   ) : (
                     "اختر دور الدخول إلى مجلس AI."
                   )}
                 </h2>
-                <p className="text-sm sm:text-base text-gray-600 leading-7 max-w-xl">
+                <p className="auth-portal-copy text-sm sm:text-base text-gray-600 leading-7 max-w-xl">
                   {isEn
                     ? "Staff users prepare the full intelligence workspace. Executives receive a concise meeting brief. Developers enter the protected systems and database console."
                     : "يدخل فريق العمل إلى مساحة التحضير الكاملة، ويحصل القياديون على إحاطة موجزة، ويدخل المطورون إلى وحدة الأنظمة وقواعد البيانات المحمية."}

@@ -16,14 +16,20 @@ import { apiFetch } from "./api";
 import { AppRole, AppSession, PrebuiltCountry, UaeIndicator, activeTabCode } from "./types";
 import { ShieldAlert, Layers, Award, Landmark, Eye, ArrowRight, FileText, CheckCircle2, Activity, Cpu, ChevronDown, Crown, Target, Sparkles, UsersRound, BrainCircuit, MessageCircle, X, Bot } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { useGsapScrollCards } from "./hooks/useGsapScrollCards";
 
 const SESSION_STORAGE_KEY = "majlis-ai-session";
 
 const workspacePanelMotion = {
-  initial: { opacity: 0, y: 18, filter: "blur(8px)" },
-  animate: { opacity: 1, y: 0, filter: "blur(0px)" },
-  exit: { opacity: 0, y: -10, filter: "blur(6px)" },
-  transition: { duration: 0.38, ease: "easeOut" },
+  initial: { opacity: 0, y: 22, scale: 0.992, filter: "blur(6px)" },
+  animate: { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" },
+  exit: { opacity: 0, y: 10, scale: 0.996, filter: "blur(4px)" },
+  transition: {
+    duration: 0.54,
+    ease: [0.16, 1, 0.3, 1],
+    opacity: { duration: 0.34 },
+    filter: { duration: 0.42 },
+  },
 };
 
 interface CountryOption {
@@ -442,6 +448,15 @@ export default function App() {
         },
       ]
     : [];
+
+  useGsapScrollCards([
+    session?.role,
+    activeCountry?.id,
+    activeTab,
+    language,
+    isGenerating,
+    showSignalsPanel,
+  ]);
 
   if (!session) {
     return (
@@ -952,7 +967,13 @@ export default function App() {
         {/* CORE WORKSPACE BOARD */}
         <div className={`grid grid-cols-1 ${showSignalsPanel ? "xl:grid-cols-12" : ""} gap-6`} id="primary-workspace-grid-layout">
           {/* MAIN COLUMN PANELS: DISPLAY CHOSEN CATEGORY WORKSPACE COMPONENTS */}
-          <div className={`${showSignalsPanel ? "xl:col-span-8" : "xl:col-span-12"} space-y-6`} id="right-workspace-panel" style={{ direction: language === "ar" ? "rtl" : "ltr" }}>
+          <motion.div
+            layout
+            transition={{ layout: { duration: 0.46, ease: [0.16, 1, 0.3, 1] } }}
+            className={`${showSignalsPanel ? "xl:col-span-8" : "xl:col-span-12"} space-y-6`}
+            id="right-workspace-panel"
+            style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+          >
             <AnimatePresence mode="wait">
               {activeTab === "debrief" && session.role === "staff" ? (
                 <motion.div key={`debrief-${selectedCountryCode || "new"}`} {...workspacePanelMotion}>
@@ -1027,7 +1048,7 @@ export default function App() {
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </motion.div>
 
           {showSignalsPanel && (
             <aside className="xl:col-span-4 xl:sticky xl:top-6 xl:self-start" id="strategic-signals-side-panel">

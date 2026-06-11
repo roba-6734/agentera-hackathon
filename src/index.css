@@ -318,6 +318,14 @@ select {
   overflow-wrap: anywhere;
 }
 
+.auth-title-tail {
+  display: inline;
+}
+
+.auth-portal-copy {
+  width: 100%;
+}
+
 .auth-role-card {
   position: relative;
   overflow: hidden;
@@ -696,6 +704,12 @@ select {
     max-width: 100%;
   }
 
+  #majlis-auth-portal main {
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+  }
+
   #majlis-auth-portal section,
   #majlis-auth-portal form,
   #majlis-auth-portal h2,
@@ -705,7 +719,31 @@ select {
 
   #majlis-auth-portal h2,
   #majlis-auth-portal p {
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+
+  .auth-title-tail {
+    display: block;
+  }
+
+  .auth-portal-copy {
+    max-width: 100% !important;
+  }
+
+  #majlis-auth-portal h2 {
+    font-size: clamp(1.65rem, 5.8vw, 2rem);
+    line-height: 1.14;
+  }
+
+  .auth-assist-card .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-node-pill {
+    justify-content: flex-start;
+    padding: 0.6rem 0.7rem;
+    font-size: 0.76rem;
   }
 
   #header-internal-container,
@@ -803,10 +841,21 @@ select {
   }
 }
 
+@media (max-width: 640px) {
+  .auth-portal-copy {
+    max-width: 22rem !important;
+  }
+}
+
 @media (max-width: 479px) {
+  .auth-portal-copy {
+    max-width: calc(100vw - 1.5rem) !important;
+  }
+
   #majlis-auth-portal h2 {
-    font-size: clamp(1.85rem, 9vw, 2.25rem);
-    line-height: 1.08;
+    font-size: clamp(1.65rem, 7.2vw, 2rem);
+    line-height: 1.14;
+    max-width: calc(100vw - 1.5rem);
   }
 
   #majlis-auth-portal main {
