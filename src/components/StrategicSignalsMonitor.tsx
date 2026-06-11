@@ -237,11 +237,11 @@ export default function StrategicSignalsMonitor({ language, compact = false }: S
 
   return (
     <section
-      className={`bg-white rounded-sm shadow-md border border-gold-border overflow-hidden ${compact ? "h-full" : ""}`}
+      className={`bg-white rounded-lg shadow-sm border border-gold-border overflow-hidden ${compact ? "h-full" : ""}`}
       id="staff-strategic-signals-monitor"
       style={{ direction: language === "ar" ? "rtl" : "ltr" }}
     >
-      <div className={`bg-slate-vip border-b border-gold-deep/20 flex items-center justify-between gap-3 ${compact ? "p-3" : "p-4"}`}>
+      <div className={`bg-slate-vip border-b border-gold-deep/20 flex items-center justify-between gap-3 ${compact ? "p-3.5" : "p-4"}`}>
         <div className="flex items-center gap-2 min-w-0">
           <RadioTower className="w-4 h-4 text-gold-deep shrink-0" />
           <div className="min-w-0">
@@ -280,7 +280,7 @@ export default function StrategicSignalsMonitor({ language, compact = false }: S
         </div>
       </div>
 
-      <div className="p-3 space-y-3">
+      <div className="p-3.5 space-y-3">
         <button
           type="button"
           onClick={() => setIsFiltersOpen((isOpen) => !isOpen)}
@@ -382,9 +382,9 @@ export default function StrategicSignalsMonitor({ language, compact = false }: S
         )}
 
         {!isLoading && !errorMessage && signals.length > 0 && (
-          <div className={`space-y-2 overflow-y-auto pr-1 ${compact ? "max-h-[390px]" : "max-h-[560px]"}`} id="strategic-signals-top-five-list">
+          <div className={`space-y-3 overflow-y-auto pr-1 ${compact ? "max-h-[420px]" : "max-h-[560px]"}`} id="strategic-signals-top-five-list">
             {signalsToRender.map((signal) => (
-              <article key={signal.id} className={`border border-gold-border rounded-sm bg-[#FDFDFC] hover:bg-gold-bg/50 transition-colors ${compact ? "p-2.5" : "p-3"}`}>
+              <article key={signal.id} className={`border border-gold-border rounded-lg bg-[#FDFDFC] hover:bg-gold-bg/50 transition-all ${compact ? "p-3" : "p-3.5"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-[9px] uppercase tracking-widest font-mono font-black text-emerald-deep bg-emerald-deep/10 border border-emerald-deep/10 px-1.5 py-0.5 rounded-sm">
                     {categoryLabelById[signal.category]}
@@ -417,7 +417,7 @@ export default function StrategicSignalsMonitor({ language, compact = false }: S
                     <Newspaper className="w-3 h-3 text-gold-deep shrink-0" />
                     <span className="truncate">{signal.sourceName}</span>
                   </div>
-                  <p className={`text-[10px] leading-4 text-emerald-deep font-semibold ${compact ? "line-clamp-2" : ""}`}>
+                  <p className={`text-[10px] leading-4 text-emerald-deep font-semibold ${compact ? "line-clamp-1" : ""}`}>
                     {signal.relevanceNote}
                   </p>
                 </div>

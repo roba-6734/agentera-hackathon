@@ -337,6 +337,9 @@ export default function App() {
     firstCountry.code.localeCompare(secondCountry.code, "en", { sensitivity: "base" })
   );
   const selectedCountryOption = countryOptions.find((option) => option.code === selectedCountryCode);
+  const suggestedCountryOptions = ["india", "germany", "singapore"]
+    .map((code) => countryOptions.find((option) => option.code === code))
+    .filter((option): option is CountryOption => Boolean(option));
   const selectedCountryNameEn = activeCountry?.nameEn || selectedCountryOption?.nameEn || "Select country";
   const selectedCountryNameAr = activeCountry?.nameAr || selectedCountryOption?.nameAr || "اختر الدولة";
   const workspaceTabItems = [
@@ -388,6 +391,26 @@ export default function App() {
   ];
   const showSignalsPanel = session?.role === "staff" && activeTab !== "debrief";
   const activeWorkspaceTab = workspaceTabItems.find((item) => item.code === activeTab);
+  const workspaceSectionTitle = activeCountry
+    ? `${isEn ? activeWorkspaceTab?.labelEn || "Workspace" : activeWorkspaceTab?.labelAr || "مساحة العمل"} - ${isEn ? activeCountry.nameEn : activeCountry.nameAr}`
+    : selectedCountryOption
+      ? isEn
+        ? `${selectedCountryOption.nameEn} is ready to initialize`
+        : `${selectedCountryOption.nameAr} جاهزة للتحضير`
+      : isEn
+        ? "Start with a country profile"
+        : "ابدأ بملف الدولة";
+  const workspaceSectionStatus = activeCountry
+    ? isEn
+      ? "Profile loaded"
+      : "تم تحميل الملف"
+    : selectedCountryOption
+      ? isEn
+        ? "Country selected"
+        : "تم اختيار الدولة"
+      : isEn
+        ? "No target selected"
+        : "لم يتم اختيار هدف";
   const assistantPortalState = {
     titleEn: isGenerating
       ? "Compiling intelligence update"
@@ -809,26 +832,26 @@ export default function App() {
       {/* Primary Workspace container */}
       <main className="max-w-[1700px] xl:max-w-[1850px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 flex-1 w-full space-y-8" id="application-primary-workspace">
             {/* UPPER BANNER PROTOCOL */}
-        <div className="bg-white rounded-sm shadow-md border-l-4 border-[#CBD5E1] p-5 md:p-6 grid grid-cols-1 xl:grid-cols-12 xl:items-stretch gap-4 xl:gap-5 relative" id="cabinet-briefing-upper-ribbon">
-          <div className="absolute top-0 right-0 w-2 bg-gradient-to-b from-gold-deep to-emerald-deep h-full pointer-events-none rounded-r-sm"></div>
+        <div className="bg-white rounded-sm shadow-md border-l-4 border-[#CBD5E1] p-4 md:p-5 grid grid-cols-1 xl:grid-cols-12 xl:items-center gap-4 xl:gap-5 relative" id="cabinet-briefing-upper-ribbon">
+          <div className="absolute top-2 bottom-2 right-0 w-1 bg-gradient-to-b from-gold-deep to-emerald-deep pointer-events-none rounded-l-full opacity-60"></div>
           
-          <div className="space-y-2 xl:col-span-5 min-w-0">
+          <div className="space-y-1.5 xl:col-span-5 min-w-0">
             <span className="text-[10px] uppercase font-mono tracking-widest text-emerald-deep font-bold flex items-center gap-1">
               <Activity className="w-3.5 h-3.5" />
               <span>{isEn ? "COUNCIL DECISION SUPPORT" : "نظام تدقيق وتخطيط المخرجات الدبلوماسية"}</span>
             </span>
-            <h2 className="text-xl font-bold font-serif text-slate-vip">
+            <h2 className="text-lg md:text-xl font-bold font-serif text-slate-vip">
               {isEn ? "Bilateral Delegation Intelligence Room" : "غرفة استخبارات الوفود وجاهزية صناع القرار"}
             </h2>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-500 max-w-3xl">
               {isEn ? "Select a strategic nation or onboard custom country directories to prepare talking points and interactive briefing boards instantly." : "اختر شريكاً دولياً لوجستياً أو ولد ملفات استتثنائية لأي دولة بالعالم في ثوانٍ لاستعراض مذكرات وشرائح العرض الفورية."}
             </p>
           </div>
 
-          <div className={`ai-assist-card ${assistantPortalState.modeClass} xl:col-span-3 rounded-lg p-4 min-w-0`}>
+          <div className={`ai-assist-card ${assistantPortalState.modeClass} xl:col-span-3 rounded-lg p-3 md:p-3.5 min-w-0`}>
             <div className="relative z-10 flex items-center gap-3">
-              <div className="ai-node-icon h-10 w-10 rounded-lg flex items-center justify-center shrink-0">
-                <Bot className="w-5 h-5" />
+              <div className="ai-node-icon h-9 w-9 rounded-lg flex items-center justify-center shrink-0">
+                <Bot className="w-4 h-4" />
               </div>
               <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-widest font-mono font-black text-slate-500">
@@ -839,7 +862,7 @@ export default function App() {
                 </h3>
               </div>
             </div>
-            <div className="relative z-10 mt-4 grid grid-cols-3 gap-2">
+            <div className="relative z-10 mt-3 grid grid-cols-3 gap-2">
               <div className="ai-node-pill">
                 <BrainCircuit className="w-3.5 h-3.5" />
                 <span>{isEn ? assistantPortalState.nodeOneEn : assistantPortalState.nodeOneAr}</span>
@@ -998,7 +1021,7 @@ export default function App() {
 
         <button
           onClick={() => setIsChatOpen(!isChatOpen)}
-          className="fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#94A3B8] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm"
+          className={`fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#94A3B8] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm ${showSignalsPanel ? "staff-signals-chat-launcher" : ""}`}
           id="ai-policy-chat-launcher"
           style={{ direction: language === "ar" ? "rtl" : "ltr" }}
         >
@@ -1013,6 +1036,24 @@ export default function App() {
             <X className="chat-launcher-close w-4 h-4 text-gold-deep ml-2 shrink-0" />
           )}
         </button>
+
+        <section className="workspace-section-heading flex flex-col md:flex-row md:items-end md:justify-between gap-3" id="workspace-section-heading">
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-emerald-deep flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{isEn ? "Active workspace" : "مساحة العمل الحالية"}</span>
+            </p>
+            <h2 className="text-xl md:text-2xl font-bold font-serif text-slate-vip mt-1 truncate">
+              {workspaceSectionTitle}
+            </h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
+            <span className="workspace-status-pill">{workspaceSectionStatus}</span>
+            {showSignalsPanel && (
+              <span className="workspace-status-pill">{isEn ? "Signals live" : "المؤشرات مباشرة"}</span>
+            )}
+          </div>
+        </section>
 
         {/* CORE WORKSPACE BOARD */}
         <div className={`grid grid-cols-1 ${showSignalsPanel ? "xl:grid-cols-12" : ""} gap-6`} id="primary-workspace-grid-layout">
@@ -1088,13 +1129,95 @@ export default function App() {
                 <motion.div
                   key="empty-country"
                   {...workspacePanelMotion}
-                  className="bg-white rounded-sm shadow-md border border-gold-border p-12 text-center"
+                  className="workspace-empty-state bg-white rounded-sm shadow-md border border-gold-border p-5 md:p-6 text-left"
                   id="no-country-fallback"
                 >
-                  <ShieldAlert className="w-12 h-12 text-gold-deep mx-auto mb-4" />
-                  <h3 className="text-lg font-serif font-bold text-slate-vip">
-                    {isEn ? "Select a country, then click Initialize Search." : "اختر دولة، ثم اضغط تحضير الإيجاز."}
-                  </h3>
+                  <div className="grid grid-cols-1 lg:grid-cols-[1.08fr_0.92fr] gap-4 md:gap-5 items-stretch">
+                    <div className="empty-country-primary rounded-lg border border-[#D8E0EF] bg-gradient-to-br from-white to-[#F6F8FC] p-5 md:p-6">
+                      <div className="flex items-start gap-4">
+                        <div className="h-12 w-12 rounded-lg bg-[#EEF2FF] text-gold-deep flex items-center justify-center shrink-0">
+                          <ShieldAlert className="w-6 h-6" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-emerald-deep">
+                            {selectedCountryOption
+                              ? isEn ? "Ready to initialize" : "جاهز للتحضير"
+                              : isEn ? "Country profile first" : "ملف الدولة أولاً"}
+                          </p>
+                          <h3 className="text-xl md:text-2xl font-serif font-bold text-slate-vip mt-1">
+                            {selectedCountryOption
+                              ? isEn ? `Open ${selectedCountryOption.nameEn} profile` : `فتح ملف ${selectedCountryOption.nameAr}`
+                              : isEn ? "Country briefing workspace" : "مساحة إحاطة الدولة"}
+                          </h3>
+                          <p className="text-sm text-slate-500 mt-2 max-w-2xl">
+                            {isEn
+                              ? "Country context, meeting briefs, comparisons, forecasts, and debrief notes stay aligned in one workspace."
+                              : "يبقى سياق الدولة والإحاطات والمقارنات والتوقعات وملاحظات التحليل منسقة في مساحة واحدة."}
+                          </p>
+                        </div>
+                      </div>
+
+                      {selectedCountryOption && (
+                        <button
+                          type="button"
+                          onClick={() => triggerSyncSearch(selectedCountryOption.code)}
+                          disabled={isGenerating}
+                          className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-deep to-gold-deep px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-blue-900/10 transition-all hover:-translate-y-0.5 disabled:opacity-60 disabled:hover:translate-y-0 cursor-pointer"
+                        >
+                          <span>{isEn ? "Initialize selected country" : "تحضير الدولة المختارة"}</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="empty-country-suggestions rounded-lg border border-[#D8E0EF] bg-white/78 p-4 md:p-5">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <div>
+                          <p className="text-xs font-bold text-emerald-deep">
+                            {isEn ? "Suggested starts" : "بدايات مقترحة"}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {isEn ? "Priority profiles" : "ملفات ذات أولوية"}
+                          </p>
+                        </div>
+                        <Target className="w-5 h-5 text-gold-deep shrink-0" />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-2.5">
+                        {suggestedCountryOptions.map((option) => (
+                          <button
+                            key={option.code}
+                            type="button"
+                            onClick={() => {
+                              handleCountryPicked(option.code);
+                              triggerSyncSearch(option.code);
+                            }}
+                            className="empty-country-suggestion-button group w-full rounded-lg border border-[#D8E0EF] bg-white px-3 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-gold-deep/45 hover:shadow-md cursor-pointer"
+                          >
+                            <span className="flex items-center justify-between gap-3">
+                              <span className="flex items-center gap-2 min-w-0">
+                                <CountryFlag
+                                  flag={option.flag}
+                                  flagUrl={option.flagUrl}
+                                  countryName={isEn ? option.nameEn : option.nameAr}
+                                  size="sm"
+                                />
+                                <span className="min-w-0">
+                                  <span className="block text-sm font-bold text-slate-vip truncate">
+                                    {isEn ? option.nameEn : option.nameAr}
+                                  </span>
+                                  <span className="block text-xs text-slate-500">
+                                    {isEn ? "Country profile" : "ملف الدولة"}
+                                  </span>
+                                </span>
+                              </span>
+                              <ArrowRight className="w-4 h-4 text-gold-deep shrink-0 transition-transform group-hover:translate-x-0.5" />
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
