@@ -159,6 +159,12 @@ const renderBriefingText = (value: string) => {
   return nodes;
 };
 
+type SectionPdfDialogOptions = {
+  bodyClassName?: string;
+  fitToSinglePage?: boolean;
+  pageRule?: string;
+};
+
 export default function BriefingGenerator({
   country,
   language,
@@ -1500,7 +1506,12 @@ export default function BriefingGenerator({
       day: "numeric",
     });
 
-  const openSectionPdfDialog = (documentTitle: string, eyebrow: string, bodyHtml: string) => {
+  const openSectionPdfDialog = (
+    documentTitle: string,
+    eyebrow: string,
+    bodyHtml: string,
+    options: SectionPdfDialogOptions = {}
+  ) => {
     setPrintError(null);
 
     try {
@@ -1523,6 +1534,8 @@ export default function BriefingGenerator({
       }
 
       const generatedOn = formatSectionPdfDate();
+      const bodyClassName = options.bodyClassName || "";
+      const pageRule = options.pageRule || "size: A4; margin: 14mm;";
       const printHtml = `
 <!doctype html>
 <html lang="${language}" dir="${isEn ? "ltr" : "rtl"}">
@@ -1530,7 +1543,7 @@ export default function BriefingGenerator({
   <meta charset="utf-8" />
   <title>${escapeHtml(documentTitle)}</title>
   <style>
-    @page { size: A4; margin: 14mm; }
+    @page { ${pageRule} }
     * { box-sizing: border-box; }
     body {
       margin: 0;
@@ -1541,6 +1554,16 @@ export default function BriefingGenerator({
       line-height: 1.48;
     }
     .report-shell { width: 100%; }
+    .report-content { width: 100%; }
+    .section-fit-export .report-content {
+      --section-fit-scale: 1;
+      width: 100%;
+      transform: scale(var(--section-fit-scale));
+      transform-origin: top left;
+    }
+    html[dir="rtl"] .section-fit-export .report-content {
+      transform-origin: top right;
+    }
     .report-header {
       border-left: 5px solid #C5A059;
       background: #F8FAFC;
@@ -1612,6 +1635,161 @@ export default function BriefingGenerator({
       background: #FFFFFF;
       break-inside: avoid;
     }
+    .content-card.flow-card {
+      break-inside: auto;
+      page-break-inside: auto;
+    }
+    .summary-export .report-header {
+      padding: 14px 18px;
+      margin-bottom: 12px;
+    }
+    .summary-export .meta-grid {
+      margin-bottom: 12px;
+    }
+    .summary-export h1 {
+      font-size: 22px;
+      margin-bottom: 6px;
+    }
+    .summary-export h2 {
+      margin-top: 0;
+    }
+    .summary-export h3 {
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+    .summary-export .summary-card {
+      padding: 12px;
+    }
+    .summary-export .briefing-content p {
+      margin-bottom: 8px;
+      orphans: 3;
+      widows: 3;
+    }
+    .talking-points-export {
+      width: 277mm;
+      height: 190mm;
+      overflow: hidden;
+      font-size: 10px;
+      line-height: 1.28;
+    }
+    .talking-points-export .report-shell {
+      width: 277mm;
+      height: 190mm;
+      max-height: 190mm;
+      overflow: hidden;
+    }
+    .talking-points-export .report-header {
+      padding: 9px 12px;
+      margin-bottom: 8px;
+      border-left-width: 4px;
+    }
+    [dir="rtl"] .talking-points-export .report-header {
+      border-right-width: 4px;
+    }
+    .talking-points-export .eyebrow {
+      font-size: 8px;
+    }
+    .talking-points-export h1 {
+      margin: 3px 0 2px;
+      font-size: 18px;
+      line-height: 1.08;
+    }
+    .talking-points-export h2 {
+      margin: 0 0 5px;
+      padding-bottom: 3px;
+      font-size: 11px;
+      line-height: 1.15;
+    }
+    .talking-points-export p {
+      margin-bottom: 0;
+    }
+    .talking-points-export .meta-grid {
+      gap: 7px;
+      margin-bottom: 8px;
+    }
+    .talking-points-export .meta-card {
+      padding: 7px 8px;
+    }
+    .talking-points-export .meta-card span,
+    .talking-points-export .content-card span {
+      font-size: 7px;
+      letter-spacing: 0.05em;
+    }
+    .talking-points-export .meta-card strong {
+      margin-top: 2px;
+      font-size: 10px;
+      line-height: 1.15;
+    }
+    .talking-points-export .content-card {
+      padding: 8px;
+      margin-bottom: 0;
+      break-inside: avoid;
+    }
+    .talking-points-export .talking-points-intro {
+      display: grid;
+      grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+      gap: 9px;
+      align-items: start;
+      margin-bottom: 8px;
+      background: #F8FAFC;
+    }
+    .talking-points-export .objective-strip {
+      border-inline-start: 3px solid #C5A059;
+      padding-inline-start: 8px;
+      color: #172520;
+    }
+    .talking-points-export .objective-strip span {
+      display: block;
+      color: #64748B;
+      font-size: 7px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+    .talking-points-export .objective-strip strong {
+      display: block;
+      font-size: 10px;
+      line-height: 1.22;
+    }
+    .talking-points-export .talking-points-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .talking-points-export .talking-point-card {
+      min-height: 34mm;
+    }
+    .talking-points-export .talking-point-card h2 {
+      color: #0D4C3A;
+      font-size: 12px;
+      margin-top: 3px;
+    }
+    .talking-points-export .talking-point-card p {
+      color: #334155;
+      font-size: 10px;
+      line-height: 1.3;
+      text-align: start;
+    }
+    .talking-points-export .callout {
+      margin-top: 8px;
+      padding: 7px 9px;
+      font-size: 9px;
+      line-height: 1.2;
+    }
+    .talking-points-export .callout span {
+      display: inline;
+      margin: 0 6px 0 0;
+      font-size: 7px;
+    }
+    [dir="rtl"] .talking-points-export .callout span {
+      margin: 0 0 0 6px;
+    }
+    .talking-points-export .footer {
+      margin-top: 8px;
+      padding-top: 6px;
+      font-size: 8px;
+    }
     .briefing-content p {
       text-align: justify;
     }
@@ -1682,30 +1860,36 @@ export default function BriefingGenerator({
     }
     @media print {
       body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-      .content-card,
+      .content-card:not(.flow-card),
       tr { break-inside: avoid; }
+      .content-card.flow-card {
+        break-inside: auto;
+        page-break-inside: auto;
+      }
     }
   </style>
 </head>
-<body>
+<body class="${escapeHtml(bodyClassName)}">
   <main class="report-shell">
-    <section class="report-header">
-      <div class="eyebrow">${escapeHtml(eyebrow)}</div>
-      <h1>${escapeHtml(documentTitle)}</h1>
-      <div style="color:#64748B;font-size:11px;font-weight:700;">${escapeHtml(isEn ? `Generated ${generatedOn}` : `تم الإنشاء في ${generatedOn}`)}</div>
-    </section>
-    <section class="meta-grid">
-      <div class="meta-card">
-        <span>${escapeHtml(isEn ? "Partner state" : "الشريك الدولي")}</span>
-        <strong>${formatCountryFlagForHtml(country, isEn)} ${escapeHtml(isEn ? country.nameEn : country.nameAr)}</strong>
-      </div>
-      <div class="meta-card">
-        <span>${escapeHtml(isEn ? "Authority node" : "جهة الصدور")}</span>
-        <strong>${escapeHtml(isEn ? "Cabinet AI Strategic Advisor" : "مستشار الذكاء الاصطناعي لحقيبة الوزير")}</strong>
-      </div>
-    </section>
-    ${bodyHtml}
-    <div class="footer">${escapeHtml(isEn ? "UAE Digital Strategic Advisor - Section export" : "المستشار الاستراتيجي الرقمي لدولة الإمارات - تصدير القسم")}</div>
+    <div class="report-content">
+      <section class="report-header">
+        <div class="eyebrow">${escapeHtml(eyebrow)}</div>
+        <h1>${escapeHtml(documentTitle)}</h1>
+        <div style="color:#64748B;font-size:11px;font-weight:700;">${escapeHtml(isEn ? `Generated ${generatedOn}` : `تم الإنشاء في ${generatedOn}`)}</div>
+      </section>
+      <section class="meta-grid">
+        <div class="meta-card">
+          <span>${escapeHtml(isEn ? "Partner state" : "الشريك الدولي")}</span>
+          <strong>${formatCountryFlagForHtml(country, isEn)} ${escapeHtml(isEn ? country.nameEn : country.nameAr)}</strong>
+        </div>
+        <div class="meta-card">
+          <span>${escapeHtml(isEn ? "Authority node" : "جهة الصدور")}</span>
+          <strong>${escapeHtml(isEn ? "Cabinet AI Strategic Advisor" : "مستشار الذكاء الاصطناعي لحقيبة الوزير")}</strong>
+        </div>
+      </section>
+      ${bodyHtml}
+      <div class="footer">${escapeHtml(isEn ? "UAE Digital Strategic Advisor - Section export" : "المستشار الاستراتيجي الرقمي لدولة الإمارات - تصدير القسم")}</div>
+    </div>
   </main>
 </body>
 </html>`;
@@ -1721,6 +1905,19 @@ export default function BriefingGenerator({
       printDocument.close();
       window.setTimeout(() => {
         try {
+          if (options.fitToSinglePage) {
+            const page = printDocument.querySelector<HTMLElement>(".report-shell");
+            const content = printDocument.querySelector<HTMLElement>(".report-content");
+            if (page && content) {
+              content.style.setProperty("--section-fit-scale", "1");
+              const heightScale = page.clientHeight / Math.max(content.scrollHeight, 1);
+              const widthScale = page.clientWidth / Math.max(content.scrollWidth, 1);
+              const fitScale = Math.min(1, heightScale, widthScale);
+              if (fitScale < 1) {
+                content.style.setProperty("--section-fit-scale", Math.max(0.5, fitScale - 0.015).toFixed(3));
+              }
+            }
+          }
           printWindow.focus();
           printWindow.print();
         } catch (error) {
@@ -1762,27 +1959,28 @@ export default function BriefingGenerator({
       isEn ? "Executive Summary Export" : "تصدير الملخص التنفيذي",
       `
         ${objectiveHtml}
-        <section class="content-card briefing-content">
+        <section class="content-card briefing-content summary-card flow-card">
           <h2>${escapeHtml(isEn ? "Immediate Executive Overview" : "الملخص التنفيذي الفوري")}</h2>
           ${formatBriefingTextForHtml(aiBriefingText)}
           ${decisionFocusHtml}
         </section>
         ${partnershipsHtml}
-      `
+      `,
+      { bodyClassName: "summary-export" }
     );
   };
 
   const handleDownloadTalkingPointsPdf = () => {
     const objectiveHtml = meetingObjective?.trim()
       ? `
-        <section class="content-card">
+        <div class="objective-strip">
           <span>${escapeHtml(isEn ? "Meeting Objective" : "هدف الاجتماع")}</span>
-          <strong>${escapeHtml(meetingObjective.trim())}</strong>
-        </section>
+          <strong>${escapeHtml(compactText(meetingObjective.trim(), 260))}</strong>
+        </div>
       `
-      : "";
+      : `<div class="objective-strip"><span>${escapeHtml(isEn ? "Use" : "الاستخدام")}</span><strong>${escapeHtml(isEn ? "Prepared for official delegation alignment before the bilateral ministerial engagement." : "أعدت لمواءمة الوفد الرسمي قبل الاجتماع الوزاري الثنائي.")}</strong></div>`;
     const talkingPointsHtml = currentTP.map((point: any, index: number) => `
-      <section class="content-card">
+      <section class="content-card talking-point-card">
         <span>${escapeHtml(isEn ? `Talking Point ${index + 1}` : `نقطة الحديث ${index + 1}`)}</span>
         <h2>${escapeHtml(isEn ? point.headerEn : point.headerAr)}</h2>
         <p>${escapeHtml(isEn ? point.pointEn : point.pointAr)}</p>
@@ -1793,18 +1991,25 @@ export default function BriefingGenerator({
       isEn ? `${country.nameEn} Talking Points` : `نقاط الحديث: ${country.nameAr}`,
       isEn ? "Talking Points Export" : "تصدير نقاط الحديث",
       `
-        ${objectiveHtml}
-        <section class="content-card">
-          <span>${escapeHtml(isEn ? "Sovereign Dialogue Protocols" : "بروتوكولات التوجيه ونقاط المحادثة")}</span>
-          <h2>${escapeHtml(isEn ? "Bilateral Session Preparatory Talking Points" : "نقاط الحديث والأوراق التفاوضية المرشدة للوزير والوفد")}</h2>
-          <p>${escapeHtml(isEn ? "Prepared for official delegation use during bilateral ministerial engagement." : "أعدت للاستخدام الرسمي للوفد خلال الاجتماع الوزاري الثنائي.")}</p>
+        <section class="content-card talking-points-intro">
+          <div>
+            <span>${escapeHtml(isEn ? "Sovereign Dialogue Protocols" : "بروتوكولات التوجيه ونقاط المحادثة")}</span>
+            <h2>${escapeHtml(isEn ? "Bilateral Session Preparatory Talking Points" : "نقاط الحديث والأوراق التفاوضية المرشدة للوزير والوفد")}</h2>
+            <p>${escapeHtml(isEn ? "Prepared for official delegation use during bilateral ministerial engagement." : "أعدت للاستخدام الرسمي للوفد خلال الاجتماع الوزاري الثنائي.")}</p>
+          </div>
+          ${objectiveHtml}
         </section>
-        ${talkingPointsHtml}
+        <section class="talking-points-grid">${talkingPointsHtml}</section>
         <div class="callout">
           <span>${escapeHtml(isEn ? "Diplomatic Notice" : "تنبيه دبلوماسي")}</span>
           ${escapeHtml(isEn ? "Strictly for use of the official UAE delegation." : "يحظر مشاركة أو تسريب هذه البنود الاستراتيجية خارج الوفد الرسمي.")}
         </div>
-      `
+      `,
+      {
+        bodyClassName: "section-fit-export talking-points-export",
+        fitToSinglePage: true,
+        pageRule: "size: A4 landscape; margin: 10mm;",
+      }
     );
   };
 
