@@ -509,11 +509,6 @@ export default function App() {
       valueAr: "مواءمة المناخ والتزامات الاستدامة ومتابعة مخرجات مؤتمر الأطراف",
     },
   ];
-  const signalSummaryItems = [
-    { labelEn: "Energy", labelAr: "الطاقة", valueEn: "Grid watch", valueAr: "متابعة الشبكات" },
-    { labelEn: "Logistics", labelAr: "اللوجستيات", valueEn: "Corridor shifts", valueAr: "تحولات الممرات" },
-    { labelEn: "Diplomacy", labelAr: "الدبلوماسية", valueEn: "Regional posture", valueAr: "الموقف الإقليمي" },
-  ];
   const assistantPortalState = {
     titleEn: isGenerating
       ? "Compiling intelligence update"
@@ -1419,74 +1414,32 @@ export default function App() {
                       </div>
                     </section>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-1 gap-4">
-                      <section className="workflow-widget p-4 md:p-5">
-                        <div className="flex items-center gap-2">
-                          <Target className="w-4 h-4 text-gold-deep" />
-                          <h3 className="text-sm font-bold text-slate-vip">{isEn ? "Meeting setup" : "إعداد الاجتماع"}</h3>
-                        </div>
-                        <input
-                          type="text"
-                          value={meetingObjective}
-                          onChange={(event) => setMeetingObjective(event.target.value)}
-                          placeholder={isEn ? "Meeting objective" : "هدف الاجتماع"}
-                          className="meeting-setup-input mt-3 w-full rounded-lg border border-[#D8E0EF] bg-white px-3 py-2.5 text-sm text-slate-vip outline-none focus:border-gold-deep focus:ring-4 focus:ring-blue-900/10"
-                        />
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {meetingTopicChips.map((chip) => (
-                            <button
-                              key={chip.labelEn}
-                              type="button"
-                              onClick={() => setMeetingObjective(isEn ? chip.valueEn : chip.valueAr)}
-                              className="meeting-topic-chip"
-                            >
-                              {isEn ? chip.labelEn : chip.labelAr}
-                            </button>
-                          ))}
-                        </div>
-                      </section>
-
-                      <section className="workflow-widget ai-recommendation-widget p-4 md:p-5">
-                        <div className="flex items-center gap-2">
-                          <BrainCircuit className="w-4 h-4 text-gold-deep" />
-                          <h3 className="text-sm font-bold text-slate-vip">{isEn ? "AI recommendation" : "توصية الذكاء"}</h3>
-                        </div>
-                        <p className="mt-3 text-sm text-slate-600 leading-6">
-                          {selectedCountryOption
-                            ? isEn
-                              ? `${selectedCountryOption.nameEn} is selected. Open the profile before moving into briefing or comparison.`
-                              : `تم اختيار ${selectedCountryOption.nameAr}. افتح الملف قبل الانتقال إلى الإحاطة أو المقارنة.`
-                            : isEn
-                              ? "Start with a priority country profile, then review live signals before preparing the briefing."
-                              : "ابدأ بملف دولة ذات أولوية، ثم راجع المؤشرات المباشرة قبل إعداد الإحاطة."}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => initializeCountryFromWidget(selectedCountryOption?.code || suggestedCountryOptions[0]?.code)}
-                          disabled={isGenerating || (!selectedCountryOption && suggestedCountryOptions.length === 0)}
-                          className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-[#EEF2FF] px-3.5 py-2 text-sm font-bold text-emerald-deep transition-all hover:-translate-y-0.5 disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed"
-                        >
-                          <Sparkles className="w-4 h-4" />
-                          <span>{selectedCountryOption ? isEn ? "Open profile" : "فتح الملف" : isEn ? "Start recommended" : "ابدأ المقترح"}</span>
-                        </button>
-                      </section>
-                    </div>
+                    <section className="workflow-widget p-4 md:p-5">
+                      <div className="flex items-center gap-2">
+                        <Target className="w-4 h-4 text-gold-deep" />
+                        <h3 className="text-sm font-bold text-slate-vip">{isEn ? "Meeting setup" : "إعداد الاجتماع"}</h3>
+                      </div>
+                      <input
+                        type="text"
+                        value={meetingObjective}
+                        onChange={(event) => setMeetingObjective(event.target.value)}
+                        placeholder={isEn ? "Meeting objective" : "هدف الاجتماع"}
+                        className="meeting-setup-input mt-3 w-full rounded-lg border border-[#D8E0EF] bg-white px-3 py-2.5 text-sm text-slate-vip outline-none focus:border-gold-deep focus:ring-4 focus:ring-blue-900/10"
+                      />
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {meetingTopicChips.map((chip) => (
+                          <button
+                            key={chip.labelEn}
+                            type="button"
+                            onClick={() => setMeetingObjective(isEn ? chip.valueEn : chip.valueAr)}
+                            className="meeting-topic-chip"
+                          >
+                            {isEn ? chip.labelEn : chip.labelAr}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
                   </div>
-
-                  <section className="workflow-widget mt-4 p-4 md:p-5">
-                    <div className="flex items-center justify-between gap-3 mb-2">
-                      <p className="text-xs font-bold text-slate-vip">{isEn ? "Signals summary" : "ملخص المؤشرات"}</p>
-                      <span className="text-[10px] font-bold text-emerald-deep">{isEn ? "Live" : "مباشر"}</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {signalSummaryItems.map((item) => (
-                        <div key={item.labelEn} className="signal-summary-row">
-                          <span className="font-bold text-slate-vip">{isEn ? item.labelEn : item.labelAr}</span>
-                          <span className="text-slate-500">{isEn ? item.valueEn : item.valueAr}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
                 </motion.div>
               )}
             </AnimatePresence>
