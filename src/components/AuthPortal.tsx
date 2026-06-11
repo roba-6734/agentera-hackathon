@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowRight, Bot, BrainCircuit, BriefcaseBusiness, Code2, Crown, Globe, LockKeyhole, Radar, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
+import { ArrowRight, Bot, BrainCircuit, BriefcaseBusiness, Crown, Globe, LockKeyhole, Radar, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import majlisLogo from "../../assets/images/majlis-ai-logo.png";
 import { AppRole, AppSession } from "../types";
@@ -36,14 +36,6 @@ const roleOptions: Array<{
     descriptionAr: "إحاطة موجزة لرؤساء الاجتماعات وكبار المسؤولين وصناع القرار دون تفاصيل زائدة.",
     icon: Crown,
   },
-  {
-    role: "developer",
-    titleEn: "Developer",
-    titleAr: "المطور",
-    descriptionEn: "Systems console, Neon data migration, diagnostics, and security audit tools.",
-    descriptionAr: "وحدة الأنظمة وترحيل بيانات نيون والتشخيص وأدوات التدقيق الأمني.",
-    icon: Code2,
-  },
 ];
 
 const formMotion = {
@@ -79,7 +71,6 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
   ];
 
   const fallbackDisplayName: Record<AppRole, string> = {
-    developer: "Developer User",
     staff: "Staff User",
     executive: "Executive User",
   };
@@ -155,8 +146,8 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
                 </h2>
                 <p className="auth-portal-copy text-sm sm:text-base text-gray-600 leading-7 max-w-xl">
                   {isEn
-                    ? "Staff users prepare the full intelligence workspace. Executives receive a concise meeting brief. Developers enter the protected systems and database console."
-                    : "يدخل فريق العمل إلى مساحة التحضير الكاملة، ويحصل القياديون على إحاطة موجزة، ويدخل المطورون إلى وحدة الأنظمة وقواعد البيانات المحمية."}
+                    ? "Staff users prepare the full intelligence workspace. Executives receive a concise meeting brief."
+                    : "يدخل فريق العمل إلى مساحة التحضير الكاملة، ويحصل القياديون على إحاطة موجزة."}
                 </p>
               </div>
 
@@ -190,7 +181,7 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3" id="auth-role-distribution-panel">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3" id="auth-role-distribution-panel">
                 {roleOptions.map((option, index) => {
                   const RoleIcon = option.icon;
                   const isSelected = selectedRole === option.role;
@@ -334,11 +325,9 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
                     className="auth-submit-button w-full min-h-12 px-3 text-white font-mono font-black text-[10px] sm:text-xs uppercase tracking-widest leading-4 py-3.5 rounded-lg flex items-center justify-center gap-2 text-center cursor-pointer transition-all duration-300 hover:shadow-2xl active:scale-[0.99]"
                   >
                     <span className="min-w-0">
-                      {selectedRole === "developer"
-                        ? isEn ? "Enter Developer Console" : "دخول وحدة المطور"
-                        : selectedRole === "executive"
-                          ? isEn ? "Enter Executive Briefing" : "دخول الإحاطة القيادية"
-                          : isEn ? "Enter Staff Workspace" : "دخول مساحة فريق العمل"}
+                      {selectedRole === "executive"
+                        ? isEn ? "Enter Executive Briefing" : "دخول الإحاطة القيادية"
+                        : isEn ? "Enter Staff Workspace" : "دخول مساحة فريق العمل"}
                     </span>
                     <ArrowRight className="w-4 h-4 shrink-0" />
                   </button>

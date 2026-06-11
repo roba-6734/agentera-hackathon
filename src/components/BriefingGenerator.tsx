@@ -367,6 +367,11 @@ export default function BriefingGenerator({
   const slides = artifactSlides || fallbackSlides;
   const executiveSummaryArtifact = briefingArtifacts?.executiveSummary;
   const onePagerArtifact = briefingArtifacts?.onePager;
+  const isDatabaseBriefingSource = Boolean(
+    briefingSource?.includes("neon-country-briefing-artifacts") ||
+    briefingSource?.includes("country_briefing_artifacts") ||
+    briefingSource?.includes("countries_briefing_artifacts")
+  );
 
   const formatPptxFileName = (name: string) => {
     const safeName = name
@@ -1843,6 +1848,28 @@ export default function BriefingGenerator({
     );
   };
 
+  const renderTalkingPointCard = (tpOn: (typeof currentTP)[number], idxKey: number) => (
+    <div key={idxKey} className="bg-slate-50/60 hover:bg-gold-bg/35 rounded-lg border border-gray-100 p-4 flex items-start gap-3 h-fit transition-all duration-300">
+      <div className="h-8 w-8 rounded-full bg-emerald-deep text-white font-mono font-bold text-sm flex items-center justify-center shrink-0">
+        {idxKey + 1}
+      </div>
+      <div className="min-w-0">
+        <h4 className="font-serif font-bold text-slate-vip border-b border-gold-deep/20 pb-1 mb-2 text-sm md:text-base">
+          {isEn ? tpOn.headerEn : tpOn.headerAr}
+        </h4>
+        <p className="text-xs md:text-sm text-gray-600 leading-relaxed font-medium">
+          {isEn ? tpOn.pointEn : tpOn.pointAr}
+        </p>
+      </div>
+    </div>
+  );
+
+  const talkingPointColumns = [0, 1].map((columnIndex) =>
+    currentTP
+      .map((tpOn, idxKey) => ({ tpOn, idxKey }))
+      .filter(({ idxKey }) => idxKey % 2 === columnIndex)
+  );
+
   return (
     <div className="space-y-6 animate-fade-in" id="briefing-generator-workspace">
       
@@ -1955,12 +1982,18 @@ export default function BriefingGenerator({
                 <HelpCircle className="w-5 h-5 text-[#C5A059] shrink-0 mt-0.5" />
                 <div className="space-y-1">
                   <span className="font-bold text-slate-vip uppercase tracking-wider block text-[10px] font-mono">
-                    {isEn ? "STANDBY SECURITY INTELLIGENCE ACTIVE" : "نشاط بروتوكول استرجاع البيانات المعتمدة محلياً"}
+                    {isDatabaseBriefingSource
+                      ? isEn ? "DATABASE BRIEFING ARTIFACT LOADED" : "تم تحميل إحاطة محفوظة من قاعدة البيانات"
+                      : isEn ? "STANDBY SECURITY INTELLIGENCE ACTIVE" : "نشاط بروتوكول استرجاع البيانات المعتمدة محلياً"}
                   </span>
                   <p className="text-gray-600 leading-relaxed">
-                    {isEn 
-                      ? "Under ministerial secure communication protocol, high-fidelity sovereign briefing directories have been loaded as standby security models due to active external gateway rate throttling."
-                      : "بموجب البريد الحكومي المؤمن، تم تفعيل خط السحب الاحتياطي المباشر وقراءة التقارير الحيوية المصدقة سلفاً بدلاً من البوابات السحابية النشطة تفادياً لبطء الاتصال."}
+                    {isDatabaseBriefingSource
+                      ? isEn
+                        ? "The saved country briefing package was loaded from the briefing artifacts database and rendered through the same summary, talking-points, one-pager, and slide views."
+                        : "تم تحميل حزمة الإحاطة المحفوظة من قاعدة بيانات الإحاطات وعرضها عبر الملخص ونقاط الحديث والصفحة الواحدة والشرائح نفسها."
+                      : isEn
+                        ? "Under ministerial secure communication protocol, high-fidelity sovereign briefing directories have been loaded as standby security models due to active external gateway rate throttling."
+                        : "بموجب البريد الحكومي المؤمن، تم تفعيل خط السحب الاحتياطي المباشر وقراءة التقارير الحيوية المصدقة سلفاً بدلاً من البوابات السحابية النشطة تفادياً لبطء الاتصال."}
                   </p>
                 </div>
               </div>
@@ -2014,22 +2047,18 @@ export default function BriefingGenerator({
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="talking-points-cards-grid">
-              {currentTP.map((tpOn: any, idxKey: number) => (
-                <div key={idxKey} className="bg-slate-50/60 hover:bg-gold-bg/35 rounded-xl border border-gray-100 p-5 flex gap-4 transition-all duration-300">
-                  <div className="h-8 w-8 rounded-full bg-emerald-deep text-white font-mono font-bold text-sm flex items-center justify-center shrink-0">
-                    {idxKey + 1}
+            <div id="talking-points-cards-grid">
+              <div className="space-y-4 md:hidden">
+                {currentTP.map((tpOn, idxKey) => renderTalkingPointCard(tpOn, idxKey))}
+              </div>
+
+              <div className="hidden md:grid md:grid-cols-2 gap-4 items-start">
+                {talkingPointColumns.map((column, columnIndex) => (
+                  <div key={`talking-point-column-${columnIndex}`} className="space-y-4">
+                    {column.map(({ tpOn, idxKey }) => renderTalkingPointCard(tpOn, idxKey))}
                   </div>
-                  <div>
-                    <h4 className="font-serif font-bold text-slate-vip border-b border-gold-deep/20 pb-1 mb-2 text-sm md:text-base">
-                      {isEn ? tpOn.headerEn : tpOn.headerAr}
-                    </h4>
-                    <p className="text-xs md:text-sm text-gray-600 leading-relaxed font-medium">
-                      {isEn ? tpOn.pointEn : tpOn.pointAr}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
             
             <div className="p-3 bg-gold-bg/30 rounded-lg border border-gold-border/40 text-xs text-gray-500 font-mono text-center flex items-center justify-center gap-1.5">

@@ -63,6 +63,14 @@ app.use((req, res, next) => {
   return next();
 });
 
+app.get("/health", (_req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "majlis",
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.use(express.json({ limit: "16mb" }));
 
 let aiClient: OpenAI | null = null;
@@ -1011,6 +1019,22 @@ type NeonCountryIntelligenceRow = {
   hub_last_updated: string | Date | null;
 };
 
+type NeonCountryBriefingArtifactRow = {
+  id: number | string;
+  hub_country_id: number | string | null;
+  profile_id: number | string | null;
+  country_name: string;
+  iso_code: string;
+  artifact_type: string | null;
+  language: string | null;
+  artifact_json: unknown;
+  generated_at: string | Date | null;
+  updated_at: string | Date | null;
+  ai_generated: boolean | null;
+  ai_generated_facts: boolean | null;
+  method: string | null;
+};
+
 type VectorContextRecord = {
   id: string;
   countryId?: string;
@@ -1076,6 +1100,10 @@ type VoiceTranscriptionResult = {
 const NEON_COUNTRY_INTELLIGENCE_TABLE = "country_intelligence_profiles";
 const NEON_COUNTRY_INTELLIGENCE_HUB_TABLE = "country_intelligence_hub";
 const NEON_COUNTRIES_TABLE = "countries";
+const NEON_COUNTRY_BRIEFING_ARTIFACT_TABLES = [
+  "countries_briefing_artifacts",
+  "country_briefing_artifacts",
+] as const;
 const NEON_COUNTRY_SELECT_COLUMNS = [
   "p.id",
   "p.hub_country_id",
@@ -1893,6 +1921,122 @@ async function fetchNeonCountryProfile(countryId: string, rawCountry: string): P
   return rows[0] || null;
 }
 
+function normalizeLookupIdentifier(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  return normalizeShortText(String(value), "", 120);
+}
+
+function getCountryIsoLookupCandidate(countryId: string, rawCountry: string, countryData: any): string {
+  const intelligenceIso = normalizeShortText(countryData?.intelligenceHub?.isoCode, "", 3).toUpperCase();
+  if (intelligenceIso) return intelligenceIso;
+
+  const demoIso = demoCountryIsoCodes[normalizeCountryId(countryData?.id || countryId)];
+  if (demoIso) return demoIso;
+
+  const requestedIso = normalizeShortText(rawCountry, "", 12).replace(/[^a-z]/gi, "").slice(0, 3).toUpperCase();
+  return requestedIso || countryId.replace(/[^a-z]/gi, "").slice(0, 3).toUpperCase();
+}
+
+async function fetchNeonCountryBriefingArtifact(
+  countryId: string,
+  rawCountry: string,
+  countryData: any,
+  language: "en" | "ar"
+): Promise<{ table: string; row: NeonCountryBriefingArtifactRow } | null> {
+  const sql = getNeonSql();
+  if (!sql) return null;
+
+  const requestedCountry = normalizeShortText(rawCountry, countryId, 160);
+  const countryName = normalizeShortText(countryData?.nameEn, requestedCountry, 160);
+  const normalizedRequestedCountry = normalizeCountryId(requestedCountry);
+  const normalizedCountryName = normalizeCountryId(countryName);
+  const isoCode = getCountryIsoLookupCandidate(countryId, rawCountry, countryData);
+  const hubCountryId = normalizeLookupIdentifier(countryData?.intelligenceHub?.hubCountryId);
+  const profileId = normalizeLookupIdentifier(countryData?.intelligenceHub?.rowId);
+
+  for (const tableName of NEON_COUNTRY_BRIEFING_ARTIFACT_TABLES) {
+    try {
+      const rows = await sql.query(
+        `SELECT id,
+                hub_country_id,
+                profile_id,
+                country_name,
+                iso_code,
+                artifact_type,
+                language,
+                artifact_json,
+                generated_at,
+                updated_at,
+                ai_generated,
+                ai_generated_facts,
+                method
+         FROM ${tableName}
+         WHERE (
+             trim(both '-' from regexp_replace(replace(lower(country_name), '&', 'and'), '[^a-z0-9]+', '-', 'g')) = $1
+          OR trim(both '-' from regexp_replace(replace(lower(country_name), '&', 'and'), '[^a-z0-9]+', '-', 'g')) = $2
+          OR lower(country_name) = lower($3)
+          OR lower(country_name) = lower($4)
+          OR lower(iso_code) = lower($5)
+          OR hub_country_id::text = $6
+          OR profile_id::text = $7
+         )
+         AND (language = $8 OR ($8 = 'en' AND (language = 'en' OR language IS NULL)))
+         ORDER BY CASE WHEN language = $8 THEN 0 WHEN language = 'en' THEN 1 ELSE 2 END,
+                  CASE WHEN artifact_type = 'strategic_briefing_pack' THEN 0 ELSE 1 END,
+                  generated_at DESC NULLS LAST,
+                  updated_at DESC NULLS LAST,
+                  id DESC
+         LIMIT 1`,
+        [
+          normalizedRequestedCountry || countryId,
+          normalizedCountryName || countryId,
+          requestedCountry,
+          countryName,
+          isoCode,
+          hubCountryId,
+          profileId,
+          language,
+        ]
+      ) as NeonCountryBriefingArtifactRow[];
+
+      if (rows[0]) {
+        return { table: tableName, row: rows[0] };
+      }
+    } catch (error: any) {
+      if (error?.code === "42P01") {
+        continue;
+      }
+
+      console.warn(`[Neon] Could not read ${tableName}. Continuing with generated briefing fallback.`, error?.message || error);
+    }
+  }
+
+  return null;
+}
+
+function normalizeStoredBriefingArtifacts(
+  row: NeonCountryBriefingArtifactRow,
+  fallback: BriefingArtifacts
+): BriefingArtifacts | null {
+  const extracted = extractBriefingArtifactsFromN8NResponse(row.artifact_json);
+  if (!extracted || typeof extracted !== "object" || Array.isArray(extracted)) {
+    return null;
+  }
+
+  const generatedAt = timestampToIso(row.generated_at)
+    || timestampToIso(row.updated_at)
+    || fallback.generatedAt;
+  const storedLanguage = row.language === "ar" ? "ar" : row.language === "en" ? "en" : undefined;
+  const source = {
+    ...extracted,
+    country: extracted.country || row.country_name || fallback.country,
+    language: extracted.language || storedLanguage || fallback.language,
+    generatedAt: extracted.generatedAt || extracted.generated_at || generatedAt,
+  };
+
+  return normalizeBriefingArtifacts(source, fallback);
+}
+
 async function fetchAllNeonCountryProfiles(): Promise<NeonCountryIntelligenceRow[]> {
   const sql = getNeonSql();
   if (!sql) return [];
@@ -2259,7 +2403,7 @@ async function saveMeetingRecord(recordInput: Partial<MeetingRecord>): Promise<M
     createdBy: {
       displayName: normalizeShortText(createdBy.displayName, "Staff User", 160),
       email: normalizeShortText(createdBy.email, "", 240),
-      role: createdBy.role === "staff" || createdBy.role === "developer" || createdBy.role === "executive" ? createdBy.role : "staff",
+      role: createdBy.role === "staff" || createdBy.role === "executive" ? createdBy.role : "staff",
     },
     createdAt: existingRecord?.createdAt || normalizeShortText(recordInput.createdAt, now, 80),
     updatedAt: now,
@@ -3275,14 +3419,14 @@ function normalizeBriefingArtifacts(candidate: any, fallback: BriefingArtifacts)
   return {
     generatedAt: normalizeGeneratedBriefingDate(source.generatedAt || source.generated_at || fallback.generatedAt),
     country: coerceBriefingText(source.country, fallback.country, 120),
-    language: source.language === "ar" ? "ar" : fallback.language,
+    language: source.language === "ar" ? "ar" : source.language === "en" ? "en" : fallback.language,
     executiveSummary,
     talkingPoints: coerceTalkingPoints(source.talkingPoints || source.talking_points, fallback.talkingPoints),
     onePager: {
       title: coerceBriefingText(onePagerSource.title, fallbackOnePager.title, 180),
       subtitle: coerceBriefingText(onePagerSource.subtitle, fallbackOnePager.subtitle, 220),
       country: coerceBriefingText(onePagerSource.country, fallbackOnePager.country, 120),
-      strategicPriority: coerceBriefingPriority(onePagerSource.strategicPriority || onePagerSource.strategic_priority || fallbackOnePager.strategicPriority),
+      strategicPriority: coerceBriefingText(onePagerSource.strategicPriority || onePagerSource.strategic_priority, fallbackOnePager.strategicPriority, 220),
       lastUpdated: normalizeGeneratedBriefingDate(onePagerSource.lastUpdated || onePagerSource.last_updated || fallbackOnePager.lastUpdated),
       uaeRelevance: coerceBriefingText(onePagerSource.uaeRelevance || onePagerSource.uae_relevance, fallbackOnePager.uaeRelevance, 600),
       fastFacts: coerceBriefingFacts(onePagerSource.fastFacts || onePagerSource.fast_facts, fallbackOnePager.fastFacts),
@@ -4291,6 +4435,62 @@ app.post("/api/advisor/brief", async (req, res) => {
       question
     );
     const localRawText = renderBriefingArtifactsMarkdown(localArtifacts);
+
+    try {
+      const storedArtifact = await fetchNeonCountryBriefingArtifact(
+        normalizedCountry,
+        country || normalizedCountry,
+        localized.countryData,
+        currentLang
+      );
+
+      if (storedArtifact) {
+        const briefingArtifacts = normalizeStoredBriefingArtifacts(storedArtifact.row, localArtifacts);
+        if (briefingArtifacts) {
+          const artifactGeneratedAt = timestampToIso(storedArtifact.row.generated_at)
+            || timestampToIso(storedArtifact.row.updated_at)
+            || briefingArtifacts.generatedAt;
+
+          return res.json({
+            success: true,
+            source: [
+              "neon-country-briefing-artifacts",
+              storedArtifact.table,
+              source,
+              vectorContext.length > 0 ? "neon-jsonb-context" : "",
+              meetingMemory.length > 0 ? "meeting-memory" : "",
+            ].filter(Boolean).join("+"),
+            workflow: {
+              status: "database-cache",
+              channel: "briefing-tab-prefetch",
+            },
+            dataSources: {
+              ...dataSources,
+              briefingArtifacts: {
+                table: storedArtifact.table,
+                rowId: String(storedArtifact.row.id),
+                artifactType: storedArtifact.row.artifact_type,
+                language: storedArtifact.row.language || briefingArtifacts.language,
+                generatedAt: artifactGeneratedAt,
+                method: storedArtifact.row.method,
+              },
+            },
+            country: localized.countryData.nameEn,
+            countryData: localized.countryData,
+            briefingArtifacts,
+            aiBriefing: {
+              rawText: renderBriefingArtifactsMarkdown(briefingArtifacts),
+              structured: briefingArtifacts,
+            },
+          });
+        }
+
+        console.warn(`[Neon] Stored briefing artifact row ${storedArtifact.row.id} did not include a supported briefingArtifacts payload.`);
+      }
+    } catch (error: any) {
+      console.warn("[Neon] Stored briefing artifact unavailable. Continuing with briefing generation fallback.", error?.message || error);
+    }
+
     const renderedGroundingBrief = renderDatabaseBriefing(localized.countryData, localized.vectorContext, meetingMemory, currentLang, question);
     const briefingPayload = {
       event: "advisor.briefing.prepare",

@@ -166,6 +166,7 @@ All API routes are served by `server.ts`.
 
 | Method | Route | Description |
 | --- | --- | --- |
+| `GET` | `/health` | Lightweight Render/readiness health check. Does not call AI, database, workflows, migrations, or indexing code. |
 | `POST` | `/api/advisor/brief` | Loads a country profile, applies JSONB context and meeting memory, then returns a briefing payload. |
 | `POST` | `/api/advisor/chat` | Handles advisor chat. Uses n8n when configured, otherwise returns a local grounded response. |
 | `POST` | `/api/advisor/transcribe` | Transcribes voice input through OpenAI or returns a mock transcript for development. |
@@ -203,6 +204,8 @@ NODE_ENV=production npm start
 ```
 
 In production mode, Express serves static assets from `dist` and falls back to `dist/index.html` for client-side routes.
+
+For Render readiness, cold-start notes, and the optional GitHub Actions keep-alive workflow, see [docs/deployment-readiness.md](docs/deployment-readiness.md).
 
 ## Development Notes
 
