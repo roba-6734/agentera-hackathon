@@ -1,15 +1,15 @@
 import React, { useState } from "react";
 import { PrebuiltCountry, UaeIndicator } from "../types";
-import { 
-  Scale, 
-  BarChart3, 
-  Table, 
-  TrendingUp, 
-  Zap, 
-  HardHat, 
-  Recycle, 
-  Compass, 
-  ArrowUpRight, 
+import {
+  Scale,
+  BarChart3,
+  Table,
+  TrendingUp,
+  Zap,
+  HardHat,
+  Recycle,
+  Compass,
+  ArrowUpRight,
   Award,
   Download
 } from "lucide-react";
@@ -17,9 +17,74 @@ import CountryFlag from "./CountryFlag";
 
 interface ComparisonEngineProps {
   country: PrebuiltCountry;
+  countries?: PrebuiltCountry[];
   uaeData: UaeIndicator;
   language: "en" | "ar";
 }
+
+interface EnergySegment {
+  nameEn: string;
+  nameAr: string;
+  percentage: number;
+  color: string;
+}
+
+interface ComparisonRow {
+  key: string;
+  nameEn: string;
+  nameAr: string;
+  shortNameEn: string;
+  shortNameAr: string;
+  flag?: string;
+  flagUrl?: string;
+  country?: PrebuiltCountry;
+  gdp: number | null;
+  gdpLabel: string;
+  growth: number;
+  infra: number;
+  competitivenessValue: number;
+  competitivenessLabelEn: string;
+  competitivenessLabelAr: string;
+  energySegments: EnergySegment[];
+  barClass: string;
+  headerClass: string;
+  ringColor: string;
+  valueClass: string;
+  isUae: boolean;
+}
+
+const targetStylePalette = [
+  {
+    barClass: "bg-gradient-to-r from-slate-vip to-slate-800",
+    headerClass: "bg-slate-vip",
+    ringColor: "#C5A059",
+    valueClass: "text-slate-800",
+  },
+  {
+    barClass: "bg-gradient-to-r from-[#6B5E2E] to-[#C5A059]",
+    headerClass: "bg-[#6B5E2E]",
+    ringColor: "#6B5E2E",
+    valueClass: "text-[#6B5E2E]",
+  },
+  {
+    barClass: "bg-gradient-to-r from-[#294B63] to-[#3B82F6]",
+    headerClass: "bg-[#294B63]",
+    ringColor: "#294B63",
+    valueClass: "text-[#294B63]",
+  },
+  {
+    barClass: "bg-gradient-to-r from-[#5B4B63] to-[#A855F7]",
+    headerClass: "bg-[#5B4B63]",
+    ringColor: "#5B4B63",
+    valueClass: "text-[#5B4B63]",
+  },
+  {
+    barClass: "bg-gradient-to-r from-[#7C2D12] to-[#EA580C]",
+    headerClass: "bg-[#7C2D12]",
+    ringColor: "#7C2D12",
+    valueClass: "text-[#7C2D12]",
+  },
+];
 
 function escapeHtml(value: string | number | null | undefined): string {
   const replacements: Record<string, string> = {
@@ -33,7 +98,6 @@ function escapeHtml(value: string | number | null | undefined): string {
   return String(value ?? "").replace(/[&<>"']/g, (char) => replacements[char]);
 }
 
-// Robust parsing utilities to convert string indices to reliable numbers for calculation
 function isPlaceholderGdpValue(gdpStr: string): boolean {
   const normalized = (gdpStr || "").toLowerCase();
   return (
@@ -46,19 +110,15 @@ function isPlaceholderGdpValue(gdpStr: string): boolean {
 
 function extractGdpValue(gdpStr: string): number | null {
   if (!gdpStr || isPlaceholderGdpValue(gdpStr)) return null;
-  // Clean comma, brackets and currency symbols
   const cleaned = gdpStr.replace(/,/g, "").replace(/\([^)]*\)/g, "");
-  // Look for decimals or integers
   const match = cleaned.match(/([0-9]+(?:\.[0-9]+)?)/);
-  if (match) {
-    let numeric = parseFloat(match[1]);
-    // If GDP is listed in Trillions rather than Billions, scale it
-    if (cleaned.toLowerCase().includes("trillion") || cleaned.includes("ترليون")) {
-      return numeric * 1000;
-    }
-    return numeric;
+  if (!match) return null;
+
+  const numeric = parseFloat(match[1]);
+  if (cleaned.toLowerCase().includes("trillion") || cleaned.includes("ترليون")) {
+    return numeric * 1000;
   }
-  return null;
+  return numeric;
 }
 
 function formatParsedGdpValue(gdpValue: number | null, fallbackLabel: string, isEn: boolean): string {
@@ -90,7 +150,7 @@ function extractInfrastructureScore(infraStr: string): number {
   }
   const score = parseFloat(infraStr.replace(/[^0-9.]/g, ""));
   if (!isNaN(score)) {
-    if (score <= 10) return score * 10; // normalize 1-10 to 1-100 scale
+    if (score <= 10) return score * 10;
     return score;
   }
   return 50;
@@ -99,18 +159,7 @@ function extractInfrastructureScore(infraStr: string): number {
 function extractRankValue(rankStr: string): number {
   if (!rankStr) return 50;
   const match = rankStr.replace(/[^0-9]/g, "");
-  if (match) {
-    return parseInt(match, 10);
-  }
-  return 30; // default medium high for descriptions
-}
-
-// Extractor for complex Energy lists (e.g. "Natural Gas (55%), Solar & Clean Nuclear (42%)")
-interface EnergySegment {
-  nameEn: string;
-  nameAr: string;
-  percentage: number;
-  color: string;
+  return match ? parseInt(match, 10) : 30;
 }
 
 function parseEnergyMix(energyStr: string, isUae: boolean): EnergySegment[] {
@@ -121,14 +170,12 @@ function parseEnergyMix(energyStr: string, isUae: boolean): EnergySegment[] {
     ];
   }
 
-  // Parse percentages dynamically
   const segments: EnergySegment[] = [];
   const parts = energyStr.split(",");
-  
   const colorsPalette = [
     isUae ? "bg-emerald-deep" : "bg-slate-vip",
-    "bg-[#C5A059]", // Gold
-    "bg-[#1D322A]", // Dark Emerald
+    "bg-[#C5A059]",
+    "bg-[#1D322A]",
     "bg-amber-600",
     "bg-gray-400"
   ];
@@ -136,12 +183,10 @@ function parseEnergyMix(energyStr: string, isUae: boolean): EnergySegment[] {
   parts.forEach((part, index) => {
     const pctMatch = part.match(/([0-9]+(?:\.[0-9]+)?)\s*%/);
     const pct = pctMatch ? parseFloat(pctMatch[1]) : 0;
-    
-    // Determine label
     let labelEn = "Fossil / Mixed";
     let labelAr = "هيدروكربونات / مختلط";
-    
     const lower = part.toLowerCase();
+
     if (lower.includes("gas") || lower.includes("غاز")) {
       labelEn = "Natural Gas";
       labelAr = "غاز طبيعي";
@@ -161,7 +206,6 @@ function parseEnergyMix(energyStr: string, isUae: boolean): EnergySegment[] {
       labelEn = "Wind Energy";
       labelAr = "طاقة الرياح";
     } else {
-      // Extract first two words for label fallback
       const cleanLabel = part.replace(/[0-9%()]/g, "").trim();
       labelEn = cleanLabel.split(" ").slice(0, 2).join(" ") || "Energy Core";
       labelAr = cleanLabel || "قطاع الطاقة";
@@ -178,7 +222,6 @@ function parseEnergyMix(energyStr: string, isUae: boolean): EnergySegment[] {
   });
 
   if (segments.length === 0) {
-    // If string has status descriptions without percentage figures
     return [
       { nameEn: "Transition Assets", nameAr: "أصول تحول الطاقة", percentage: 65, color: isUae ? "bg-emerald-deep" : "bg-slate-vip" },
       { nameEn: "Standby Capacity", nameAr: "الاحتياطي التشغيلي", percentage: 35, color: "bg-[#C5A059]" }
@@ -188,86 +231,127 @@ function parseEnergyMix(energyStr: string, isUae: boolean): EnergySegment[] {
   return segments;
 }
 
-export default function ComparisonEngine({ country, uaeData, language }: ComparisonEngineProps) {
+function dedupeCountries(countries: PrebuiltCountry[]): PrebuiltCountry[] {
+  return Array.from(new Map(countries.map((item) => [item.id, item])).values());
+}
+
+export default function ComparisonEngine({ country, countries, uaeData, language }: ComparisonEngineProps) {
   const isEn = language === "en";
   const [viewMode, setViewMode] = useState<"charts" | "table">("charts");
-  const [activeHoverData, setActiveHoverData] = useState<string | null>(null);
+  const targetCountries = dedupeCountries((countries && countries.length > 0 ? countries : [country]).filter(Boolean));
+  const primaryCountry = targetCountries[0] || country;
+  const isMultiCountry = targetCountries.length > 1;
 
-  // Parsing values dynamically for high fidelity chart scaling
   const uaeGdp = extractGdpValue(uaeData.gdp);
-  const targetGdp = extractGdpValue(country.indicators.gdp);
-  const maxGdpValue = Math.max(uaeGdp || 0, targetGdp || 0, 100);
-  const uaeGdpBarPercent = uaeGdp === null ? 0 : Math.max(12, (uaeGdp / maxGdpValue) * 100);
-  const targetGdpBarPercent = targetGdp === null ? 0 : Math.max(12, (targetGdp / maxGdpValue) * 100);
-  const uaeGdpLabel = formatParsedGdpValue(uaeGdp, isEn ? uaeData.gdp : uaeData.gdpAr, isEn);
-  const targetGdpLabel = formatParsedGdpValue(targetGdp, isEn ? country.indicators.gdp : country.indicators.gdpAr, isEn);
+  const uaeRow: ComparisonRow = {
+    key: "uae",
+    nameEn: uaeData.nameEn,
+    nameAr: uaeData.nameAr,
+    shortNameEn: "UAE",
+    shortNameAr: "الإمارات",
+    flag: uaeData.flag,
+    gdp: uaeGdp,
+    gdpLabel: formatParsedGdpValue(uaeGdp, isEn ? uaeData.gdp : uaeData.gdpAr, isEn),
+    growth: extractGrowthValue(uaeData.growth),
+    infra: extractInfrastructureScore(uaeData.infrastructureIndex),
+    competitivenessValue: extractRankValue(uaeData.competitivenessRank),
+    competitivenessLabelEn: uaeData.competitivenessRank,
+    competitivenessLabelAr: uaeData.competitivenessRankAr,
+    energySegments: parseEnergyMix(uaeData.energyMix, true),
+    barClass: "bg-gradient-to-r from-emerald-deep to-emerald-light",
+    headerClass: "bg-emerald-deep",
+    ringColor: "#0D4C3A",
+    valueClass: "text-emerald-deep",
+    isUae: true,
+  };
 
-  const uaeGrowth = extractGrowthValue(uaeData.growth);
-  const targetGrowth = extractGrowthValue(country.indicators.growth);
+  const targetRows: ComparisonRow[] = targetCountries.map((targetCountry, index) => {
+    const style = targetStylePalette[index % targetStylePalette.length];
+    const gdp = extractGdpValue(targetCountry.indicators.gdp);
+    return {
+      key: targetCountry.id,
+      nameEn: targetCountry.nameEn,
+      nameAr: targetCountry.nameAr,
+      shortNameEn: targetCountry.nameEn,
+      shortNameAr: targetCountry.nameAr,
+      flag: targetCountry.flag,
+      flagUrl: targetCountry.flagUrl,
+      country: targetCountry,
+      gdp,
+      gdpLabel: formatParsedGdpValue(gdp, isEn ? targetCountry.indicators.gdp : targetCountry.indicators.gdpAr, isEn),
+      growth: extractGrowthValue(targetCountry.indicators.growth),
+      infra: extractInfrastructureScore(targetCountry.indicators.infrastructureIndex),
+      competitivenessValue: extractRankValue(targetCountry.indicators.competitivenessRank),
+      competitivenessLabelEn: targetCountry.indicators.competitivenessRank,
+      competitivenessLabelAr: targetCountry.indicators.competitivenessRank,
+      energySegments: parseEnergyMix(targetCountry.indicators.energyMix, false),
+      barClass: style.barClass,
+      headerClass: style.headerClass,
+      ringColor: style.ringColor,
+      valueClass: style.valueClass,
+      isUae: false,
+    };
+  });
 
-  const uaeInfra = extractInfrastructureScore(uaeData.infrastructureIndex);
-  const targetInfra = extractInfrastructureScore(country.indicators.infrastructureIndex);
+  const comparisonRows = [uaeRow, ...targetRows];
+  const maxGdpValue = Math.max(...comparisonRows.map((row) => row.gdp || 0), 100);
+  const highestGrowthRow = comparisonRows.reduce((highest, row) => row.growth > highest.growth ? row : highest, comparisonRows[0]);
+  const strongestInfraRow = comparisonRows.reduce((strongest, row) => row.infra > strongest.infra ? row : strongest, comparisonRows[0]);
+  const competitivenessRows = [...comparisonRows].sort((first, second) => first.competitivenessValue - second.competitivenessValue);
 
-  const uaeCompetitivenessValue = extractRankValue(uaeData.competitivenessRank);
-  const targetCompetitivenessValue = extractRankValue(country.indicators.competitivenessRank);
+  const renderMarker = (row: ComparisonRow, size: "xs" | "sm" | "md" = "sm") => (
+    row.country ? (
+      <CountryFlag flag={row.flag} flagUrl={row.flagUrl} countryName={isEn ? row.nameEn : row.nameAr} size={size} />
+    ) : (
+      <span className={size === "md" ? "text-2xl" : size === "sm" ? "text-base" : "text-xs"}>{row.flag || "🇦🇪"}</span>
+    )
+  );
 
-  const uaeEnergyMixSegments = parseEnergyMix(uaeData.energyMix, true);
-  const targetEnergyMixSegments = parseEnergyMix(country.indicators.energyMix, false);
+  const rowName = (row: ComparisonRow) => isEn ? row.nameEn : row.nameAr;
+  const rowShortName = (row: ComparisonRow) => isEn ? row.shortNameEn : row.shortNameAr;
 
   const traditionalMetrics = [
     {
       labelEn: "Sovereign GDP Size (Market Value)",
       labelAr: "الناتج المحلي الإجمالي وحياد الأسواق",
       icon: <TrendingUp className="w-5 h-5 text-gold-deep" />,
-      uaeValue: uaeData.gdp,
-      uaeValueAr: uaeData.gdpAr,
-      countryValue: country.indicators.gdp,
-      countryValueAr: country.indicators.gdpAr,
+      getUaeValue: () => isEn ? uaeData.gdp : uaeData.gdpAr,
+      getCountryValue: (targetCountry: PrebuiltCountry) => isEn ? targetCountry.indicators.gdp : targetCountry.indicators.gdpAr,
     },
     {
       labelEn: "Annual Economic Growth Rate",
       labelAr: "معدل النمو الاقتصادي السنوي",
       icon: <ArrowUpRight className="w-5 h-5 text-gold-deep" />,
-      uaeValue: uaeData.growth,
-      uaeValueAr: uaeData.growth,
-      countryValue: country.indicators.growth,
-      countryValueAr: country.indicators.growth,
+      getUaeValue: () => uaeData.growth,
+      getCountryValue: (targetCountry: PrebuiltCountry) => targetCountry.indicators.growth,
     },
     {
       labelEn: "Energy Grid Transition Mix",
       labelAr: "مصفوفة ومزيج الطاقة الوطني",
       icon: <Zap className="w-5 h-5 text-gold-deep" />,
-      uaeValue: uaeData.energyMix,
-      uaeValueAr: uaeData.energyMixAr,
-      countryValue: country.indicators.energyMix,
-      countryValueAr: country.indicators.energyMixAr,
+      getUaeValue: () => isEn ? uaeData.energyMix : uaeData.energyMixAr,
+      getCountryValue: (targetCountry: PrebuiltCountry) => isEn ? targetCountry.indicators.energyMix : targetCountry.indicators.energyMixAr,
     },
     {
       labelEn: "Infrastructure & Logistics Readiness Score",
       labelAr: "مؤشر جاهزية البنية التحتية والموانئ",
       icon: <HardHat className="w-5 h-5 text-gold-deep" />,
-      uaeValue: uaeData.infrastructureIndex,
-      uaeValueAr: uaeData.infrastructureIndexAr,
-      countryValue: country.indicators.infrastructureIndex,
-      countryValueAr: country.indicators.infrastructureIndex,
+      getUaeValue: () => isEn ? uaeData.infrastructureIndex : uaeData.infrastructureIndexAr,
+      getCountryValue: (targetCountry: PrebuiltCountry) => targetCountry.indicators.infrastructureIndex,
     },
     {
       labelEn: "Sustainability Horizon & Climate Focus",
       labelAr: "أهداف الاستدامة وترتيب الحفظ البيئي الدولي",
       icon: <Recycle className="w-5 h-5 text-gold-deep" />,
-      uaeValue: uaeData.environmentalRank,
-      uaeValueAr: uaeData.environmentalRankAr,
-      countryValue: country.indicators.environmentalRank,
-      countryValueAr: country.indicators.environmentalRank,
+      getUaeValue: () => isEn ? uaeData.environmentalRank : uaeData.environmentalRankAr,
+      getCountryValue: (targetCountry: PrebuiltCountry) => targetCountry.indicators.environmentalRank,
     },
     {
       labelEn: "Global Competitiveness Positioning",
       labelAr: "مستويات التنافسية والتمكين الاستثماري",
       icon: <Compass className="w-5 h-5 text-gold-deep" />,
-      uaeValue: uaeData.competitivenessRank,
-      uaeValueAr: uaeData.competitivenessRankAr,
-      countryValue: country.indicators.competitivenessRank,
-      countryValueAr: country.indicators.competitivenessRank,
+      getUaeValue: () => isEn ? uaeData.competitivenessRank : uaeData.competitivenessRankAr,
+      getCountryValue: (targetCountry: PrebuiltCountry) => targetCountry.indicators.competitivenessRank,
     }
   ];
 
@@ -277,72 +361,75 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
       month: "short",
       day: "numeric",
     });
-    const targetCountryName = isEn ? country.nameEn : country.nameAr;
     const uaeCountryName = isEn ? uaeData.nameEn : uaeData.nameAr;
-    const metricRows = traditionalMetrics
-      .map((metric) => `
-        <tr>
-          <th>${escapeHtml(isEn ? metric.labelEn : metric.labelAr)}</th>
-          <td>${escapeHtml(isEn ? metric.uaeValue : metric.uaeValueAr)}</td>
-          <td>${escapeHtml(isEn ? metric.countryValue : metric.countryValueAr)}</td>
-        </tr>
-      `)
+    const targetHeaderCells = targetCountries
+      .map((targetCountry) => `<th>${escapeHtml(isEn ? targetCountry.nameEn : targetCountry.nameAr)}</th>`)
       .join("");
-    const summaryRows = [
+    const summaryItems = [
       {
         label: isEn ? "GDP scale" : "حجم الناتج المحلي",
-        uaeValue: uaeGdpLabel,
-        targetValue: targetGdpLabel,
+        uaeValue: uaeRow.gdpLabel,
+        getTargetValue: (row: ComparisonRow) => row.gdpLabel,
       },
       {
         label: isEn ? "Annual growth" : "النمو السنوي",
-        uaeValue: `${uaeGrowth}%`,
-        targetValue: `${targetGrowth}%`,
+        uaeValue: `${uaeRow.growth}%`,
+        getTargetValue: (row: ComparisonRow) => `${row.growth}%`,
       },
       {
         label: isEn ? "Infrastructure score" : "مؤشر البنية التحتية",
-        uaeValue: `${uaeInfra}/100`,
-        targetValue: `${targetInfra}/100`,
+        uaeValue: `${uaeRow.infra}/100`,
+        getTargetValue: (row: ComparisonRow) => `${row.infra}/100`,
       },
       {
         label: isEn ? "Competitiveness rank" : "ترتيب التنافسية",
         uaeValue: isEn ? uaeData.competitivenessRank : uaeData.competitivenessRankAr,
-        targetValue: isEn ? country.indicators.competitivenessRank : country.indicators.competitivenessRank,
+        getTargetValue: (row: ComparisonRow) => isEn ? row.competitivenessLabelEn : row.competitivenessLabelAr,
       },
-    ]
+    ];
+    const summaryRows = summaryItems
       .map((item) => `
-        <div class="summary-row">
-          <span>${escapeHtml(item.label)}</span>
-          <strong>${escapeHtml(item.uaeValue)}</strong>
-          <strong>${escapeHtml(item.targetValue)}</strong>
-        </div>
+        <tr>
+          <th>${escapeHtml(item.label)}</th>
+          <td>${escapeHtml(item.uaeValue)}</td>
+          ${targetRows.map((row) => `<td>${escapeHtml(item.getTargetValue(row))}</td>`).join("")}
+        </tr>
       `)
       .join("");
+    const metricRows = traditionalMetrics
+      .map((metric) => `
+        <tr>
+          <th>${escapeHtml(isEn ? metric.labelEn : metric.labelAr)}</th>
+          <td>${escapeHtml(metric.getUaeValue())}</td>
+          ${targetCountries.map((targetCountry) => `<td>${escapeHtml(metric.getCountryValue(targetCountry))}</td>`).join("")}
+        </tr>
+      `)
+      .join("");
+    const targetTitle = isMultiCountry
+      ? targetCountries.map((targetCountry) => isEn ? targetCountry.nameEn : targetCountry.nameAr).join(", ")
+      : isEn ? primaryCountry.nameEn : primaryCountry.nameAr;
     const printHtml = `
       <!doctype html>
       <html lang="${isEn ? "en" : "ar"}" dir="${isEn ? "ltr" : "rtl"}">
         <head>
           <meta charset="utf-8" />
-          <title>${escapeHtml(isEn ? `UAE vs ${country.nameEn} Sovereign Comparison` : `مقارنة الإمارات و${country.nameAr}`)}</title>
+          <title>${escapeHtml(isEn ? `UAE Sovereign Comparison - ${targetTitle}` : `مقارنة الإمارات - ${targetTitle}`)}</title>
           <style>
-            @page { size: A4; margin: 14mm; }
+            @page { size: A4 landscape; margin: 12mm; }
             * { box-sizing: border-box; }
             body {
               margin: 0;
               background: #ffffff;
               color: #172520;
               font-family: Inter, Arial, sans-serif;
-              font-size: 12px;
+              font-size: 11px;
               line-height: 1.45;
-            }
-            .report-shell {
-              width: 100%;
             }
             .report-header {
               border-left: 5px solid #C5A059;
-              padding: 18px 20px;
+              padding: 16px 18px;
               background: #F8FAFC;
-              margin-bottom: 18px;
+              margin-bottom: 14px;
             }
             [dir="rtl"] .report-header {
               border-left: 0;
@@ -350,103 +437,60 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
             }
             .eyebrow {
               color: #0D4C3A;
-              font-size: 10px;
+              font-size: 9px;
               font-weight: 800;
               letter-spacing: 0.08em;
               text-transform: uppercase;
             }
             h1 {
               margin: 6px 0 8px;
-              font-size: 24px;
+              font-size: 22px;
               line-height: 1.2;
               color: #172520;
             }
             .meta {
               color: #64748B;
-              font-size: 11px;
-              font-weight: 700;
-            }
-            .country-strip {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 10px;
-              margin-bottom: 14px;
-            }
-            .country-card {
-              border: 1px solid #D8E0EF;
-              padding: 12px;
-              background: #FFFFFF;
-            }
-            .country-card span {
-              display: block;
-              color: #64748B;
               font-size: 10px;
-              font-weight: 800;
-              text-transform: uppercase;
-            }
-            .country-card strong {
-              display: block;
-              margin-top: 4px;
-              font-size: 16px;
-              color: #172520;
-            }
-            .summary {
-              border: 1px solid #D8E0EF;
-              margin-bottom: 16px;
-            }
-            .summary-row {
-              display: grid;
-              grid-template-columns: 1.1fr 1fr 1fr;
-              gap: 10px;
-              padding: 9px 12px;
-              border-bottom: 1px solid #E2E8F0;
-              align-items: start;
-            }
-            .summary-row:first-child {
-              background: #F8FAFC;
-            }
-            .summary-row:last-child {
-              border-bottom: 0;
-            }
-            .summary-row span {
-              color: #475569;
-              font-weight: 800;
-            }
-            .summary-row strong {
-              color: #172520;
+              font-weight: 700;
             }
             table {
               width: 100%;
               border-collapse: collapse;
+              margin-bottom: 14px;
               page-break-inside: auto;
             }
             th,
             td {
               border: 1px solid #D8E0EF;
-              padding: 10px;
+              padding: 8px;
               text-align: start;
               vertical-align: top;
             }
             thead th {
               background: #0D4C3A;
               color: #FFFFFF;
-              font-size: 10px;
+              font-size: 9px;
               text-transform: uppercase;
               letter-spacing: 0.06em;
             }
             tbody th {
-              width: 32%;
+              min-width: 170px;
               background: #F8FAFC;
               color: #172520;
-            }
-            tbody td {
-              width: 34%;
             }
             tr {
               break-inside: avoid;
             }
+            .section-title {
+              margin: 14px 0 6px;
+              color: #0D4C3A;
+              font-size: 12px;
+              font-weight: 900;
+              text-transform: uppercase;
+              letter-spacing: 0.06em;
+            }
             .footer {
-              margin-top: 18px;
+              margin-top: 14px;
               padding-top: 10px;
               border-top: 1px solid #D8E0EF;
               color: #64748B;
@@ -455,39 +499,32 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
           </style>
         </head>
         <body>
-          <main class="report-shell">
+          <main>
             <section class="report-header">
               <div class="eyebrow">${escapeHtml(isEn ? "Sovereign Comparison Export" : "تصدير المقارنة السيادية")}</div>
-              <h1>${escapeHtml(isEn ? `UAE vs ${country.nameEn}` : `الإمارات و${country.nameAr}`)}</h1>
-              <div class="meta">${escapeHtml(isEn ? `Generated ${generatedOn}` : `تم الإنشاء في ${generatedOn}`)}</div>
+              <h1>${escapeHtml(isEn ? `UAE vs ${targetTitle}` : `الإمارات و${targetTitle}`)}</h1>
+              <div class="meta">${escapeHtml(isEn ? `${targetCountries.length} peer countries - Generated ${generatedOn}` : `${targetCountries.length} دول مقارنة - تم الإنشاء في ${generatedOn}`)}</div>
             </section>
 
-            <section class="country-strip">
-              <div class="country-card">
-                <span>${escapeHtml(isEn ? "Benchmark host" : "الدولة المرجعية")}</span>
-                <strong>${escapeHtml(uaeCountryName)}</strong>
-              </div>
-              <div class="country-card">
-                <span>${escapeHtml(isEn ? "Target nation" : "الدولة المستهدفة")}</span>
-                <strong>${escapeHtml(targetCountryName)}</strong>
-              </div>
-            </section>
+            <div class="section-title">${escapeHtml(isEn ? "Executive metric summary" : "ملخص المؤشرات القيادية")}</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>${escapeHtml(isEn ? "Benchmark" : "المعيار")}</th>
+                  <th>${escapeHtml(uaeCountryName)}</th>
+                  ${targetHeaderCells}
+                </tr>
+              </thead>
+              <tbody>${summaryRows}</tbody>
+            </table>
 
-            <section class="summary">
-              <div class="summary-row">
-                <span>${escapeHtml(isEn ? "Benchmark" : "المعيار")}</span>
-                <strong>${escapeHtml(uaeCountryName)}</strong>
-                <strong>${escapeHtml(targetCountryName)}</strong>
-              </div>
-              ${summaryRows}
-            </section>
-
+            <div class="section-title">${escapeHtml(isEn ? "Full sovereign comparison matrix" : "مصفوفة المقارنة السيادية الكاملة")}</div>
             <table>
               <thead>
                 <tr>
                   <th>${escapeHtml(isEn ? "Indicator" : "المؤشر")}</th>
                   <th>${escapeHtml(uaeCountryName)}</th>
-                  <th>${escapeHtml(targetCountryName)}</th>
+                  ${targetHeaderCells}
                 </tr>
               </thead>
               <tbody>${metricRows}</tbody>
@@ -534,25 +571,29 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
 
   return (
     <div className="space-y-6" id="country-comparison-engine-view">
-      
-      {/* Sovereign Scale Header Card */}
       <div className="bg-white rounded-sm shadow-md border-l-4 border-gold-deep p-6 md:p-8" id="comparison-banner-scale">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="flex items-center gap-4 min-w-0">
             <div className="h-12 w-12 bg-gold-bg border border-gold-border/60 text-gold-deep rounded-sm flex items-center justify-center shrink-0">
               <Scale className="w-6 h-6" />
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-[10px] font-bold font-mono text-emerald-deep tracking-wider uppercase block">
                 {isEn ? "Sovereign Benchmarks Ratio" : "المقارنات الفيدرالية الثنائية"}
               </span>
               <h3 className="text-xl font-serif font-bold text-slate-vip mt-0.5">
-                {isEn ? `Bilateral Comparative Dashboard: UAE vs ${country.nameEn}` : `لوحة المقارنة المتطورة: الإمارات ضد ${country.nameAr}`}
+                {isMultiCountry
+                  ? isEn
+                    ? `Multi-Country Comparative Dashboard: UAE + ${targetCountries.length} Peers`
+                    : `لوحة مقارنة متعددة الدول: الإمارات + ${targetCountries.length} دول`
+                  : isEn
+                    ? `Bilateral Comparative Dashboard: UAE vs ${primaryCountry.nameEn}`
+                    : `لوحة المقارنة المتطورة: الإمارات ضد ${primaryCountry.nameAr}`}
               </h3>
             </div>
           </div>
-          
-          <div className="flex flex-wrap gap-2 items-center justify-center md:justify-end">
+
+          <div className="flex flex-wrap gap-2 items-center justify-start lg:justify-end">
             <button
               type="button"
               onClick={handleDownloadPdf}
@@ -563,9 +604,9 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
               <Download className="w-3.5 h-3.5" />
               <span>PDF</span>
             </button>
-            {/* Display View Mode Switcher */}
             <div className="bg-gray-100 p-1 rounded-sm flex gap-1 border border-gray-200">
               <button
+                type="button"
                 onClick={() => setViewMode("charts")}
                 className={`px-3 py-1.5 rounded-sm text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                   viewMode === "charts"
@@ -577,6 +618,7 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
                 <span>{isEn ? "Visual Charts" : "مخططات بيانية"}</span>
               </button>
               <button
+                type="button"
                 onClick={() => setViewMode("table")}
                 className={`px-3 py-1.5 rounded-sm text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                   viewMode === "table"
@@ -592,488 +634,360 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
         </div>
       </div>
 
-      {/* Head-to-Head Country Columns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6" id="comparison-col-headers">
-        {/* UAE Column */}
-        <div className="bg-emerald-deep h-16 rounded-sm flex items-center justify-between px-6 text-white border-b-4 border-gold-deep shadow-md" id="col-uae-header">
-          <span className="text-lg font-bold font-serif tracking-tight flex items-center gap-2.5">
-            <span className="text-2xl">🇦🇪</span>
-            <span>{isEn ? uaeData.nameEn : uaeData.nameAr}</span>
-          </span>
-          <span className="text-[10px] uppercase font-mono tracking-widest text-[#E5C179] bg-slate-vip/70 px-2.5 py-1 rounded border border--[#C5A059]/20">
-            {isEn ? "Benchmark Host" : "الدولة المرجعية"}
-          </span>
-        </div>
-
-        {/* Selected Country Column */}
-        <div className="bg-slate-vip h-16 rounded-sm flex items-center justify-between px-6 text-white border-b-4 border-gold-deep shadow-md" id="col-target-header">
-          <span className="text-lg font-bold font-serif tracking-tight flex items-center gap-2.5">
-            <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="md" />
-            <span>{isEn ? country.nameEn : country.nameAr}</span>
-          </span>
-          <span className="text-[10px] uppercase font-mono tracking-widest text-[#E5C179] bg-[#121E1A] px-2.5 py-1 rounded border border-[#C5A059]/20">
-            {isEn ? "Target Nation" : "الوفد النظير"}
-          </span>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3" id="comparison-country-roster">
+        {comparisonRows.map((row, index) => (
+          <div
+            key={row.key}
+            className={`${row.headerClass} min-h-16 rounded-sm flex items-center justify-between gap-3 px-4 text-white border-b-4 border-gold-deep shadow-md`}
+          >
+            <span className="text-sm font-bold font-serif tracking-tight flex items-center gap-2.5 min-w-0">
+              {renderMarker(row, "md")}
+              <span className="truncate">{rowName(row)}</span>
+            </span>
+            <span className="text-[9px] uppercase font-mono tracking-widest text-[#E5C179] bg-black/25 px-2 py-1 rounded border border-[#C5A059]/20 shrink-0">
+              {row.isUae ? (isEn ? "Host" : "مرجعية") : (isEn ? `Peer ${index}` : `نظير ${index}`)}
+            </span>
+          </div>
+        ))}
       </div>
 
       {viewMode === "charts" ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" id="comparison-visual-charts-grid">
-          
-          {/* Chart 1: Sovereign Economic Scale Comparison */}
-          <div 
-            className="bg-white border border-gold-border rounded-lg p-5 md:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-            onMouseEnter={() => setActiveHoverData("gdp")}
-            onMouseLeave={() => setActiveHoverData(null)}
-          >
+          <div className="bg-white border border-gold-border rounded-lg p-5 md:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
             <div>
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="bg-gold-bg text-gold-deep p-1.5 rounded-sm">
+              <div className="flex justify-between items-start mb-4 gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="bg-gold-bg text-gold-deep p-1.5 rounded-sm shrink-0">
                     <TrendingUp className="w-4 h-4" />
                   </span>
                   <h4 className="font-serif font-bold text-slate-vip text-sm md:text-base">
                     {isEn ? "GDP Economic Size (Volume Comparison)" : "حجم الناتج المحلي الإجمالي الاسمي الثنائي"}
                   </h4>
                 </div>
-                <span className="text-[10px] font-mono text-gray-400 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">USD Billion</span>
+                <span className="text-[10px] font-mono text-gray-400 bg-gray-50 px-2 py-0.5 rounded border border-gray-100 shrink-0">USD Billion</span>
               </div>
 
-              {/* Chart Visual Section */}
-              <div className="space-y-5 h-44 flex flex-col justify-center">
-                {/* UAE GDP Column Bar */}
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5 font-semibold text-slate-700">
-                    <span className="flex items-center gap-1">🇦🇪 {isEn ? "UAE" : "الإمارات"}</span>
-                    <span className="font-mono text-emerald-deep font-extrabold">{uaeGdpLabel}</span>
-                  </div>
-                  <div className="w-full bg-gray-100 h-6 rounded-md overflow-hidden p-0.5 border border-gray-200">
-                    <div 
-                      className="bg-gradient-to-r from-emerald-deep to-emerald-light h-full rounded transition-all duration-1000 ease-out flex items-center justify-end px-2"
-                      style={{ width: `${uaeGdpBarPercent}%` }}
-                    >
-                      <span className="text-[10px] font-mono font-bold text-white text-[9px]">
-                        {uaeGdp === null ? "N/A" : `${Math.round((uaeGdp / maxGdpValue) * 100)}%`}
-                      </span>
+              <div className="space-y-4">
+                {comparisonRows.map((row) => {
+                  const barPercent = row.gdp === null ? 0 : Math.max(10, (row.gdp / maxGdpValue) * 100);
+                  return (
+                    <div key={`gdp-${row.key}`}>
+                      <div className="flex justify-between gap-3 text-xs mb-1.5 font-semibold text-slate-700">
+                        <span className="flex items-center gap-1 min-w-0">
+                          {renderMarker(row, "xs")}
+                          <span className="truncate">{rowShortName(row)}</span>
+                        </span>
+                        <span className={`font-mono font-extrabold text-right ${row.valueClass}`}>{row.gdpLabel}</span>
+                      </div>
+                      <div className="w-full bg-gray-100 h-6 rounded-md overflow-hidden p-0.5 border border-gray-200">
+                        <div
+                          className={`${row.barClass} h-full rounded transition-all duration-1000 ease-out flex items-center justify-end px-2`}
+                          style={{ width: `${barPercent}%` }}
+                        >
+                          <span className="font-mono font-bold text-white text-[9px]">
+                            {row.gdp === null ? "N/A" : `${Math.round((row.gdp / maxGdpValue) * 100)}%`}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-
-                {/* Country GDP Column Bar */}
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5 font-semibold text-slate-700">
-                    <span className="flex items-center gap-1">
-                      <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="xs" />
-                      <span>{isEn ? country.nameEn : country.nameAr}</span>
-                    </span>
-                    <span className="font-mono text-slate-800 font-extrabold">{targetGdpLabel}</span>
-                  </div>
-                  <div className="w-full bg-gray-100 h-6 rounded-md overflow-hidden p-0.5 border border-gray-200">
-                    <div 
-                      className="bg-gradient-to-r from-slate-vip to-slate-800 h-full rounded transition-all duration-1000 ease-out flex items-center justify-end px-2"
-                      style={{ width: `${targetGdpBarPercent}%` }}
-                    >
-                      <span className="text-[10px] font-mono font-bold text-[#E5C179] text-[9px]">
-                        {targetGdp === null ? "N/A" : `${Math.round((targetGdp / maxGdpValue) * 100)}%`}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
             </div>
 
-            <p className="text-[11px] text-gray-500 mt-2 border-t border-gray-100 pt-3 flex items-center gap-1 bg-gold-bg/10 p-2 rounded">
-              <span className="font-bold text-[#C5A059]">ℹ️ Ratio:</span> 
-              {uaeGdp === null || targetGdp === null
-                ? (isEn
-                  ? "A verified peer GDP figure is not available in the current country profile."
-                  : "لا تتوفر قيمة موثقة للناتج المحلي في ملف الدولة الحالي.")
-                : uaeGdp > targetGdp 
-                ? (isEn 
-                  ? `UAE GDP is ${((uaeGdp / (targetGdp || 1))).toFixed(1)}x larger than the peer national index.`
-                  : `الناتج المحلي لدولة الإمارات أكبر بمقدار ${((uaeGdp / (targetGdp || 1))).toFixed(1)} أضعاف الناتج النظير.`)
-                : (isEn 
-                  ? `${country.nameEn} occupies a heavier economic scale (~${((targetGdp / (uaeGdp || 1))).toFixed(1)}x larger than UAE).`
-                  : `تشغل ${country.nameAr} نطاقاً اقتصادياً أثقل حجماً بنسبة تُقدّر بنحو ${((targetGdp / (uaeGdp || 1))).toFixed(1)} أضعاف حجم الاقتصاد الإماراتي.`)}
+            <p className="text-[11px] text-gray-500 mt-4 border-t border-gray-100 pt-3 flex items-center gap-1 bg-gold-bg/10 p-2 rounded">
+              <span className="font-bold text-[#C5A059]">Ratio:</span>
+              {isMultiCountry
+                ? isEn
+                  ? `${targetCountries.length} peer GDP profiles normalized against the largest verified economy in the selected basket.`
+                  : `تمت مواءمة ${targetCountries.length} ملفات للناتج المحلي مقابل أكبر اقتصاد موثق ضمن السلة المختارة.`
+                : uaeRow.gdp === null || targetRows[0]?.gdp === null
+                  ? isEn
+                    ? "A verified peer GDP figure is not available in the current country profile."
+                    : "لا تتوفر قيمة موثقة للناتج المحلي في ملف الدولة الحالي."
+                  : (uaeRow.gdp || 0) > (targetRows[0]?.gdp || 0)
+                    ? isEn
+                      ? `UAE GDP is ${((uaeRow.gdp || 0) / (targetRows[0]?.gdp || 1)).toFixed(1)}x larger than the peer national index.`
+                      : `الناتج المحلي لدولة الإمارات أكبر بمقدار ${((uaeRow.gdp || 0) / (targetRows[0]?.gdp || 1)).toFixed(1)} أضعاف الناتج النظير.`
+                    : isEn
+                      ? `${targetRows[0]?.nameEn} occupies a heavier economic scale (~${((targetRows[0]?.gdp || 0) / (uaeRow.gdp || 1)).toFixed(1)}x larger than UAE).`
+                      : `تشغل ${targetRows[0]?.nameAr} نطاقاً اقتصادياً أثقل حجماً بنسبة تُقدّر بنحو ${((targetRows[0]?.gdp || 0) / (uaeRow.gdp || 1)).toFixed(1)} أضعاف حجم الاقتصاد الإماراتي.`}
             </p>
           </div>
 
-          {/* Chart 2: Annual GDP Growth Rate Accelerator */}
-          <div 
-            className="bg-white border border-gold-border rounded-lg p-5 md:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-            onMouseEnter={() => setActiveHoverData("growth")}
-            onMouseLeave={() => setActiveHoverData(null)}
-          >
+          <div className="bg-white border border-gold-border rounded-lg p-5 md:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
             <div>
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="bg-gold-bg text-gold-deep p-1.5 rounded-sm">
+              <div className="flex justify-between items-start mb-4 gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="bg-gold-bg text-gold-deep p-1.5 rounded-sm shrink-0">
                     <ArrowUpRight className="w-4 h-4" />
                   </span>
                   <h4 className="font-serif font-bold text-slate-vip text-sm md:text-base">
                     {isEn ? "Annual GDP Growth Vector" : "مؤشر سرعة النمو الاقتصادي السنوي"}
                   </h4>
                 </div>
-                <span className="text-[10px] font-mono text-emerald-light bg-emerald-deep font-bold px-2 py-0.5 rounded">% Growth</span>
+                <span className="text-[10px] font-mono text-emerald-light bg-emerald-deep font-bold px-2 py-0.5 rounded shrink-0">% Growth</span>
               </div>
 
-              {/* Chart Visual Section */}
-              <div className="flex justify-around items-center h-44">
-                
-                {/* UAE Concentric Ring Meter */}
-                <div className="flex flex-col items-center">
-                  <div className="relative h-24 w-24">
-                    <svg className="w-full h-full transform -rotate-90">
-                      <circle cx="48" cy="48" r="38" stroke="#F1F5F9" strokeWidth="8" fill="transparent" />
-                      <circle 
-                        cx="48" 
-                        cy="48" 
-                        r="38" 
-                        stroke="#0D4C3A" 
-                        strokeWidth="8" 
-                        fill="transparent" 
-                        strokeDasharray={2 * Math.PI * 38}
-                        strokeDashoffset={2 * Math.PI * 38 * (1 - Math.min(10, Math.max(0, uaeGrowth)) / 10)}
-                        strokeLinecap="round"
-                        className="transition-all duration-1000 ease-out"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col justify-center items-center">
-                      <span className="text-xl font-bold font-mono text-emerald-deep">{uaeGrowth}%</span>
-                      <span className="text-[9px] text-gray-500 font-bold">🇦🇪 UAE</span>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-mono mt-2 bg-emerald-light/10 text-emerald-deep px-2 py-0.5 rounded font-extrabold uppercase">
-                    {isEn ? "Accelerated" : "نشط"}
-                  </span>
-                </div>
-
-                {/* Target Country Concentric Ring Meter */}
-                <div className="flex flex-col items-center">
-                  <div className="relative h-24 w-24">
-                    <svg className="w-full h-full transform -rotate-90">
-                      <circle cx="48" cy="48" r="38" stroke="#F1F5F9" strokeWidth="8" fill="transparent" />
-                      <circle 
-                        cx="48" 
-                        cy="48" 
-                        r="38" 
-                        stroke="#C5A059" 
-                        strokeWidth="8" 
-                        fill="transparent" 
-                        strokeDasharray={2 * Math.PI * 38}
-                        strokeDashoffset={2 * Math.PI * 38 * (1 - Math.min(10, Math.max(0, targetGrowth)) / 10)}
-                        strokeLinecap="round"
-                        className="transition-all duration-1000 ease-out"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex flex-col justify-center items-center">
-                      <span className="text-xl font-bold font-mono text-slate-vip">{targetGrowth}%</span>
-                      <span className="text-[9px] text-gray-500 font-bold flex items-center justify-center gap-1">
-                        <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={country.nameEn} size="xs" />
-                        <span>{country.nameEn}</span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+                {comparisonRows.map((row) => {
+                  const progress = Math.min(10, Math.max(0, row.growth)) / 10;
+                  return (
+                    <div key={`growth-${row.key}`} className="flex flex-col items-center rounded border border-gray-100 bg-gray-50/60 p-3">
+                      <div className="relative h-24 w-24">
+                        <svg className="w-full h-full transform -rotate-90">
+                          <circle cx="48" cy="48" r="38" stroke="#F1F5F9" strokeWidth="8" fill="transparent" />
+                          <circle
+                            cx="48"
+                            cy="48"
+                            r="38"
+                            stroke={row.ringColor}
+                            strokeWidth="8"
+                            fill="transparent"
+                            strokeDasharray={2 * Math.PI * 38}
+                            strokeDashoffset={2 * Math.PI * 38 * (1 - progress)}
+                            strokeLinecap="round"
+                            className="transition-all duration-1000 ease-out"
+                          />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col justify-center items-center">
+                          <span className={`text-lg font-bold font-mono ${row.valueClass}`}>{row.growth}%</span>
+                          <span className="text-[9px] text-gray-500 font-bold flex items-center justify-center gap-1 max-w-[78px]">
+                            {renderMarker(row, "xs")}
+                            <span className="truncate">{rowShortName(row)}</span>
+                          </span>
+                        </div>
+                      </div>
+                      <span className={`text-[10px] font-mono mt-2 px-2 py-0.5 rounded font-extrabold uppercase ${
+                        row.growth > 2 ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-600"
+                      }`}>
+                        {row.growth > 2 ? (isEn ? "Expanding" : "توسع") : (isEn ? "Steady" : "مستقر")}
                       </span>
                     </div>
-                  </div>
-                  <span className={`text-[10px] font-mono mt-2 px-2 py-0.5 rounded font-extrabold uppercase ${
-                    targetGrowth > 2 ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-600"
-                  }`}>
-                    {targetGrowth > 2 ? (isEn ? "Expanding" : "توسع") : (isEn ? "Steady" : "مستقر")}
-                  </span>
-                </div>
-
+                  );
+                })}
               </div>
             </div>
 
-            <p className="text-[11px] text-gray-500 mt-2 border-t border-gray-100 pt-3 flex items-center gap-1 bg-gold-bg/10 p-2 rounded">
-              <span className="font-bold text-[#C5A059]">⚡ Comparative Pace:</span>
-              {uaeGrowth > targetGrowth 
-                ? (isEn 
-                  ? `UAE GDP speed leads by a vector of +${(uaeGrowth - targetGrowth).toFixed(1)}% annual rate.`
-                  : `النشاط الاقتصادي الإماراتي يتصدر بمعدل تصاعدي يوازي +${(uaeGrowth - targetGrowth).toFixed(1)}% سنويّاً.`)
-                : (isEn 
-                  ? `Peer delegation features active target growth delta (+${(targetGrowth - uaeGrowth).toFixed(1)}% vs UAE).`
-                  : `تمتلك الدولة المستهدفة فارق نمو متسارع يُقدّر بنحو +${(targetGrowth - uaeGrowth).toFixed(1)}% مقارنةً بدولة الإمارات.`)}
+            <p className="text-[11px] text-gray-500 mt-4 border-t border-gray-100 pt-3 flex items-center gap-1 bg-gold-bg/10 p-2 rounded">
+              <span className="font-bold text-[#C5A059]">Comparative Pace:</span>
+              {isEn
+                ? `${rowName(highestGrowthRow)} has the highest parsed annual growth signal in this comparison set.`
+                : `${rowName(highestGrowthRow)} تسجل أعلى إشارة نمو سنوي مقروءة ضمن مجموعة المقارنة.`}
             </p>
           </div>
 
-          {/* Chart 3: Infrastructure Readiness Horizon */}
-          <div 
-            className="bg-white border border-gold-border rounded-lg p-5 md:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-            onMouseEnter={() => setActiveHoverData("infra")}
-            onMouseLeave={() => setActiveHoverData(null)}
-          >
+          <div className="bg-white border border-gold-border rounded-lg p-5 md:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
             <div>
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="bg-gold-bg text-gold-deep p-1.5 rounded-sm">
+              <div className="flex justify-between items-start mb-4 gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="bg-gold-bg text-gold-deep p-1.5 rounded-sm shrink-0">
                     <HardHat className="w-4 h-4" />
                   </span>
                   <h4 className="font-serif font-bold text-slate-vip text-sm md:text-base">
                     {isEn ? "Infrastructure & Logistical Connectivity" : "مؤشر جاهزية البنية التحتية والشبكة الملاحية"}
                   </h4>
                 </div>
-                <span className="text-[10px] font-mono text-gray-400 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">Index Score / 100</span>
+                <span className="text-[10px] font-mono text-gray-400 bg-gray-50 px-2 py-0.5 rounded border border-gray-100 shrink-0">Index / 100</span>
               </div>
 
-              {/* Chart Visual Section */}
-              <div className="space-y-6 h-44 flex flex-col justify-center">
-                {/* Dual Horizontal Sliding Bars */}
-                <div>
-                  <div className="flex justify-between text-xs font-semibold mb-1">
-                    <span className="flex items-center gap-1">🇦🇪 {isEn ? "UAE Logistical Hub" : "الإمارات اللوجستية"}</span>
-                    <span className="font-mono text-emerald-deep font-extrabold">{uaeInfra}/100</span>
+              <div className="space-y-4">
+                {comparisonRows.map((row) => (
+                  <div key={`infra-${row.key}`}>
+                    <div className="flex justify-between gap-3 text-xs font-semibold mb-1">
+                      <span className="flex items-center gap-1 min-w-0">
+                        {renderMarker(row, "xs")}
+                        <span className="truncate">{row.isUae ? (isEn ? "UAE Logistical Hub" : "الإمارات اللوجستية") : rowName(row)}</span>
+                      </span>
+                      <span className={`font-mono font-extrabold ${row.valueClass}`}>{row.infra}/100</span>
+                    </div>
+                    <div className="relative w-full bg-gray-100 h-3 rounded-full overflow-hidden p-0.5 border border-gray-200">
+                      <div
+                        className={`${row.barClass} h-full rounded-full transition-all duration-1000 ease-out`}
+                        style={{ width: `${Math.min(100, Math.max(0, row.infra))}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="relative w-full bg-gray-100 h-3 rounded-full overflow-hidden p-0.5 border border-gray-200">
-                    <div 
-                      className="bg-gradient-to-r from-[#033425] to-emerald-light h-full rounded-full transition-all duration-1000 ease-out"
-                      style={{ width: `${uaeInfra}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] font-mono text-gray-400 font-semibold block mt-1 line-clamp-1">
-                    {isEn ? uaeData.infrastructureIndex : uaeData.infrastructureIndexAr}
-                  </span>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs font-semibold mb-1">
-                    <span className="flex items-center gap-1">
-                      <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="xs" />
-                      <span>{isEn ? `${country.nameEn} Grid` : `بنية ${country.nameAr}`}</span>
-                    </span>
-                    <span className="font-mono text-slate-800 font-extrabold">{targetInfra}/100</span>
-                  </div>
-                  <div className="relative w-full bg-gray-100 h-3 rounded-full overflow-hidden p-0.5 border border-gray-200">
-                    <div 
-                      className="bg-gradient-to-r from-[#172520] to-[#C5A059] h-full rounded-full transition-all duration-1000 ease-out"
-                      style={{ width: `${targetInfra}%` }}
-                    />
-                  </div>
-                  <span className="text-[10px] font-mono text-gray-500 block mt-1 line-clamp-1">
-                    {isEn ? country.indicators.infrastructureIndex : country.indicators.infrastructureIndex}
-                  </span>
-                </div>
+                ))}
               </div>
             </div>
 
-            <p className="text-[11px] text-gray-500 mt-2 border-t border-gray-100 pt-3 flex items-center gap-1 bg-gold-bg/10 p-2 rounded">
-              <span className="font-bold text-[#C5A059]">👑 Status:</span>
-              {uaeInfra >= targetInfra 
-                ? (isEn 
-                  ? "UAE maintains highly optimized ports/road framework for high-efficiency sovereign exports."
-                  : "تحتفظ دولة الإمارات بمستوى ريادي مطلق وبنية متكاملة تُسهل سلاسل الإمداد الثنائية.")
-                : (isEn 
-                  ? `${country.nameEn} holds structural excellence in complex logistic corridors.`
-                  : `تتمتع ${country.nameAr} بكفاءة عالية في هيكل الممرات اللوجستية.`)}
+            <p className="text-[11px] text-gray-500 mt-4 border-t border-gray-100 pt-3 flex items-center gap-1 bg-gold-bg/10 p-2 rounded">
+              <span className="font-bold text-[#C5A059]">Status:</span>
+              {isEn
+                ? `${rowName(strongestInfraRow)} has the strongest parsed infrastructure readiness score in the selected group.`
+                : `${rowName(strongestInfraRow)} تسجل أقوى مؤشر جاهزية بنية تحتية ضمن المجموعة المختارة.`}
             </p>
           </div>
 
-          {/* Chart 4: Segmented Energy Transition Stack */}
-          <div 
-            className="bg-white border border-gold-border rounded-lg p-5 md:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-            onMouseEnter={() => setActiveHoverData("energy")}
-            onMouseLeave={() => setActiveHoverData(null)}
-          >
+          <div className="bg-white border border-gold-border rounded-lg p-5 md:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
             <div>
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="bg-gold-bg text-gold-deep p-1.5 rounded-sm">
+              <div className="flex justify-between items-start mb-3 gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="bg-gold-bg text-gold-deep p-1.5 rounded-sm shrink-0">
                     <Zap className="w-4 h-4" />
                   </span>
                   <h4 className="font-serif font-bold text-slate-vip text-sm md:text-base">
                     {isEn ? "Energy Grid Matrices Comparison" : "خارطة توزيع ومزيج مصادر الطاقة النظيفة"}
                   </h4>
                 </div>
-                <span className="text-[10px] font-mono text-emerald-light bg-emerald-deep font-bold px-2 py-0.5 rounded">Stacked Fuel %</span>
+                <span className="text-[10px] font-mono text-emerald-light bg-emerald-deep font-bold px-2 py-0.5 rounded shrink-0">Stacked Fuel %</span>
               </div>
 
-              {/* Chart Visual Section */}
-              <div className="space-y-5 h-44 flex flex-col justify-center">
-                {/* Stacked indicator bars */}
-                <div>
-                  <span className="text-[11px] font-bold text-slate-700 block mb-1.5">🇦🇪 {isEn ? "UAE Hybrid Matrix Grid" : "مزيج دولة الإمارات الهجين"}</span>
-                  <div className="w-full h-5 rounded overflow-hidden flex shadow-inner border border-gray-200">
-                    {uaeEnergyMixSegments.map((seg, sIdx) => (
-                      <div 
-                        key={sIdx} 
-                        className={`h-full ${seg.color} transition-all relative group flex items-center justify-center`}
-                        style={{ width: `${seg.percentage}%` }}
-                        title={`${isEn ? seg.nameEn : seg.nameAr}: ${seg.percentage}%`}
-                      >
-                        <span className="text-[8px] font-mono text-white font-black truncate px-0.5">
-                          {seg.percentage >= 15 ? `${seg.percentage}%` : ""}
+              <div className="space-y-4">
+                {comparisonRows.map((row) => (
+                  <div key={`energy-${row.key}`}>
+                    <span className="text-[11px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                      {renderMarker(row, "xs")}
+                      <span className="truncate">{row.isUae ? (isEn ? "UAE Hybrid Matrix Grid" : "مزيج دولة الإمارات الهجين") : rowName(row)}</span>
+                    </span>
+                    <div className="w-full h-5 rounded overflow-hidden flex shadow-inner border border-gray-200">
+                      {row.energySegments.map((segment, segmentIndex) => (
+                        <div
+                          key={`${row.key}-${segmentIndex}`}
+                          className={`h-full ${segment.color} transition-all relative group flex items-center justify-center`}
+                          style={{ width: `${segment.percentage}%` }}
+                          title={`${isEn ? segment.nameEn : segment.nameAr}: ${segment.percentage}%`}
+                        >
+                          <span className="text-[8px] font-mono text-white font-black truncate px-0.5">
+                            {segment.percentage >= 15 ? `${segment.percentage}%` : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 font-mono text-[9px] text-gray-500">
+                      {row.energySegments.map((segment, segmentIndex) => (
+                        <span key={`${row.key}-legend-${segmentIndex}`} className="flex items-center gap-1">
+                          <span className={`h-1.5 w-1.5 rounded-full ${segment.color}`}></span>
+                          <span>{isEn ? segment.nameEn : segment.nameAr}</span>
                         </span>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                  {/* Legend mini */}
-                  <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 font-mono text-[9px] text-gray-500">
-                    {uaeEnergyMixSegments.map((seg, sIdx) => (
-                      <span key={sIdx} className="flex items-center gap-1">
-                        <span className={`h-1.5 w-1.5 rounded-full ${seg.color}`}></span>
-                        <span>{isEn ? seg.nameEn : seg.nameAr}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-[11px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                    <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="xs" />
-                    <span>{isEn ? `${country.nameEn} Fuel Index` : `مزيج وملف ${country.nameAr}`}</span>
-                  </span>
-                  <div className="w-full h-5 rounded overflow-hidden flex shadow-inner border border-gray-200">
-                    {targetEnergyMixSegments.map((seg, sIdx) => (
-                      <div 
-                        key={sIdx} 
-                        className={`h-full ${seg.color} transition-all relative group flex items-center justify-center`}
-                        style={{ width: `${seg.percentage}%` }}
-                        title={`${isEn ? seg.nameEn : seg.nameAr}: ${seg.percentage}%`}
-                      >
-                        <span className="text-[8px] font-mono text-white font-black truncate px-0.5">
-                          {seg.percentage >= 15 ? `${seg.percentage}%` : ""}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1 font-mono text-[9px] text-gray-500">
-                    {targetEnergyMixSegments.map((seg, sIdx) => (
-                      <span key={sIdx} className="flex items-center gap-1">
-                        <span className={`h-1.5 w-1.5 rounded-full ${seg.color}`}></span>
-                        <span>{isEn ? seg.nameEn : seg.nameAr}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
-            <p className="text-[11px] text-gray-500 mt-2 border-t border-gray-100 pt-3 flex items-center gap-1 bg-gold-bg/10 p-2 rounded">
-              <span className="font-bold text-[#C5A059]">🤝 Synergy Vector:</span>
-              {isEn 
-                ? "Excellent potential for technological transfer in net-zero infrastructure & utility decarbonization pacts."
-                : "فرص واعدة لنقل المعرفة التقنية والخبرات في مجال الطاقة النووية ومشاريع الطاقة الشمسية الذكية."}
+            <p className="text-[11px] text-gray-500 mt-4 border-t border-gray-100 pt-3 flex items-center gap-1 bg-gold-bg/10 p-2 rounded">
+              <span className="font-bold text-[#C5A059]">Synergy Vector:</span>
+              {isEn
+                ? "Selected energy matrices reveal transfer pathways across net-zero infrastructure, utility decarbonization, and grid resilience."
+                : "تكشف مصفوفات الطاقة المختارة مسارات لنقل المعرفة في البنية التحتية للحياد المناخي وإزالة الكربون ومرونة الشبكات."}
             </p>
           </div>
 
-          {/* Chart 5: Global Competitiveness Inverted Podium */}
-          <div 
-            className="bg-white border border-gold-border rounded-lg p-5 md:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between lg:col-span-2"
-          >
+          <div className="bg-white border border-gold-border rounded-lg p-5 md:p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between lg:col-span-2">
             <div>
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="bg-gold-bg text-gold-deep p-1.5 rounded-sm">
+              <div className="flex justify-between items-start mb-4 gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="bg-gold-bg text-gold-deep p-1.5 rounded-sm shrink-0">
                     <Compass className="w-4 h-4" />
                   </span>
                   <h4 className="font-serif font-bold text-slate-vip text-sm md:text-base">
                     {isEn ? "Global Competitiveness Rank Distribution" : "توزيع وترتيب الميزة التنافسية العالمية"}
                   </h4>
                 </div>
-                <span className="text-[10px] font-mono text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded font-bold">Inverted Target (Lower is Superior)</span>
+                <span className="text-[10px] font-mono text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded font-bold shrink-0">
+                  {isEn ? "Lower Rank Is Superior" : "الترتيب الأقل أفضل"}
+                </span>
               </div>
 
-              {/* Chart Visual Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center h-auto md:h-36 py-2">
-                {/* Left Side: Text and values */}
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-3 bg-emerald-deep/5 rounded border border-emerald-deep/10">
-                      <span className="text-gray-500 block text-[10px]">🇦🇪 {isEn ? "UAE Rank" : "الترتيب الفيدرالي"}</span>
-                      <span className="font-serif font-bold text-slate-vip text-sm mt-1 block">
-                        {isEn ? uaeData.competitivenessRank : uaeData.competitivenessRankAr}
-                      </span>
-                    </div>
-                    <div className="p-3 bg-slate-50 rounded border border-gray-100">
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-5 items-start">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  {comparisonRows.map((row) => (
+                    <div key={`rank-card-${row.key}`} className="p-3 bg-slate-50 rounded border border-gray-100">
                       <span className="text-gray-500 text-[10px] flex items-center gap-1">
-                        <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={country.nameEn} size="xs" />
-                        <span>{isEn ? `${country.nameEn} Rank` : `ترتيب ${country.nameEn}`}</span>
+                        {renderMarker(row, "xs")}
+                        <span className="truncate">{rowName(row)}</span>
                       </span>
                       <span className="font-serif font-bold text-slate-vip text-sm mt-1 block">
-                        {isEn ? country.indicators.competitivenessRank : country.indicators.competitivenessRank}
+                        {isEn ? row.competitivenessLabelEn : row.competitivenessLabelAr}
                       </span>
                     </div>
-                  </div>
+                  ))}
                 </div>
 
-                {/* Right Side: Simple Podium block diagram */}
-                <div className="flex justify-center items-end h-full gap-2 pt-6">
-                  {/* Target nation column block */}
-                  <div className="flex flex-col items-center w-24">
-                    <span className="text-xs font-bold text-slate-vip pb-1 font-mono">{targetCompetitivenessValue}</span>
-                    <div 
-                      className="w-full bg-slate-vip rounded-t-sm transition-all duration-1000 ease-out flex items-center justify-center text-[#E5C179] font-bold text-[10px]"
-                      style={{ height: `${Math.max(25, 100 - targetCompetitivenessValue)}px` }}
-                    >
-                      <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={country.nameEn} size="sm" />
-                    </div>
-                    <span className="text-[9px] font-bold text-gray-500 mt-1 truncate max-w-full">{country.nameEn}</span>
-                  </div>
-
-                  {/* King's Podium Spot (UAE) */}
-                  <div className="flex flex-col items-center w-24">
-                    <span className="text-xs font-bold text-emerald-deep pb-1 font-mono">
-                      {uaeCompetitivenessValue}
-                    </span>
-                    <div 
-                      className="w-full bg-[#0E4637] rounded-t-sm transition-all duration-1000 ease-out border-t-2 border-[#C5A059] flex flex-col items-center justify-center text-white"
-                      style={{ height: `${Math.max(45, 100 - uaeCompetitivenessValue)}px` }}
-                    >
-                      <Award className="w-3.5 h-3.5 text-gold-deep animate-bounce mt-1" />
-                    </div>
-                    <span className="text-[9px] font-bold text-gray-500 mt-1">🇦🇪 UAE</span>
-                  </div>
-
+                <div className="space-y-3">
+                  {competitivenessRows.map((row) => {
+                    const scoreWidth = Math.max(12, 100 - Math.min(95, row.competitivenessValue));
+                    return (
+                      <div key={`rank-bar-${row.key}`}>
+                        <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-700 mb-1">
+                          <span className="flex items-center gap-1 min-w-0">
+                            {renderMarker(row, "xs")}
+                            <span className="truncate">{rowShortName(row)}</span>
+                          </span>
+                          <span className={`font-mono ${row.valueClass}`}>{row.competitivenessValue}</span>
+                        </div>
+                        <div className="h-6 rounded bg-gray-100 border border-gray-200 p-0.5 overflow-hidden">
+                          <div
+                            className={`${row.barClass} h-full rounded transition-all duration-1000 ease-out flex items-center justify-end px-2`}
+                            style={{ width: `${scoreWidth}%` }}
+                          >
+                            {row.isUae && <Award className="w-3.5 h-3.5 text-gold-deep" />}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           </div>
-
         </div>
       ) : (
-        /* Tabular Fallback View */
         <div className="space-y-4 animate-in fade-in duration-300" id="comparison-rows-stack">
-          {traditionalMetrics.map((metItem, idxKey) => (
-            <div key={idxKey} className="bg-white rounded-sm border border-gold-border overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-              
-              {/* Metric Title Riband */}
+          {traditionalMetrics.map((metric, metricIndex) => (
+            <div key={metricIndex} className="bg-white rounded-sm border border-gold-border overflow-hidden shadow-sm hover:shadow-md transition-shadow">
               <div className="bg-gray-50/70 border-b border-gray-100 px-6 py-3 flex items-center gap-3">
-                {metItem.icon}
+                {metric.icon}
                 <span className="font-serif font-bold text-slate-vip text-sm md:text-base">
-                  {isEn ? metItem.labelEn : metItem.labelAr}
+                  {isEn ? metric.labelEn : metric.labelAr}
                 </span>
               </div>
 
-              {/* Side-by-side comparative parameters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100 text-sm">
-                
-                {/* UAE Index Value Spot */}
-                <div className="p-6 bg-emerald-deep/[0.01]">
-                  <div className="flex items-center gap-2 text-xs font-mono text-emerald-light font-bold mb-2">
-                    <span>🇦🇪</span>
-                    <span>{isEn ? "UAE INDEX INDICATOR" : "حصيلة دولة الإمارات"}</span>
-                  </div>
-                  <p className="text-sm sm:text-base font-bold text-[#0E4637] leading-relaxed">
-                    {isEn ? metItem.uaeValue : metItem.uaeValueAr}
-                  </p>
-                </div>
-
-                {/* Target Delegation Value Spot */}
-                <div className="p-6 bg-slate-50/10">
-                  <div className="flex items-center gap-2 text-xs font-mono text-gray-400 font-bold mb-2">
-                    <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="xs" />
-                    <span>{isEn ? `${country.nameEn.toUpperCase()} INDEX` : `نتيجة ${country.nameAr}`}</span>
-                  </div>
-                  <p className="text-sm sm:text-base font-bold text-slate-800 leading-relaxed">
-                    {isEn ? metItem.countryValue : metItem.countryValueAr}
-                  </p>
-                </div>
-
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead>
+                    <tr className="bg-slate-vip text-white">
+                      <th className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span>🇦🇪</span>
+                          <span>{isEn ? "UAE Index" : "حصيلة دولة الإمارات"}</span>
+                        </span>
+                      </th>
+                      {targetCountries.map((targetCountry) => (
+                        <th key={`${metricIndex}-${targetCountry.id}`} className="px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest">
+                          <span className="inline-flex items-center gap-1.5 min-w-0">
+                            <CountryFlag flag={targetCountry.flag} flagUrl={targetCountry.flagUrl} countryName={isEn ? targetCountry.nameEn : targetCountry.nameAr} size="xs" />
+                            <span className="truncate">{isEn ? targetCountry.nameEn : targetCountry.nameAr}</span>
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="divide-x divide-gray-100">
+                      <td className="p-5 bg-emerald-deep/[0.01] align-top">
+                        <p className="text-sm sm:text-base font-bold text-[#0E4637] leading-relaxed">
+                          {metric.getUaeValue()}
+                        </p>
+                      </td>
+                      {targetCountries.map((targetCountry) => (
+                        <td key={`${metricIndex}-${targetCountry.id}-value`} className="p-5 bg-slate-50/10 align-top">
+                          <p className="text-sm sm:text-base font-bold text-slate-800 leading-relaxed">
+                            {metric.getCountryValue(targetCountry)}
+                          </p>
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           ))}
         </div>
       )}
-
     </div>
   );
 }

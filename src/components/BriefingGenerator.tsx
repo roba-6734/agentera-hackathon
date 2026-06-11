@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import pptxgen from "pptxgenjs";
 import { BriefingArtifacts, PrebuiltCountry, UaeIndicator } from "../types";
-import { FileText, Award, Layers, Volume2, ChevronLeft, ChevronRight, HelpCircle, ArrowRightLeft, FileCheck, Download, X, Printer, AlertTriangle } from "lucide-react";
+import { FileText, Award, Layers, Volume2, ChevronLeft, ChevronRight, HelpCircle, ArrowRightLeft, FileCheck, Download, X, Printer, AlertTriangle, Video, Clock3 } from "lucide-react";
 import CountryFlag from "./CountryFlag";
 
 interface BriefingGeneratorProps {
@@ -170,7 +170,7 @@ export default function BriefingGenerator({
   uaeData,
 }: BriefingGeneratorProps) {
   const isEn = language === "en";
-  const [activeOutput, setActiveOutput] = useState<"summary" | "talking-points" | "one-pager" | "slides">("summary");
+  const [activeOutput, setActiveOutput] = useState<"summary" | "talking-points" | "one-pager" | "slides" | "video-brief">("summary");
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
@@ -1927,6 +1927,19 @@ export default function BriefingGenerator({
             <Layers className="w-4 h-4" />
             <span>{isEn ? "Widescreen Briefing Slides" : "شرائح العرض والتقديم"}</span>
           </button>
+
+          <button
+            onClick={() => setActiveOutput("video-brief")}
+            className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeOutput === "video-brief"
+                ? "bg-emerald-deep text-white shadow-md border border-emerald-deep"
+                : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
+            }`}
+            id="btn-output-video-brief"
+          >
+            <Video className="w-4 h-4" />
+            <span>{isEn ? "Video Brief" : "الإحاطة المرئية"}</span>
+          </button>
         </div>
 
       </div>
@@ -2303,6 +2316,100 @@ export default function BriefingGenerator({
               </div>
             </div>
 
+          </div>
+        )}
+
+        {/* 5. VIDEO BRIEF PLACEHOLDER */}
+        {activeOutput === "video-brief" && (
+          <div className="p-6 md:p-8 min-h-[460px] bg-[#F8FAFC]" id="video-brief-coming-soon-section">
+            <div className="h-full min-h-[410px] rounded-sm border border-gold-border bg-white shadow-sm overflow-hidden">
+              <div className="bg-slate-vip px-5 py-3 border-b border-gold-deep/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex items-center gap-2 text-gold-deep">
+                  <Video className="w-4 h-4" />
+                  <span className="text-[10px] font-mono font-black uppercase tracking-widest">
+                    {isEn ? "Video Brief" : "الإحاطة المرئية"}
+                  </span>
+                </div>
+                <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-gold-deep/30 bg-gold-bg/10 px-3 py-1 text-[10px] font-mono font-black uppercase tracking-widest text-gold-deep">
+                  <Clock3 className="w-3.5 h-3.5" />
+                  {isEn ? "Coming Soon" : "قريباً"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] gap-0 min-h-[350px]">
+                <div className="bg-[#16211C] text-white p-6 md:p-8 flex flex-col justify-center relative overflow-hidden">
+                  <div className="absolute top-3 right-3 h-16 w-16 border-t border-r border-gold-deep/25"></div>
+                  <div className="absolute bottom-3 left-3 h-16 w-16 border-b border-l border-gold-deep/25"></div>
+                  <div className="relative z-10 space-y-4">
+                    <div className="h-14 w-14 rounded-full border border-gold-deep/40 bg-gold-deep/10 text-gold-deep flex items-center justify-center">
+                      <Video className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-mono font-black uppercase tracking-widest text-gold-deep">
+                        {isEn ? `${country.nameEn} Briefing Package` : `حزمة إحاطة ${country.nameAr}`}
+                      </p>
+                      <h3 className="mt-2 text-2xl md:text-3xl font-serif font-bold leading-tight">
+                        {isEn ? "Video Brief is coming soon" : "الإحاطة المرئية قادمة قريباً"}
+                      </h3>
+                      <p className="mt-3 text-sm leading-6 text-gray-300">
+                        {isEn
+                          ? "This briefing package will support short narrated video summaries for executive review before meetings."
+                          : "ستدعم هذه الحزمة ملخصات مرئية قصيرة ومروية للمراجعة القيادية قبل الاجتماعات."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 md:p-8 flex flex-col justify-center">
+                  <div className="space-y-4">
+                    <div>
+                      <span className="text-[10px] bg-gold-bg text-gold-deep border border-gold-border/50 font-bold font-mono px-2 py-0.5 rounded uppercase">
+                        {isEn ? "Planned Output" : "المخرج المخطط"}
+                      </span>
+                      <h4 className="mt-2 text-xl font-serif font-bold text-slate-vip">
+                        {isEn ? "Executive video briefing module" : "وحدة الإحاطة المرئية القيادية"}
+                      </h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {[
+                        {
+                          titleEn: "Narrated Summary",
+                          titleAr: "ملخص مروي",
+                          bodyEn: "A short leadership-ready overview generated from the executive summary.",
+                          bodyAr: "نظرة موجزة جاهزة للقيادة ومبنية على الملخص التنفيذي.",
+                        },
+                        {
+                          titleEn: "Briefing Visuals",
+                          titleAr: "مرئيات الإحاطة",
+                          bodyEn: "Selected facts, talking points, and slide highlights arranged for video.",
+                          bodyAr: "حقائق ونقاط حديث وأبرز الشرائح مرتبة للعرض المرئي.",
+                        },
+                        {
+                          titleEn: "Secure Review",
+                          titleAr: "مراجعة آمنة",
+                          bodyEn: "Designed for controlled internal preview before delegation meetings.",
+                          bodyAr: "مصممة للمعاينة الداخلية المنضبطة قبل اجتماعات الوفود.",
+                        },
+                      ].map((item) => (
+                        <div key={item.titleEn} className="rounded border border-gray-200 bg-slate-50 p-3">
+                          <p className="text-sm font-bold text-slate-vip">{isEn ? item.titleEn : item.titleAr}</p>
+                          <p className="mt-1 text-xs leading-5 text-gray-600">{isEn ? item.bodyEn : item.bodyAr}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="rounded-sm border-l-4 border-gold-deep bg-gold-bg/25 p-4">
+                      <p className="text-sm font-bold text-slate-vip">
+                        {isEn
+                          ? "The video brief feature is not active yet. Use the Executive Summary, Talking Points, One-Pager, and Slides tabs for the current pitch flow."
+                          : "ميزة الإحاطة المرئية غير مفعلة حالياً. استخدم تبويبات الملخص التنفيذي ونقاط الحديث والصفحة الواحدة والشرائح في مسار العرض الحالي."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

@@ -110,6 +110,7 @@ export default function App() {
   const [language, setLanguage] = useState<"en" | "ar">("en");
   const [session, setSession] = useState<AppSession | null>(() => readStoredAppSession());
   const [selectedCountryCode, setSelectedCountryCode] = useState<string>("");
+  const [selectedComparisonCountryCodes, setSelectedComparisonCountryCodes] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<activeTabCode>("passport");
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState<boolean>(false);
@@ -203,6 +204,7 @@ export default function App() {
     const cleanTargetCountry = targetCountry.trim();
     if (!cleanTargetCountry) {
       setActiveCountry(null);
+      setSelectedComparisonCountryCodes([]);
       setAiBriefingText("");
       setBriefingArtifacts(null);
       setCurrentStep(1);
@@ -241,6 +243,9 @@ export default function App() {
         setBriefingSource(data.source || "openai-strategic-ai");
         if (data.countryData) {
           setActiveCountry(data.countryData);
+          setSelectedComparisonCountryCodes((current) =>
+            current.includes(data.countryData.id) ? current : [...current, data.countryData.id]
+          );
         }
         
         if (!shouldRedirectToProfile) {
@@ -280,12 +285,23 @@ export default function App() {
   const handleCountryPicked = (code: string) => {
     const isChangingCountry = code !== selectedCountryCode || activeCountry?.id !== code;
     setSelectedCountryCode(code);
+    setSelectedComparisonCountryCodes((current) =>
+      current.includes(code) ? current : [...current, code]
+    );
     if (isChangingCountry) {
       setActiveCountry(null);
       setAiBriefingText("");
       setBriefingArtifacts(null);
     }
     setCurrentStep(2); // Set workflow timeline stage to Step 2: Target country selected
+  };
+
+  const toggleComparisonCountry = (code: string) => {
+    setSelectedComparisonCountryCodes((current) =>
+      current.includes(code)
+        ? current.filter((countryCode) => countryCode !== code)
+        : [...current, code]
+    );
   };
 
   const toggleCountryDropdown = () => {
@@ -304,6 +320,7 @@ export default function App() {
     window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession));
     setSession(nextSession);
     setSelectedCountryCode("");
+    setSelectedComparisonCountryCodes([]);
     setActiveCountry(null);
     setAiBriefingText("");
     setBriefingArtifacts(null);
@@ -318,6 +335,7 @@ export default function App() {
     initialLoadStartedRef.current = false;
     setSession(null);
     setSelectedCountryCode("");
+    setSelectedComparisonCountryCodes([]);
     setActiveCountry(null);
     setAiBriefingText("");
     setBriefingArtifacts(null);
@@ -362,6 +380,19 @@ export default function App() {
     .filter((option): option is CountryOption => Boolean(option));
   const selectedCountryNameEn = activeCountry?.nameEn || selectedCountryOption?.nameEn || "Select country";
   const selectedCountryNameAr = activeCountry?.nameAr || selectedCountryOption?.nameAr || "اختر الدولة";
+  const comparisonCountryLookup = new Map<string, PrebuiltCountry>(
+    (Object.values(countriesIndex) as PrebuiltCountry[]).map((country) => [country.id, country])
+  );
+  if (activeCountry) {
+    comparisonCountryLookup.set(activeCountry.id, activeCountry);
+    if (selectedCountryCode) {
+      comparisonCountryLookup.set(selectedCountryCode, activeCountry);
+    }
+  }
+  const selectedComparisonCountries = selectedComparisonCountryCodes
+    .map((code) => comparisonCountryLookup.get(code))
+    .filter((country): country is PrebuiltCountry => Boolean(country));
+  const comparisonCountriesForView = selectedComparisonCountries;
   const workspaceTabItems = [
     {
       code: "passport" as activeTabCode,
@@ -944,39 +975,85 @@ export default function App() {
                       </div>
                     </div>
                     <div className="max-h-56 overflow-y-auto py-1">
-                      {filteredCountryOptions.map((opt) => (
-                        <button
-                          key={opt.code}
-                          type="button"
-                          onClick={() => {
-                            handleCountryPicked(opt.code);
-                            closeCountryDropdown();
-                          }}
-                          className={`w-full text-left px-4 py-2.5 text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                            selectedCountryCode === opt.code
-                              ? "bg-gold-bg text-emerald-deep font-extrabold"
-                              : "text-slate-vip hover:bg-gray-50 font-medium"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <CountryFlag flag={opt.flag} flagUrl={opt.flagUrl} countryName={isEn ? opt.nameEn : opt.nameAr} size="sm" />
-                            <span>{isEn ? opt.nameEn : opt.nameAr}</span>
+                      {filteredCountryOptions.map((opt) => {
+                        const isPrimaryCountry = selectedCountryCode === opt.code;
+                        const isComparisonCountry = selectedComparisonCountryCodes.includes(opt.code);
+                        return (
+                          <div
+                            key={opt.code}
+                            className={`grid grid-cols-[minmax(0,1fr)_auto] items-stretch border-b border-gray-50 last:border-b-0 ${
+                              isPrimaryCountry ? "bg-gold-bg text-emerald-deep" : "text-slate-vip hover:bg-gray-50"
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleCountryPicked(opt.code);
+                                closeCountryDropdown();
+                              }}
+                              className={`min-w-0 text-left px-4 py-2.5 text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                isPrimaryCountry ? "font-extrabold" : "font-medium"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <CountryFlag flag={opt.flag} flagUrl={opt.flagUrl} countryName={isEn ? opt.nameEn : opt.nameAr} size="sm" />
+                                <span className="truncate">{isEn ? opt.nameEn : opt.nameAr}</span>
+                              </div>
+                              {isPrimaryCountry && (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-deep shrink-0" />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleComparisonCountry(opt.code)}
+                              className={`border-l border-gray-100 px-2.5 text-[10px] font-mono font-extrabold uppercase transition-colors cursor-pointer ${
+                                isComparisonCountry
+                                  ? "bg-emerald-deep text-white"
+                                  : "bg-white text-slate-500 hover:bg-gold-bg hover:text-emerald-deep"
+                              }`}
+                              title={isEn ? "Toggle comparison selection" : "تحديد للمقارنة"}
+                              aria-pressed={isComparisonCountry}
+                            >
+                              {isComparisonCountry ? (isEn ? "In" : "ضمن") : (isEn ? "Compare" : "قارن")}
+                            </button>
                           </div>
-                          {selectedCountryCode === opt.code && (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-deep shrink-0" />
-                          )}
-                        </button>
-                      ))}
+                        );
+                      })}
                       {filteredCountryOptions.length === 0 && (
                         <div className="px-4 py-5 text-center text-xs font-semibold text-gray-500">
                           {isEn ? "No countries found" : "لم يتم العثور على دول"}
                         </div>
                       )}
                     </div>
+                    <div className="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50 px-3 py-2">
+                      <span className="text-[10px] font-mono font-extrabold uppercase text-slate-500">
+                        {isEn
+                          ? `${selectedComparisonCountryCodes.length} selected for comparison`
+                          : `${selectedComparisonCountryCodes.length} محددة للمقارنة`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedComparisonCountryCodes([])}
+                        className="text-[10px] font-bold text-emerald-deep hover:text-gold-deep cursor-pointer"
+                      >
+                        {isEn ? "Clear" : "مسح"}
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
             </div>
+
+            {activeTab === "compare" && (
+              <div className="inline-flex items-center gap-2 rounded-sm border border-[#D8E0EF] bg-white px-3 py-2 text-[10px] font-mono font-extrabold uppercase text-slate-500 shadow-sm">
+                <UsersRound className="w-3.5 h-3.5 text-gold-deep" />
+                <span>
+                  {isEn
+                    ? `${comparisonCountriesForView.length} countries in comparison`
+                    : `${comparisonCountriesForView.length} دول في المقارنة`}
+                </span>
+              </div>
+            )}
 
             {/* Meeting Objective Input Field & Search Initializer Button */}
             <form onSubmit={(e) => { e.preventDefault(); triggerSyncSearch(); }} className="flex items-center gap-3 border border-gold-border rounded-sm p-1 bg-white shadow-sm" id="meeting-objective-search-form">
@@ -1107,6 +1184,31 @@ export default function App() {
                     session={session}
                   />
                 </motion.div>
+              ) : activeTab === "compare" ? (
+                <motion.div key={`compare-${selectedComparisonCountryCodes.join("-") || activeCountry?.id || "selected"}`} {...workspacePanelMotion}>
+                  {comparisonCountriesForView.length > 0 ? (
+                    <ComparisonEngine
+                      country={comparisonCountriesForView[0]}
+                      countries={comparisonCountriesForView}
+                      uaeData={uaeData}
+                      language={language}
+                    />
+                  ) : (
+                    <div className="bg-white rounded-sm shadow-md border border-gold-border p-10 md:p-12 text-center">
+                      <div className="mx-auto mb-4 h-12 w-12 rounded-lg bg-gold-bg text-gold-deep flex items-center justify-center">
+                        <UsersRound className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-lg font-serif font-bold text-slate-vip">
+                        {isEn ? "Select countries for comparison" : "حدد الدول للمقارنة"}
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-2">
+                        {isEn
+                          ? "Use the country dropdown and toggle Compare for each peer country."
+                          : "استخدم قائمة الدول وفعل خيار المقارنة لكل دولة نظيرة."}
+                      </p>
+                    </div>
+                  )}
+                </motion.div>
               ) : activeCountry ? (
                 <motion.div key={`${activeCountry.id}-${activeTab}`} {...workspacePanelMotion}>
                   {/* 1. Country Intelligence Background */}
@@ -1135,7 +1237,12 @@ export default function App() {
 
                   {/* 4. Sovereign Indicators Comparison */}
                   {activeTab === "compare" && (
-                    <ComparisonEngine country={activeCountry} uaeData={uaeData} language={language} />
+                    <ComparisonEngine
+                      country={activeCountry}
+                      countries={comparisonCountriesForView}
+                      uaeData={uaeData}
+                      language={language}
+                    />
                   )}
 
                   {/* 5. Predictive intelligence forecasts */}
