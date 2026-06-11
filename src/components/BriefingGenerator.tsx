@@ -1457,7 +1457,6 @@ export default function BriefingGenerator({
   });
   const onePagerFactsForDisplay = displayedOnePagerFastFacts.length >= 4 ? displayedOnePagerFastFacts : onePagerFastFacts;
   const primaryOpportunity = onePagerOpportunities[0];
-  const primaryRisk = onePagerRisks[0];
   const primaryLeader = onePagerLeadership.find((leader) => leader.name?.trim()) || onePagerLeadership[0];
   const primaryAction = onePagerActions[0] || onePagerRecommendation;
   const onePagerDecisionCards = [
@@ -1481,13 +1480,6 @@ export default function BriefingGenerator({
       tone: "bg-white text-slate-vip border-gray-200",
       valueClass: "text-slate-vip",
       labelClass: "text-emerald-deep",
-    },
-    {
-      label: isEn ? "Risk Watch" : "مراقبة المخاطر",
-      value: primaryRisk?.risk || (isEn ? country.predictive.risksEn : country.predictive.risksAr),
-      tone: "bg-amber-50 text-amber-950 border-amber-200",
-      valueClass: "text-amber-950",
-      labelClass: "text-amber-700",
     },
   ];
 
@@ -1842,54 +1834,54 @@ export default function BriefingGenerator({
         const context = [fact.context, fact.year].filter(Boolean).join(" | ");
         return `
           <div class="fact-card">
-            <span>${escapeHtml(compactText(fact.label, 42))}</span>
-            <strong>${escapeHtml(compactText(fact.value, 74))}</strong>
-            ${context ? `<small>${escapeHtml(compactText(context, 54))}</small>` : ""}
+            <span>${escapeHtml(compactText(fact.label, 34))}</span>
+            <strong>${escapeHtml(compactText(fact.value, 56))}</strong>
+            ${context ? `<small>${escapeHtml(compactText(context, 42))}</small>` : ""}
           </div>
         `;
       }).join("");
       const sectorRowsHtml = onePagerSectorScorecard.slice(0, 3).map((item) => `
         <tr>
           <td>
-            <strong>${escapeHtml(compactText(item.sector, 34))}</strong>
-            ${item.policyTarget ? `<small>${escapeHtml(compactText(item.policyTarget, 70))}</small>` : ""}
+            <strong>${escapeHtml(compactText(item.sector, 30))}</strong>
+            ${item.policyTarget ? `<small>${escapeHtml(compactText(item.policyTarget, 54))}</small>` : ""}
           </td>
-          <td>${escapeHtml(compactText(item.currentBaseline, 142))}</td>
-          <td>${escapeHtml(compactText(item.uaeAngle, 130))}</td>
+          <td>${escapeHtml(compactText(item.currentBaseline, 105))}</td>
+          <td>${escapeHtml(compactText(item.uaeAngle, 96))}</td>
         </tr>
       `).join("");
       const leadershipHtml = onePagerLeadership.slice(0, 3).map((leader) => `
         <div class="leader-card">
-          <span>${escapeHtml(compactText(leader.role, 38))}</span>
-          <strong>${escapeHtml(compactText(leader.name, 92))}</strong>
-          ${leader.note ? `<small>${escapeHtml(compactText(leader.note, 80))}</small>` : ""}
+          <span>${escapeHtml(compactText(leader.role, 32))}</span>
+          <strong>${escapeHtml(compactText(leader.name, 74))}</strong>
+          ${leader.note ? `<small>${escapeHtml(compactText(leader.note, 56))}</small>` : ""}
         </div>
       `).join("");
       const decisionCardsHtml = onePagerDecisionCards.map((card, index) => `
-        <div class="decision-card ${index === 0 ? "primary" : ""} ${index === 3 ? "risk" : ""}">
+        <div class="decision-card ${index === 0 ? "primary" : ""}">
           <span>${escapeHtml(card.label)}</span>
-          <strong>${escapeHtml(compactText(card.value, index === 0 ? 116 : 132))}</strong>
+          <strong>${escapeHtml(compactText(card.value, index === 0 ? 92 : 105))}</strong>
         </div>
       `).join("");
       const opportunitiesHtml = onePagerOpportunities.slice(0, 3).map((opportunity) => `
         <div class="brief-item">
           <div>
-            <strong>${escapeHtml(compactText(opportunity.title, 58))}</strong>
-            <p>${escapeHtml(compactText(opportunity.detail, 138))}</p>
+            <strong>${escapeHtml(compactText(opportunity.title, 46))}</strong>
+            <p>${escapeHtml(compactText(opportunity.detail, 106))}</p>
           </div>
           ${opportunity.priority ? `<span class="priority-badge">${escapeHtml(opportunity.priority)}</span>` : ""}
         </div>
       `).join("");
       const risksHtml = onePagerRisks.slice(0, 2).map((risk) => `
         <div class="risk-item">
-          <strong>${escapeHtml(compactText(risk.risk, 112))}</strong>
-          <p>${escapeHtml(compactText(risk.mitigation, 128))}</p>
+          <strong>${escapeHtml(compactText(risk.risk, 90))}</strong>
+          <p>${escapeHtml(compactText(risk.mitigation, 96))}</p>
         </div>
       `).join("");
       const actionsHtml = onePagerActions.slice(0, 4).map((action, index) => `
         <li>
           <span>${index + 1}</span>
-          <p>${escapeHtml(compactText(action, 118))}</p>
+          <p>${escapeHtml(compactText(action, 94))}</p>
         </li>
       `).join("");
       const generatedOn = formatSectionPdfDate();
@@ -1901,69 +1893,83 @@ export default function BriefingGenerator({
   <meta charset="utf-8" />
   <title>${escapeHtml(onePagerTitle)}</title>
   <style>
-    @page { size: A4 landscape; margin: 8mm; }
+    @page { size: A4 landscape; margin: 6mm; }
     * { box-sizing: border-box; }
     html,
     body {
       margin: 0;
+      width: 285mm;
+      height: 198mm;
+      overflow: hidden;
       background: #FFFFFF;
       color: #101828;
       font-family: ${isEn ? "Inter, Arial, sans-serif" : "'IBM Plex Sans Arabic', Arial, sans-serif"};
-      font-size: 8.7pt;
-      line-height: 1.28;
+      font-size: 7.9pt;
+      line-height: 1.2;
       print-color-adjust: exact;
       -webkit-print-color-adjust: exact;
     }
-    body { width: 281mm; }
     .one-page {
       position: relative;
       width: 100%;
-      min-height: 194mm;
+      height: 198mm;
+      max-height: 198mm;
       overflow: hidden;
       background: #FFFFFF;
-      border-top: 3.2mm solid #101828;
-      padding-top: 4mm;
+      border-top: 2.4mm solid #101828;
+      padding-top: 2.4mm;
+      page-break-after: avoid;
+      break-after: avoid;
+    }
+    .one-page-content {
+      --fit-scale: 1;
+      width: 100%;
+      transform: scale(var(--fit-scale));
+      transform-origin: top left;
+    }
+    html[dir="rtl"] .one-page-content {
+      transform-origin: top right;
     }
     .top-accent {
       position: absolute;
-      inset-block-start: -3.2mm;
+      inset-block-start: -2.4mm;
       inset-inline-start: 0;
       width: 100%;
-      height: 3.2mm;
+      height: 2.4mm;
       background: linear-gradient(90deg, #1E3A8A, #4F46E5 44%, #C5A059 100%);
     }
     .page-header {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 48mm;
-      gap: 5mm;
+      gap: 3.5mm;
       align-items: start;
-      padding-bottom: 3.5mm;
+      padding-bottom: 2.4mm;
       border-bottom: 0.35mm solid #D8E0EF;
     }
     .eyebrow {
       display: flex;
       align-items: center;
-      gap: 2mm;
+      gap: 1.6mm;
       color: #1E3A8A;
-      font-size: 7.3pt;
+      font-size: 6.7pt;
       font-weight: 900;
     }
     h1 {
-      margin: 1.6mm 0 1.4mm;
+      margin: 1mm 0 0.8mm;
       color: #101828;
-      font-size: 20.5pt;
+      font-size: 17.2pt;
       line-height: 1.06;
     }
     .subtitle {
       max-width: 198mm;
       margin: 0;
       color: #475569;
-      font-size: 9.4pt;
+      font-size: 8pt;
     }
     .meta-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 2mm;
+      gap: 1.5mm;
     }
     .meta-card,
     .fact-card,
@@ -1975,8 +1981,8 @@ export default function BriefingGenerator({
       background: #FFFFFF;
     }
     .meta-card {
-      min-height: 16mm;
-      padding: 2.7mm;
+      min-height: 12mm;
+      padding: 2mm;
     }
     .meta-card span,
     .fact-card span,
@@ -1985,34 +1991,34 @@ export default function BriefingGenerator({
     .panel h2 {
       display: block;
       color: #64748B;
-      font-size: 6.7pt;
+      font-size: 6.2pt;
       font-weight: 900;
       letter-spacing: 0.03em;
     }
     .meta-card strong {
       display: block;
-      margin-top: 1.3mm;
+      margin-top: 0.8mm;
       color: #101828;
-      font-size: 10pt;
+      font-size: 8.7pt;
       line-height: 1.12;
     }
     .decision-strip {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 2.5mm;
-      margin-top: 3mm;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2mm;
+      margin-top: 2.2mm;
     }
     .decision-card {
-      min-height: 22mm;
-      padding: 3mm;
+      min-height: 17mm;
+      padding: 2.2mm;
       background: #F8FAFC;
     }
     .decision-card strong {
       display: block;
-      margin-top: 1.5mm;
+      margin-top: 1mm;
       color: #101828;
-      font-size: 9.2pt;
-      line-height: 1.22;
+      font-size: 8.1pt;
+      line-height: 1.18;
     }
     .decision-card.primary {
       background: #101828;
@@ -2020,97 +2026,93 @@ export default function BriefingGenerator({
     }
     .decision-card.primary span { color: #BFDBFE; }
     .decision-card.primary strong { color: #FFFFFF; }
-    .decision-card.risk {
-      background: #FFF7ED;
-      border-color: #FDBA74;
-    }
-    .decision-card.risk span { color: #9A3412; }
     .main-grid {
       display: grid;
       grid-template-columns: 0.92fr 1.2fr 0.78fr;
-      gap: 2.8mm;
-      margin-top: 3mm;
+      gap: 2mm;
+      margin-top: 2.2mm;
       align-items: start;
     }
     .bottom-grid {
       display: grid;
       grid-template-columns: 1.05fr 0.9fr 0.95fr;
-      gap: 2.8mm;
-      margin-top: 2.8mm;
+      gap: 2mm;
+      margin-top: 2.2mm;
       align-items: start;
     }
     .panel {
-      padding: 3mm;
+      padding: 2.2mm;
       break-inside: avoid;
       page-break-inside: avoid;
+      overflow: hidden;
     }
     .panel h2 {
-      margin: 0 0 2.3mm;
+      margin: 0 0 1.6mm;
       color: #1E3A8A;
-      font-size: 8pt;
+      font-size: 7.1pt;
     }
     .facts-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 1.9mm;
+      gap: 1.3mm;
     }
     .fact-card {
-      min-height: 15.5mm;
-      padding: 2.2mm;
+      min-height: 12mm;
+      padding: 1.6mm;
       background: #F8FAFC;
     }
     .fact-card strong {
       display: block;
-      margin-top: 1mm;
+      margin-top: 0.6mm;
       color: #101828;
-      font-size: 8.9pt;
+      font-size: 7.7pt;
       line-height: 1.1;
     }
     .fact-card small,
     .leader-card small,
     td small {
       display: block;
-      margin-top: 1mm;
+      margin-top: 0.6mm;
       color: #64748B;
-      font-size: 6.7pt;
-      line-height: 1.18;
+      font-size: 6pt;
+      line-height: 1.12;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 7.6pt;
-      line-height: 1.26;
+      font-size: 6.9pt;
+      line-height: 1.18;
     }
     th,
     td {
       border: 0.25mm solid #D8E0EF;
-      padding: 2mm;
+      padding: 1.5mm;
       text-align: start;
       vertical-align: top;
     }
     th {
       background: #101828;
       color: #FFFFFF;
-      font-size: 6.8pt;
+      font-size: 6.1pt;
       font-weight: 900;
     }
     td strong {
       color: #1E3A8A;
-      font-size: 7.8pt;
+      font-size: 7pt;
     }
     .relevance {
-      margin-top: 2mm;
-      padding: 2.5mm;
-      border-inline-start: 1mm solid #475569;
+      margin-top: 1.4mm;
+      padding: 1.8mm;
+      border-inline-start: 0.8mm solid #475569;
       background: #F1F5F9;
       color: #101828;
     }
     .relevance span,
     .recommendation span {
       display: block;
-      margin-bottom: 1mm;
+      margin-bottom: 0.6mm;
       color: #475569;
-      font-size: 6.8pt;
+      font-size: 6.2pt;
       font-weight: 900;
     }
     .relevance p,
@@ -2122,24 +2124,24 @@ export default function BriefingGenerator({
     }
     .leader-stack {
       display: grid;
-      gap: 1.9mm;
+      gap: 1.3mm;
     }
     .leader-card {
-      padding: 2.4mm;
+      padding: 1.8mm;
       background: #FFFFFF;
     }
     .leader-card strong {
       display: block;
-      margin-top: 1mm;
+      margin-top: 0.6mm;
       color: #101828;
-      font-size: 8.4pt;
-      line-height: 1.16;
+      font-size: 7.5pt;
+      line-height: 1.12;
     }
     .brief-item {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
-      gap: 2mm;
-      padding: 2.2mm 0;
+      gap: 1.5mm;
+      padding: 1.5mm 0;
       border-top: 0.25mm solid #E2E8F0;
     }
     .brief-item:first-of-type,
@@ -2150,22 +2152,22 @@ export default function BriefingGenerator({
     .brief-item strong,
     .risk-item strong {
       color: #101828;
-      font-size: 8.5pt;
+      font-size: 7.5pt;
     }
     .brief-item p,
     .risk-item p {
-      margin-top: 1mm;
+      margin-top: 0.6mm;
       color: #475569;
-      font-size: 7.7pt;
-      line-height: 1.25;
+      font-size: 6.9pt;
+      line-height: 1.16;
     }
     .priority-badge {
       align-self: start;
       border-radius: 99px;
       background: #EEF2FF;
       color: #3730A3;
-      padding: 0.8mm 1.6mm;
-      font-size: 6.5pt;
+      padding: 0.6mm 1.2mm;
+      font-size: 5.8pt;
       font-weight: 900;
     }
     .risk-panel {
@@ -2174,7 +2176,7 @@ export default function BriefingGenerator({
     }
     .risk-panel h2 { color: #92400E; }
     .risk-item {
-      padding: 2.2mm 0;
+      padding: 1.5mm 0;
       border-top: 0.25mm solid #FDE68A;
     }
     .actions-panel {
@@ -2188,38 +2190,38 @@ export default function BriefingGenerator({
       margin: 0;
       padding: 0;
       display: grid;
-      gap: 1.7mm;
+      gap: 1.2mm;
     }
     .actions-list li {
       display: grid;
-      grid-template-columns: 6.5mm minmax(0, 1fr);
-      gap: 1.8mm;
+      grid-template-columns: 5.8mm minmax(0, 1fr);
+      gap: 1.3mm;
       align-items: start;
     }
     .actions-list span {
       display: grid;
       place-items: center;
-      width: 5.6mm;
-      height: 5.6mm;
+      width: 5mm;
+      height: 5mm;
       border-radius: 1.2mm;
       background: #4F46E5;
       color: #FFFFFF;
-      font-size: 7pt;
+      font-size: 6.2pt;
       font-weight: 900;
     }
     .actions-list p {
       color: #FFFFFF;
-      font-size: 7.8pt;
-      line-height: 1.25;
+      font-size: 6.9pt;
+      line-height: 1.16;
     }
     .recommendation {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
-      gap: 4mm;
+      gap: 3mm;
       align-items: center;
-      margin-top: 3mm;
-      padding: 3mm 3.5mm;
-      border-inline-start: 1.2mm solid #4F46E5;
+      margin-top: 2.2mm;
+      padding: 2.2mm 2.8mm;
+      border-inline-start: 1mm solid #4F46E5;
       background: #1E3A8A;
       color: #FFFFFF;
       break-inside: avoid;
@@ -2228,30 +2230,39 @@ export default function BriefingGenerator({
     .recommendation span { color: #BFDBFE; }
     .recommendation p {
       color: #FFFFFF;
-      font-size: 9.2pt;
+      font-size: 8pt;
       font-weight: 800;
-      line-height: 1.24;
+      line-height: 1.18;
     }
     .footer-meta {
       color: #CBD5E1;
-      font-size: 6.8pt;
+      font-size: 6.1pt;
       font-weight: 800;
       white-space: nowrap;
     }
     @media print {
-      body { width: auto; }
-      .one-page { min-height: auto; }
+      html,
+      body {
+        width: 285mm;
+        height: 198mm;
+        overflow: hidden;
+      }
+      .one-page {
+        height: 198mm;
+        max-height: 198mm;
+      }
     }
   </style>
 </head>
 <body>
   <main class="one-page">
     <div class="top-accent"></div>
+    <div class="one-page-content">
     <header class="page-header">
       <section>
         <div class="eyebrow">${formatCountryFlagForHtml(country, isEn)} ${escapeHtml(isEn ? "Executive Infographic One-Pager" : "صفحة معلومات تنفيذية واحدة")}</div>
-        <h1>${escapeHtml(onePagerTitle)}</h1>
-        <p class="subtitle">${escapeHtml(compactText(onePagerSubtitle, 180))}</p>
+        <h1>${escapeHtml(compactText(onePagerTitle, 110))}</h1>
+        <p class="subtitle">${escapeHtml(compactText(onePagerSubtitle, 132))}</p>
       </section>
       <section class="meta-grid">
         <div class="meta-card">
@@ -2289,7 +2300,7 @@ export default function BriefingGenerator({
         </table>
         <div class="relevance">
           <span>${escapeHtml(isEn ? "UAE Relevance" : "صلة الملف بالإمارات")}</span>
-          <p>${escapeHtml(compactText(onePagerUaeRelevance, 168))}</p>
+          <p>${escapeHtml(compactText(onePagerUaeRelevance, 126))}</p>
         </div>
       </section>
 
@@ -2319,10 +2330,11 @@ export default function BriefingGenerator({
     <section class="recommendation">
       <div>
         <span>${escapeHtml(isEn ? "Strategic Recommendation" : "التوصية الاستراتيجية")}</span>
-        <p>${escapeHtml(compactText(onePagerRecommendation, 230))}</p>
+        <p>${escapeHtml(compactText(onePagerRecommendation, 170))}</p>
       </div>
       <div class="footer-meta">${escapeHtml(isEn ? `Generated ${generatedOn}` : `تم الإنشاء في ${generatedOn}`)}</div>
     </section>
+    </div>
   </main>
 </body>
 </html>`;
@@ -2338,6 +2350,17 @@ export default function BriefingGenerator({
       printDocument.close();
       window.setTimeout(() => {
         try {
+          const page = printDocument.querySelector<HTMLElement>(".one-page");
+          const content = printDocument.querySelector<HTMLElement>(".one-page-content");
+          if (page && content) {
+            content.style.setProperty("--fit-scale", "1");
+            const heightScale = page.clientHeight / Math.max(content.scrollHeight, 1);
+            const widthScale = page.clientWidth / Math.max(content.scrollWidth, 1);
+            const fitScale = Math.min(1, heightScale, widthScale);
+            if (fitScale < 1) {
+              content.style.setProperty("--fit-scale", Math.max(0.72, fitScale - 0.015).toFixed(3));
+            }
+          }
           printWindow.focus();
           printWindow.print();
         } catch (error) {
@@ -2630,7 +2653,7 @@ export default function BriefingGenerator({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-2.5" id="one-pager-decision-strip">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5" id="one-pager-decision-strip">
                 {onePagerDecisionCards.map((card) => (
                   <div key={card.label} className={`rounded border p-3.5 min-h-[108px] ${card.tone}`}>
                     <p className={`text-[10px] uppercase tracking-widest font-mono font-black ${card.labelClass}`}>{card.label}</p>

@@ -224,9 +224,13 @@ export default function App() {
         setBriefingSource(data.source || "openai-strategic-ai");
         if (data.countryData) {
           setActiveCountry(data.countryData);
-          setSelectedComparisonCountryCodes((current) =>
-            current.includes(data.countryData.id) ? current : [...current, data.countryData.id]
-          );
+          setSelectedComparisonCountryCodes((current) => {
+            const nextCountryCode = data.countryData.id;
+            if (activeTab === "compare" && !shouldRedirectToProfile) {
+              return current.includes(nextCountryCode) ? current : [...current, nextCountryCode];
+            }
+            return [nextCountryCode];
+          });
         }
         
         if (!shouldRedirectToProfile) {
@@ -264,11 +268,22 @@ export default function App() {
   }, [activeTab]);
 
   const handleCountryPicked = (code: string) => {
+    if (activeTab === "compare" && activeCountry) {
+      setSelectedComparisonCountryCodes((current) =>
+        current.includes(code) ? current : [...current, code]
+      );
+      setCurrentStep(4);
+      return;
+    }
+
     const isChangingCountry = code !== selectedCountryCode || activeCountry?.id !== code;
     setSelectedCountryCode(code);
-    setSelectedComparisonCountryCodes((current) =>
-      current.includes(code) ? current : [...current, code]
-    );
+    setSelectedComparisonCountryCodes((current) => {
+      if (activeTab !== "compare") {
+        return [code];
+      }
+      return current.includes(code) ? current : [...current, code];
+    });
     if (isChangingCountry) {
       setActiveCountry(null);
       setAiBriefingText("");
@@ -293,6 +308,21 @@ export default function App() {
   const closeCountryDropdown = () => {
     setCountrySearchQuery("");
     setIsCountryDropdownOpen(false);
+  };
+
+  const resetComparisonCountriesToPrimary = () => {
+    setSelectedComparisonCountryCodes((current) => {
+      const primaryCountryCode = selectedCountryCode || activeCountry?.id || current[0] || "";
+      return primaryCountryCode ? [primaryCountryCode] : [];
+    });
+  };
+
+  const handleWorkspaceTabChange = (nextTab: activeTabCode, nextStep: number) => {
+    if (nextTab !== "compare") {
+      resetComparisonCountriesToPrimary();
+    }
+    setActiveTab(nextTab);
+    setCurrentStep(nextStep);
   };
 
   useEffect(() => {
@@ -1373,8 +1403,7 @@ export default function App() {
                     key={item.code}
                     type="button"
                     onClick={() => {
-                      setActiveTab(item.code);
-                      setCurrentStep(item.step);
+                      handleWorkspaceTabChange(item.code, item.step);
                     }}
                     className={`min-h-11 px-3 py-2 rounded-sm border-b-2 text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
                       isActiveTab
@@ -1624,8 +1653,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => {
-                            setActiveTab("debrief");
-                            setCurrentStep(9);
+                            handleWorkspaceTabChange("debrief", 9);
                           }}
                           className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#D8E0EF] bg-white px-4 py-2.5 text-sm font-bold text-emerald-deep transition-all hover:-translate-y-0.5 hover:border-gold-deep/45 hover:shadow-md cursor-pointer"
                         >
