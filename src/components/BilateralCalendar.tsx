@@ -534,7 +534,7 @@ export default function BilateralCalendar({ country, language, onClose }: Bilate
                 className="w-full bg-slate-vip hover:bg-slate-vip/90 text-white font-mono font-bold text-[10px] uppercase tracking-widest py-2.5 rounded-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5 text-gold-deep" />
-                <span>{isEn ? "Schedule bilateral Summit" : "توثيق وجدول الموعد فوراً"}</span>
+                <span>{isEn ? "Schedule Meeting" : "جدولة اجتماع"}</span>
               </button>
             </form>
           </div>

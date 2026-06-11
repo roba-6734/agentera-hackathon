@@ -1885,7 +1885,7 @@ export default function BriefingGenerator({
             id="btn-output-one-pager"
           >
             <FileCheck className="w-4 h-4" />
-            <span>{isEn ? "One-Pager Memoram" : "مذكرة الحزب الفردية"}</span>
+            <span>{isEn ? "One-Pager" : "صفحة واحدة"}</span>
           </button>
 
           <button
@@ -1902,28 +1902,6 @@ export default function BriefingGenerator({
           </button>
         </div>
 
-        {/* Unified VIP Export PDF and Print Trigger Button */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleExportToPdf}
-            className="bg-gold-deep border border-gold-deep text-slate-vip hover:bg-slate-vip hover:text-white px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer shadow-md tracking-wide"
-            id="btn-export-pdf"
-            title={isEn ? "Print polished PDF strategic briefing" : "تصدير الملف الاستراتيجي الكامل بصيغة PDF"}
-          >
-            <FileText className="w-4 h-4 shrink-0" />
-            <span>{isEn ? "Export Executive PDF" : "تصدير ملف PDF الرئاسي"}</span>
-          </button>
-
-          <button
-            onClick={downloadOfflineHtml}
-            className="bg-white border border-gray-200 text-slate-vip hover:bg-gray-50 hover:border-gray-300 px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer shadow-sm tracking-wide"
-            id="btn-download-offline-html"
-            title={isEn ? "Download standalone offline interactive dossier" : "تحميل ملف الإيجاز الرئاسي المستقل"}
-          >
-            <Download className="w-4 h-4 shrink-0 text-emerald-deep" />
-            <span>{isEn ? "Download Offline HTML" : "تحميل الملف المستقل"}</span>
-          </button>
-        </div>
       </div>
 
       {printError && (

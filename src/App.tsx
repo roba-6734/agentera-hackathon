@@ -562,6 +562,7 @@ export default function App() {
           setLanguage={setLanguage}
           selectedCountryNameEn={selectedCountryNameEn}
           selectedCountryNameAr={selectedCountryNameAr}
+          onOpenCalendar={() => setIsCalendarOpen(true)}
           sessionDisplayName={session.displayName}
           sessionRole={session.role}
           onLogout={handleLogout}
@@ -676,122 +677,53 @@ export default function App() {
             </div>
           </section>
 
-          {activeCountry ? (
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6" id="executive-briefing-grid">
-              <section className="xl:col-span-8 bg-white rounded-sm shadow-md border-l-4 border-emerald-deep overflow-hidden" id="executive-summary-panel">
-                <div className="bg-slate-vip px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-white">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <CountryFlag flag={activeCountry.flag} flagUrl={activeCountry.flagUrl} countryName={isEn ? activeCountry.nameEn : activeCountry.nameAr} size="lg" />
-                    <div className="min-w-0">
-                      <p className="text-[10px] uppercase tracking-widest text-gold-deep font-mono font-extrabold">
-                        {isEn ? "Meeting Brief" : "إحاطة الاجتماع"}
-                      </p>
-                      <h3 className="text-xl font-serif font-bold truncate">
-                        {isEn ? activeCountry.nameEn : activeCountry.nameAr}
-                      </h3>
-                    </div>
-                  </div>
-                  <span className="text-[10px] bg-gold-deep text-slate-vip font-mono font-black px-2.5 py-1 rounded-sm uppercase self-start sm:self-auto">
-                    {isEn ? "Concise" : "موجز"}
-                  </span>
-                </div>
-
-                <div className="p-6 md:p-8 space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="border border-gold-border bg-[#F8F8F6] rounded-sm p-4">
-                      <p className="text-[10px] uppercase tracking-widest text-gray-500 font-mono font-bold">{isEn ? "Objective" : "الهدف"}</p>
-                      <p className="text-sm font-bold text-slate-vip mt-1 leading-5">
-                        {meetingObjective.trim() || (isEn ? "Lead a focused bilateral discussion." : "قيادة نقاش ثنائي مركز.")}
-                      </p>
-                    </div>
-                    <div className="border border-gold-border bg-[#F8F8F6] rounded-sm p-4">
-                      <p className="text-[10px] uppercase tracking-widest text-gray-500 font-mono font-bold">{isEn ? "Framework" : "الإطار"}</p>
-                      <p className="text-sm font-bold text-slate-vip mt-1 leading-5">
-                        {isEn ? activeCountry.indicators.cooperationAgreementEn : activeCountry.indicators.cooperationAgreementAr}
-                      </p>
-                    </div>
-                    <div className="border border-gold-border bg-[#F8F8F6] rounded-sm p-4">
-                      <p className="text-[10px] uppercase tracking-widest text-gray-500 font-mono font-bold">{isEn ? "Posture" : "الموقف"}</p>
-                      <p className="text-sm font-bold text-slate-vip mt-1 leading-5">
-                        {isEn ? "Confirm alignment, ask for commitment, avoid operational depth." : "تأكيد التوافق وطلب الالتزام دون الدخول في التفاصيل التشغيلية."}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-100 pt-5">
-                    <div className="flex items-center gap-2 mb-3">
-                      <FileText className="w-4 h-4 text-emerald-deep" />
-                      <h4 className="font-serif font-bold text-lg text-slate-vip">
-                        {isEn ? "What to Know Before Speaking" : "ما يجب معرفته قبل الحديث"}
-                      </h4>
-                    </div>
-                    {isGenerating ? (
-                      <div className="flex items-center justify-center py-16 gap-3" id="executive-briefing-loader">
-                        <div className="h-9 w-9 border-4 border-gold-deep border-t-emerald-deep rounded-full animate-spin"></div>
-                        <p className="text-sm text-gray-500 font-semibold font-mono">
-                          {isEn ? "Compiling executive brief..." : "تجميع الإحاطة القيادية..."}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {executiveBriefingBlocks.map((block, index) => (
-                          <p key={index} className="text-sm md:text-base text-gray-700 leading-7 font-medium">
-                            {block}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              <aside className="xl:col-span-4 space-y-4" id="executive-priority-stack">
-                {executivePriorityCards.map((card, index) => {
-                  const PriorityIcon = card.icon;
-                  return (
-                    <div key={card.titleEn} className="bg-white rounded-sm shadow-md border border-gold-border border-l-4 border-gold-deep p-5">
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-2">
-                          <PriorityIcon className="w-4 h-4 text-emerald-deep" />
-                          <h4 className="font-serif font-bold text-base text-slate-vip">
-                            {isEn ? card.titleEn : card.titleAr}
-                          </h4>
-                        </div>
-                        <span className="h-6 w-6 rounded-sm bg-gold-bg border border-gold-border flex items-center justify-center text-[10px] font-mono font-black text-emerald-deep">
-                          {index + 1}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 leading-6">
-                        {cleanBriefingBlock(isEn ? card.bodyEn : card.bodyAr, 260)}
-                      </p>
-                    </div>
-                  );
-                })}
-              </aside>
-
-              <section className="xl:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-4" id="executive-speaking-line-grid">
-                <div className="bg-slate-vip text-white rounded-sm shadow-md border-l-4 border-gold-deep p-5">
-                  <p className="text-[10px] uppercase tracking-widest text-gold-deep font-mono font-bold">{isEn ? "Opening Line" : "سطر الافتتاح"}</p>
-                  <p className="text-sm leading-6 mt-2 text-gray-100">
-                    {isEn
-                      ? `Position the UAE as a stable, execution-oriented partner for ${activeCountry.nameEn}.`
-                      : `تقديم دولة الإمارات كشريك مستقر وعملي مع ${activeCountry.nameAr}.`}
-                  </p>
-                </div>
-                <div className="bg-white rounded-sm shadow-md border-l-4 border-emerald-deep p-5">
-                  <p className="text-[10px] uppercase tracking-widest text-emerald-deep font-mono font-bold">{isEn ? "Ask" : "الطلب"}</p>
-                  <p className="text-sm leading-6 mt-2 text-gray-700">
-                    {isEn ? activeCountry.predictive.proposalsEn : activeCountry.predictive.proposalsAr}
-                  </p>
-                </div>
-                <div className="bg-white rounded-sm shadow-md border-l-4 border-[#CBD5E1] p-5">
-                  <p className="text-[10px] uppercase tracking-widest text-gold-deep font-mono font-bold">{isEn ? "Risk Watch" : "مراقبة المخاطر"}</p>
-                  <p className="text-sm leading-6 mt-2 text-gray-700">
-                    {isEn ? activeCountry.predictive.risksEn : activeCountry.predictive.risksAr}
-                  </p>
-                </div>
-              </section>
+          {isGenerating && !activeCountry ? (
+            <div className="bg-white rounded-sm shadow-md border border-gold-border p-12 text-center" id="executive-briefing-loading-state">
+              <div className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-gold-border border-t-emerald-deep animate-spin"></div>
+              <h3 className="text-lg font-serif font-bold text-slate-vip">
+                {isEn ? "Preparing briefing sections..." : "جاري إعداد أقسام الإحاطة..."}
+              </h3>
+              <p className="text-sm text-gray-500 mt-2">
+                {isEn
+                  ? "Executive summary, talking points, one-pager, and slides will appear here when ready."
+                  : "سيظهر الملخص التنفيذي ونقاط الحديث والصفحة الواحدة والشرائح هنا عند الجاهزية."}
+              </p>
             </div>
+          ) : activeCountry ? (
+            <section className="bg-white rounded-sm shadow-md border-l-4 border-emerald-deep overflow-hidden" id="executive-briefing-parts-panel">
+              <div className="bg-slate-vip px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-white">
+                <div className="flex items-center gap-3 min-w-0">
+                  <CountryFlag flag={activeCountry.flag} flagUrl={activeCountry.flagUrl} countryName={isEn ? activeCountry.nameEn : activeCountry.nameAr} size="lg" />
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-widest text-gold-deep font-mono font-extrabold">
+                      {isEn ? "Briefing Package" : "حزمة الإحاطة"}
+                    </p>
+                    <h3 className="text-xl font-serif font-bold truncate">
+                      {isEn ? activeCountry.nameEn : activeCountry.nameAr}
+                    </h3>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[10px] font-mono font-black uppercase">
+                  <span className="bg-gold-deep text-slate-vip px-2.5 py-1 rounded-sm">{isEn ? "Summary" : "ملخص"}</span>
+                  <span className="bg-white/10 text-white px-2.5 py-1 rounded-sm border border-white/15">{isEn ? "Talking Points" : "نقاط الحديث"}</span>
+                  <span className="bg-white/10 text-white px-2.5 py-1 rounded-sm border border-white/15">{isEn ? "One-Pager" : "صفحة واحدة"}</span>
+                  <span className="bg-white/10 text-white px-2.5 py-1 rounded-sm border border-white/15">{isEn ? "Slides" : "شرائح"}</span>
+                </div>
+              </div>
+
+              <div className="p-4 md:p-6">
+                <BriefingGenerator
+                  country={activeCountry}
+                  language={language}
+                  aiBriefingText={aiBriefingText}
+                  briefingArtifacts={briefingArtifacts}
+                  isGenerating={isGenerating}
+                  briefingSource={briefingSource}
+                  meetingObjective={meetingObjective}
+                  uaeData={uaeData}
+                />
+              </div>
+            </section>
           ) : (
             <div className="bg-white rounded-sm shadow-md border border-gold-border p-12 text-center" id="executive-no-country-fallback">
               <ShieldAlert className="w-12 h-12 text-gold-deep mx-auto mb-4" />
@@ -857,6 +789,23 @@ export default function App() {
               />
             </div>
           </>
+        )}
+
+        {isCalendarOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[200] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200" id="executive-calendar-modal-backdrop" onClick={() => setIsCalendarOpen(false)}>
+            <div
+              className="bg-white rounded-md shadow-2xl border border-gold-border w-full max-w-[1200px] max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200 relative"
+              id="executive-calendar-modal-content-container"
+              onClick={(event) => event.stopPropagation()}
+              style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+            >
+              <BilateralCalendar
+                country={activeCountry}
+                language={language}
+                onClose={() => setIsCalendarOpen(false)}
+              />
+            </div>
+          </div>
         )}
       </div>
     );

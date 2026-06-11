@@ -1,5 +1,5 @@
 import React from "react";
-import { Globe, Award, Calendar, LogOut, UserRound } from "lucide-react";
+import { Globe, Award, Calendar, LogOut, UserRound, BellRing } from "lucide-react";
 import majlisLogo from "../../assets/images/majlis-ai-logo.png";
 import { AppRole } from "../types";
 
@@ -21,6 +21,10 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
     executive: language === "en" ? "Executive" : "قيادي",
   }[sessionRole];
   const isExecutive = sessionRole === "executive";
+  const selectedCountryLabel = language === "en" ? selectedCountryNameEn : selectedCountryNameAr;
+  const controlShellClass = "h-12 rounded-lg border border-[#D7DFEA] bg-white shadow-sm shadow-slate-200/60 flex items-center transition-all";
+  const iconTileClass = "h-8 w-8 rounded-md bg-[#F8FAFC] border border-[#E2E8F0] flex items-center justify-center text-emerald-deep shrink-0";
+  const iconButtonClass = `${controlShellClass} w-12 justify-center text-slate-vip hover:bg-[#F8FAFC] hover:border-[#B8C4D6] cursor-pointer`;
 
   return (
     <header className="bg-white relative border-b border-gold-border text-slate-vip overflow-hidden shadow-sm animate-fade-in-down" id="moei-executive-header">
@@ -67,43 +71,74 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
           </div>
 
           {/* Real-time Status and Language Toggle */}
-          <div className="flex flex-wrap items-center gap-4 md:self-center" id="header-controls-section">
+          <div className="flex flex-wrap items-center justify-start md:justify-end gap-2 md:self-center" id="header-controls-section">
             
             {/* Preparation Indicator Badge */}
-            <div className="bg-[#F8F8F6] rounded-md p-2.5 border border-gold-border flex items-center gap-3 shadow-xs" id="briefing-target-badge">
-              <Award className="w-4 h-4 text-emerald-deep" />
-              <div className="text-left font-sans">
-                <p className="text-[9px] text-gray-500 uppercase tracking-widest block leading-none">
+            <div className={`${controlShellClass} gap-2 px-3 min-w-[170px] max-w-[230px]`} id="briefing-target-badge">
+              <span className={iconTileClass}>
+                <Award className="w-4 h-4" />
+              </span>
+              <div className="text-left font-sans min-w-0">
+                <p className="text-[9px] text-slate-500 uppercase tracking-widest block leading-none">
                   {isExecutive
                     ? language === "en" ? "Briefing Target" : "هدف الإحاطة"
                     : language === "en" ? "Active Consult" : "الاستشاري النشط"}
                 </p>
-                <p className="text-xs font-bold font-mono text-slate-vip mt-0.5">
-                  {language === "en" ? `Targeting: ${selectedCountryNameEn}` : `المستهدف: ${selectedCountryNameAr}`}
+                <p className="text-xs font-bold font-mono text-slate-vip mt-1 truncate">
+                  {selectedCountryLabel}
                 </p>
               </div>
             </div>
 
-            {/* Cabinet Portfolio Schedule Calendar Toggle Button */}
-            {!isExecutive && onOpenCalendar && (
-              <button
-                onClick={onOpenCalendar}
-                className="bg-[#FAF8F5] hover:bg-gold-bg text-slate-vip border border-gold-border font-semibold font-mono text-xs tracking-wide px-3.5 py-2.5 rounded shadow-sm transition-all flex items-center gap-2 cursor-pointer"
-                id="header-calendar-toggle-btn"
-                title={language === "en" ? "Bilateral Schedule Calendar" : "مفكرة المواعيد الثنائية"}
-              >
-                <Calendar className="w-4 h-4 text-emerald-deep" />
-                <span>{language === "en" ? "Portfolio Schedule" : "المواعيد والوفود"}</span>
-              </button>
+            {/* Meeting scheduler and reminder status */}
+            {onOpenCalendar && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onOpenCalendar}
+                  className={`${controlShellClass} gap-2 px-3.5 text-slate-vip hover:bg-[#F8FAFC] hover:border-[#B8C4D6] cursor-pointer`}
+                  id="header-calendar-toggle-btn"
+                  title={language === "en" ? "Schedule a bilateral meeting" : "جدولة اجتماع ثنائي"}
+                >
+                  <Calendar className="w-4 h-4 text-emerald-deep shrink-0" />
+                  <span className="text-xs font-mono font-bold tracking-wide whitespace-nowrap">
+                    {language === "en" ? "Schedule Meeting" : "جدولة اجتماع"}
+                  </span>
+                </button>
+
+                <span
+                  className={`${iconButtonClass} relative group`}
+                  id="header-meeting-reminder-indicator"
+                  title={
+                    language === "en"
+                      ? "Notification will be sent when the meeting time is approaching."
+                      : "سيتم إرسال إشعار عند اقتراب موعد الاجتماع."
+                  }
+                  aria-label={
+                    language === "en"
+                      ? "Meeting reminder notifications enabled"
+                      : "تنبيهات تذكير الاجتماعات مفعلة"
+                  }
+                >
+                  <BellRing className="w-4 h-4" />
+                  <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-gold-deep border border-white"></span>
+                  <span className="pointer-events-none absolute top-[calc(100%+0.5rem)] right-0 z-50 hidden w-64 rounded-md border border-[#D7DFEA] bg-white px-3 py-2 text-left text-[11px] leading-4 font-sans font-semibold text-slate-vip shadow-xl group-hover:block">
+                    {language === "en"
+                      ? "Notification will be sent when the meeting time is approaching."
+                      : "سيتم إرسال إشعار عند اقتراب موعد الاجتماع."}
+                  </span>
+                </span>
+              </div>
             )}
 
-            <div className="bg-[#F8F8F6] rounded-md border border-gold-border flex items-center gap-2 shadow-xs px-3 py-2.5" id="header-session-badge">
-              <UserRound className="w-4 h-4 text-emerald-deep" />
-              <div className="min-w-0">
-                <span className="text-[10px] max-w-[120px] truncate font-mono font-bold text-slate-vip block leading-none">
+            <div className={`${controlShellClass} gap-2 px-3 min-w-[132px] max-w-[176px]`} id="header-session-badge">
+              <span className={iconTileClass}>
+                <UserRound className="w-4 h-4" />
+              </span>
+              <div className="min-w-0 text-left">
+                <span className="text-[10px] max-w-[104px] truncate font-mono font-bold text-slate-vip block leading-none">
                   {sessionDisplayName}
                 </span>
-                <span className="text-[8px] uppercase tracking-widest text-gray-500 font-mono font-bold block mt-1 leading-none">
+                <span className="text-[8px] uppercase tracking-widest text-slate-500 font-mono font-bold block mt-1 leading-none">
                   {roleLabel}
                 </span>
               </div>
@@ -111,22 +146,23 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
 
             <button
               onClick={onLogout}
-              className="bg-white hover:bg-red-50 text-slate-vip hover:text-red-700 border border-gold-border font-semibold font-mono text-xs tracking-wide px-3.5 py-2.5 rounded shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+              className={`${iconButtonClass} hover:text-red-700 hover:bg-red-50`}
               id="header-switch-account-btn"
               title={language === "en" ? "Switch Account" : "تبديل الحساب"}
+              aria-label={language === "en" ? "Switch Account" : "تبديل الحساب"}
             >
               <LogOut className="w-4 h-4" />
-              <span>{language === "en" ? "Switch Account" : "تبديل الحساب"}</span>
             </button>
 
             {/* Bilingual Switcher Toggle Button */}
             <button
               onClick={() => setLanguage(language === "en" ? "ar" : "en")}
-              className="bg-gold-deep hover:bg-gold-deep/90 text-[#1B1B1B] font-bold text-xs uppercase tracking-widest px-4 py-2.5 rounded-sm shadow-sm transition-all duration-300 flex items-center gap-2 border-0 cursor-pointer"
+              className="h-12 rounded-lg bg-[#3730A3] hover:bg-[#312E81] text-white font-bold text-xs uppercase tracking-widest px-3.5 shadow-sm transition-all duration-300 flex items-center gap-2 border border-[#4338CA] cursor-pointer"
               id="language-translator-toggle"
+              title={language === "en" ? "Switch to Arabic" : "Switch to English"}
             >
-              <Globe className="w-4 h-4 text-[#1B1B1B]" />
-              <span>{language === "en" ? "العربية" : "English"}</span>
+              <Globe className="w-4 h-4 text-white" />
+              <span>{language === "en" ? "AR" : "EN"}</span>
             </button>
           </div>
 
