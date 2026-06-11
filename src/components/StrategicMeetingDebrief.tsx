@@ -20,6 +20,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { apiFetch } from "../api";
+import CountryFlag from "./CountryFlag";
 import {
   AppSession,
   MeetingActionItem,
@@ -35,6 +36,7 @@ interface CountryOption {
   nameEn: string;
   nameAr: string;
   flag: string;
+  flagUrl?: string;
 }
 
 interface StrategicMeetingDebriefProps {
@@ -556,7 +558,12 @@ export default function StrategicMeetingDebrief({
 
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div className="text-xs text-gray-500 flex flex-wrap items-center gap-2">
-                  {selectedCountry && <span>{selectedCountry.flag} {isEn ? selectedCountry.nameEn : selectedCountry.nameAr}</span>}
+                  {selectedCountry && (
+                    <span className="inline-flex items-center gap-1.5">
+                      <CountryFlag flag={selectedCountry.flag} flagUrl={selectedCountry.flagUrl} countryName={isEn ? selectedCountry.nameEn : selectedCountry.nameAr} size="xs" />
+                      <span>{isEn ? selectedCountry.nameEn : selectedCountry.nameAr}</span>
+                    </span>
+                  )}
                   <span className="h-1 w-1 rounded-full bg-gray-300"></span>
                   <span>{transcriptText.trim().length.toLocaleString()} {isEn ? "characters" : "حرف"}</span>
                   {uploadedFileName && (

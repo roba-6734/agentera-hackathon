@@ -57,6 +57,7 @@ export interface CountryIntelligenceHub {
   hubCountryId?: number | null;
   countryName: string;
   isoCode: string;
+  flagUrl?: string;
   lastUpdated?: string;
   createdAt?: string;
   profileStatus?: string;
@@ -72,6 +73,7 @@ export interface PrebuiltCountry {
   nameEn: string;
   nameAr: string;
   flag: string;
+  flagUrl?: string;
   profile: CountryProfile;
   indicators: CountryIndicators;
   sectors: CountrySectors;

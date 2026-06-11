@@ -24,6 +24,18 @@ const HTML_ESCAPE_MAP: Record<string, string> = {
 const escapeHtml = (value: unknown) =>
   String(value ?? "").replace(/[&<>"']/g, (char) => HTML_ESCAPE_MAP[char]);
 
+const isRenderableFlagUrl = (value?: string) =>
+  Boolean(value && /^(https?:\/\/|\/|data:image\/)/i.test(value.trim()));
+
+const formatCountryFlagForHtml = (country: PrebuiltCountry, isEn: boolean) => {
+  const flagUrl = country.flagUrl?.trim();
+  if (isRenderableFlagUrl(flagUrl)) {
+    return `<img src="${escapeHtml(flagUrl)}" alt="${escapeHtml(country.nameEn)} flag" style="width: 22px; height: 15px; object-fit: cover; border-radius: 2px; border: 1px solid #E2E8F0; vertical-align: -2px; margin-${isEn ? "right" : "left"}: 5px;" />`;
+  }
+
+  return escapeHtml(country.flag || "🌐");
+};
+
 const formatHtmlFileSegment = (value: string) => {
   const safeName = value
     .replace(/[^a-z0-9]+/gi, "_")
@@ -706,7 +718,7 @@ export default function BriefingGenerator({
     <div class="metadata-box">
       <div class="metadata-item">
         <h5>${isEn ? "PARTNER STATE" : "الشريك الدولي"}</h5>
-        <p>${h(country.flag)} ${h(isEn ? country.nameEn : country.nameAr)}</p>
+        <p>${formatCountryFlagForHtml(country, isEn)} ${h(isEn ? country.nameEn : country.nameAr)}</p>
       </div>
       <div class="metadata-item">
         <h5>${isEn ? "AUTHORITY NODE" : "جهة الصدور"}</h5>
@@ -735,7 +747,7 @@ export default function BriefingGenerator({
         <tr>
           <th>${isEn ? "Benchmark Indicator" : "مؤشر القياس والتنافسية"}</th>
           <th>${isEn ? "United Arab Emirates 🇦🇪" : "دولة الإمارات العربية المتحدة 🇦🇪"}</th>
-          <th>${h(country.flag)} ${h(isEn ? country.nameEn : country.nameAr)}</th>
+          <th>${formatCountryFlagForHtml(country, isEn)} ${h(isEn ? country.nameEn : country.nameAr)}</th>
         </tr>
       </thead>
       <tbody>
@@ -1180,7 +1192,7 @@ export default function BriefingGenerator({
     <div class="metadata-box">
       <div class="metadata-item">
         <h5>${isEn ? "PARTNER STATE" : "الشريك الدولي"}</h5>
-        <p>${h(country.flag)} ${h(isEn ? country.nameEn : country.nameAr)}</p>
+        <p>${formatCountryFlagForHtml(country, isEn)} ${h(isEn ? country.nameEn : country.nameAr)}</p>
       </div>
       <div class="metadata-item">
         <h5>${isEn ? "AUTHORITY NODE" : "جهة الصدور"}</h5>
@@ -1209,7 +1221,7 @@ export default function BriefingGenerator({
         <tr>
           <th>${isEn ? "Benchmark Indicator" : "مؤشر القياس والتنافسية"}</th>
           <th>${isEn ? "United Arab Emirates 🇦🇪" : "دولة الإمارات العربية المتحدة 🇦🇪"}</th>
-          <th>${h(country.flag)} ${h(isEn ? country.nameEn : country.nameAr)}</th>
+          <th>${formatCountryFlagForHtml(country, isEn)} ${h(isEn ? country.nameEn : country.nameAr)}</th>
         </tr>
       </thead>
       <tbody>

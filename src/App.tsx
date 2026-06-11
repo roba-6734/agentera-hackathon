@@ -11,11 +11,20 @@ import DeveloperDashboard from "./components/DeveloperDashboard";
 import AuthPortal from "./components/AuthPortal";
 import StrategicSignalsMonitor from "./components/StrategicSignalsMonitor";
 import StrategicMeetingDebrief from "./components/StrategicMeetingDebrief";
+import CountryFlag from "./components/CountryFlag";
 import { apiFetch } from "./api";
 import { AppRole, AppSession, PrebuiltCountry, UaeIndicator, activeTabCode } from "./types";
 import { ShieldAlert, Layers, Award, Landmark, Eye, ArrowRight, FileText, CheckCircle2, Activity, Cpu, ChevronDown, Crown, Target, Sparkles, UsersRound, BrainCircuit } from "lucide-react";
 
 const SESSION_STORAGE_KEY = "majlis-ai-session";
+
+interface CountryOption {
+  code: string;
+  nameEn: string;
+  nameAr: string;
+  flag: string;
+  flagUrl?: string;
+}
 
 function normalizeStoredRole(role: unknown): AppRole | null {
   if (role === "developer" || role === "staff" || role === "executive") {
@@ -113,7 +122,7 @@ export default function App() {
   const [briefingSource, setBriefingSource] = useState<string>("openai-strategic-ai");
 
   // Country listing options (pre-seeded with high fidelity research)
-  const availableBilateralOptions = [
+  const availableBilateralOptions: CountryOption[] = [
     { code: "brazil", nameEn: "Brazil", nameAr: "البرازيل", flag: "🇧🇷" },
     { code: "germany", nameEn: "Germany", nameAr: "ألمانيا", flag: "🇩🇪" },
     { code: "india", nameEn: "India", nameAr: "الهند", flag: "🇮🇳" },
@@ -279,15 +288,24 @@ export default function App() {
   };
 
   const isEn = language === "en";
-  const countryOptions = [
-    ...availableBilateralOptions,
+  const enrichedBilateralOptions = availableBilateralOptions.map((option) => {
+    const indexedCountry = countriesIndex[option.code];
+    return {
+      ...option,
+      flag: indexedCountry?.flag || option.flag,
+      flagUrl: indexedCountry?.flagUrl || option.flagUrl,
+    };
+  });
+  const countryOptions: CountryOption[] = [
+    ...enrichedBilateralOptions,
     ...(Object.values(countriesIndex) as PrebuiltCountry[])
-      .filter((country) => !availableBilateralOptions.some((option) => option.code === country.id))
+      .filter((country) => !enrichedBilateralOptions.some((option) => option.code === country.id))
       .map((country) => ({
         code: country.id,
         nameEn: country.nameEn,
         nameAr: country.nameAr,
         flag: country.flag || "🌐",
+        flagUrl: country.flagUrl,
       })),
   ].sort((firstCountry, secondCountry) =>
     firstCountry.nameEn.localeCompare(secondCountry.nameEn, "en", { sensitivity: "base" }) ||
@@ -440,7 +458,12 @@ export default function App() {
                   id="executive-country-selector-btn"
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-base leading-none">{selectedCountryOption?.flag || activeCountry?.flag || "🌐"}</span>
+                    <CountryFlag
+                      flag={selectedCountryOption?.flag || activeCountry?.flag}
+                      flagUrl={selectedCountryOption?.flagUrl || activeCountry?.flagUrl}
+                      countryName={isEn ? selectedCountryNameEn : selectedCountryNameAr}
+                      size="sm"
+                    />
                     <span className="truncate max-w-[135px]">
                       {selectedCountryOption
                         ? isEn ? selectedCountryOption.nameEn : selectedCountryOption.nameAr
@@ -475,7 +498,7 @@ export default function App() {
                             }`}
                           >
                             <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-base leading-none">{option.flag}</span>
+                              <CountryFlag flag={option.flag} flagUrl={option.flagUrl} countryName={isEn ? option.nameEn : option.nameAr} size="sm" />
                               <span className="truncate">{isEn ? option.nameEn : option.nameAr}</span>
                             </div>
                             {selectedCountryCode === option.code && (
@@ -523,7 +546,7 @@ export default function App() {
               <section className="xl:col-span-8 bg-white rounded-sm shadow-md border-l-4 border-emerald-deep overflow-hidden" id="executive-summary-panel">
                 <div className="bg-slate-vip px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-white">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-4xl leading-none">{activeCountry.flag}</span>
+                    <CountryFlag flag={activeCountry.flag} flagUrl={activeCountry.flagUrl} countryName={isEn ? activeCountry.nameEn : activeCountry.nameAr} size="lg" />
                     <div className="min-w-0">
                       <p className="text-[10px] uppercase tracking-widest text-gold-deep font-mono font-extrabold">
                         {isEn ? "Meeting Brief" : "إحاطة الاجتماع"}
@@ -698,9 +721,12 @@ export default function App() {
                 id="country-spinner-trigger-btn"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-base leading-none">
-                    {selectedCountryOption?.flag || activeCountry?.flag || "🌐"}
-                  </span>
+                  <CountryFlag
+                    flag={selectedCountryOption?.flag || activeCountry?.flag}
+                    flagUrl={selectedCountryOption?.flagUrl || activeCountry?.flagUrl}
+                    countryName={isEn ? selectedCountryNameEn : selectedCountryNameAr}
+                    size="sm"
+                  />
                   <span className="truncate max-w-[130px]">
                     {selectedCountryOption
                       ? isEn ? selectedCountryOption.nameEn : selectedCountryOption.nameAr
@@ -739,7 +765,7 @@ export default function App() {
                           }`}
                         >
                           <div className="flex items-center gap-2">
-                            <span className="text-base leading-none">{opt.flag}</span>
+                            <CountryFlag flag={opt.flag} flagUrl={opt.flagUrl} countryName={isEn ? opt.nameEn : opt.nameAr} size="sm" />
                             <span>{isEn ? opt.nameEn : opt.nameAr}</span>
                           </div>
                           {selectedCountryCode === opt.code && (

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "../api";
 import { PrebuiltCountry } from "../types";
+import CountryFlag from "./CountryFlag";
 
 interface DeveloperDashboardProps {
   language: "en" | "ar";
@@ -333,7 +334,7 @@ export default function DeveloperDashboard({ language, countriesCount, onRefresh
                           selectedCountry?.id === country.id ? "bg-emerald-deep/10 border-emerald-deep" : "bg-[#141412] border-[#2C2C24] hover:bg-[#181815]"
                         }`}
                       >
-                        <span className="text-base">{country.flag || "🌐"}</span>
+                        <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={country.nameEn} size="sm" />
                         <span className="min-w-0">
                           <span className="block text-white font-bold truncate">{country.nameEn}</span>
                           <span className="block text-[10px] text-gray-500 truncate">{country.intelligenceHub?.isoCode || country.id}</span>

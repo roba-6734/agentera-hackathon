@@ -900,6 +900,7 @@ type NeonCountryIntelligenceRow = {
   hub_country_id: number | null;
   country_name: string;
   iso_code: string;
+  flag_url: string | null;
   overview: string | null;
   government_structure: string | null;
   political_context: string | null;
@@ -991,11 +992,13 @@ type VoiceTranscriptionResult = {
 
 const NEON_COUNTRY_INTELLIGENCE_TABLE = "country_intelligence_profiles";
 const NEON_COUNTRY_INTELLIGENCE_HUB_TABLE = "country_intelligence_hub";
+const NEON_COUNTRIES_TABLE = "countries";
 const NEON_COUNTRY_SELECT_COLUMNS = [
   "p.id",
   "p.hub_country_id",
   "p.country_name",
   "p.iso_code",
+  "c.flag_url AS flag_url",
   "p.overview",
   "p.government_structure",
   "p.political_context",
@@ -1027,6 +1030,22 @@ const NEON_COUNTRY_SELECT_COLUMNS = [
   "h.macro_economics AS macro_economics",
   "h.last_updated AS hub_last_updated",
 ].join(", ");
+const NEON_COUNTRY_FLAG_JOIN = `
+     LEFT JOIN LATERAL (
+       SELECT c.flag_url
+       FROM ${NEON_COUNTRIES_TABLE} c
+       WHERE lower(trim(c.iso3)) = lower(trim(p.iso_code))
+          OR lower(trim(c.iso2)) = lower(trim(p.iso_code))
+          OR lower(c.name) = lower(p.country_name)
+          OR lower(c.official_name) = lower(p.country_name)
+       ORDER BY CASE
+         WHEN lower(trim(c.iso3)) = lower(trim(p.iso_code)) THEN 1
+         WHEN lower(trim(c.iso2)) = lower(trim(p.iso_code)) THEN 2
+         WHEN lower(c.name) = lower(p.country_name) THEN 3
+         ELSE 4
+       END
+       LIMIT 1
+     ) c ON TRUE`;
 
 let neonSqlCache: NeonQueryFunction<false, false> | null | undefined;
 
@@ -1234,6 +1253,12 @@ function countryFlagFromIsoCode(isoCode: string): string | undefined {
     .join("");
 }
 
+function normalizeFlagUrl(value: unknown): string | undefined {
+  const flagUrl = normalizeShortText(value, "", 500);
+  if (!flagUrl) return undefined;
+  return /^(https?:\/\/|\/|data:image\/)/i.test(flagUrl) ? flagUrl : undefined;
+}
+
 function timestampToIso(value: unknown): string | undefined {
   if (value instanceof Date) return value.toISOString();
   return normalizeShortText(value, "", 80) || undefined;
@@ -1379,6 +1404,7 @@ function serializeNeonCountryRow(row: NeonCountryIntelligenceRow): Record<string
     hub_country_id: row.hub_country_id,
     country_name: row.country_name,
     iso_code: row.iso_code,
+    flag_url: row.flag_url,
     overview: row.overview,
     government_structure: row.government_structure,
     political_context: row.political_context,
@@ -1418,6 +1444,7 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
   const countryName = normalizeShortText(row.country_name, "Country", 120);
   const isoCode = normalizeShortText(row.iso_code, "", 3).toUpperCase();
   const countryId = normalizeCountryId(countryName) || normalizeCountryId(isoCode) || String(row.id);
+  const flagUrl = normalizeFlagUrl(row.flag_url);
   const updatedAt = timestampToIso(row.updated_at);
   const hubLastUpdated = timestampToIso(row.hub_last_updated);
   const createdAt = timestampToIso(row.created_at);
@@ -1461,6 +1488,7 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
     ], 120),
     flag: pickFirstJsonTextFromSources(countrySources, [["flag"], ["emoji"], ["flagEmoji"], ["flag_emoji"]], 8)
       || countryFlagFromIsoCode(isoCode),
+    flagUrl,
     profile: {
       overviewEn: normalizeShortText(row.overview || row.executive_summary || row.rag_summary, "", 900)
         || pickFirstJsonTextFromSources(countrySources, [
@@ -1742,6 +1770,7 @@ function normalizeNeonCountryRow(row: NeonCountryIntelligenceRow): any {
       hubCountryId: row.hub_country_id,
       countryName,
       isoCode,
+      flagUrl,
       lastUpdated: updatedAt,
       hubLastUpdated,
       createdAt,
@@ -1768,6 +1797,7 @@ async function fetchNeonCountryProfile(countryId: string, rawCountry: string): P
        ON h.id = p.hub_country_id
        OR lower(h.country_name) = lower(p.country_name)
        OR lower(h.iso_code) = lower(p.iso_code)
+     ${NEON_COUNTRY_FLAG_JOIN}
      WHERE trim(both '-' from regexp_replace(replace(lower(p.country_name), '&', 'and'), '[^a-z0-9]+', '-', 'g')) = $1
         OR lower(p.country_name) = lower($2)
         OR lower(p.iso_code) = lower($2)
@@ -1792,6 +1822,7 @@ async function fetchAllNeonCountryProfiles(): Promise<NeonCountryIntelligenceRow
        ON h.id = p.hub_country_id
        OR lower(h.country_name) = lower(p.country_name)
        OR lower(h.iso_code) = lower(p.iso_code)
+     ${NEON_COUNTRY_FLAG_JOIN}
      ORDER BY p.country_name ASC
      LIMIT $1`,
     [limit]
@@ -3066,18 +3097,6 @@ function renderN8NAdvisorText(parsedResponse: any): string {
   const sections = [answer];
   if (answerRecord) {
     appendN8NMarkdownList(sections, "Key points", normalizeN8NMarkdownList(answerRecord.key_points || answerRecord.keyPoints, 6));
-    appendN8NMarkdownList(sections, "Source notes", normalizeN8NMarkdownList(answerRecord.source_notes || answerRecord.sourceNotes, 5));
-    appendN8NMarkdownList(sections, "Missing data", normalizeN8NMarkdownList(answerRecord.missing_data || answerRecord.missingData, 4));
-    appendN8NMarkdownList(
-      sections,
-      "Recommended follow-up questions",
-      normalizeN8NMarkdownList(answerRecord.recommended_follow_up_questions || answerRecord.recommendedFollowUpQuestions, 4)
-    );
-
-    const confidence = normalizeShortText(answerRecord.confidence, "", 80);
-    if (confidence) {
-      sections.push(`**Confidence:** ${confidence}`);
-    }
   }
 
   return sections.join("\n\n");

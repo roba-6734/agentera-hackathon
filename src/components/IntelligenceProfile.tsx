@@ -1,6 +1,7 @@
 import React from "react";
 import { PrebuiltCountry } from "../types";
 import { Building, Award, Landmark, TrendingUp, Zap, HardHat, Recycle } from "lucide-react";
+import CountryFlag from "./CountryFlag";
 
 interface IntelligenceProfileProps {
   country: PrebuiltCountry;
@@ -18,9 +19,7 @@ export default function IntelligenceProfile({ country, language }: IntelligenceP
         <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-deep/5 rounded-bl-full pointer-events-none"></div>
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
           <div className="flex items-center gap-4">
-            <span className="text-5xl md:text-6xl filter drop-shadow-md" role="img" aria-label="Country Flag">
-              {country.flag}
-            </span>
+            <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="xl" />
             <div>
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-light"></span>

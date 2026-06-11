@@ -14,6 +14,7 @@ import {
   Award,
   Maximize2
 } from "lucide-react";
+import CountryFlag from "./CountryFlag";
 
 interface ComparisonEngineProps {
   country: PrebuiltCountry;
@@ -325,7 +326,7 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
         {/* Selected Country Column */}
         <div className="bg-slate-vip h-16 rounded-sm flex items-center justify-between px-6 text-white border-b-4 border-gold-deep shadow-md" id="col-target-header">
           <span className="text-lg font-bold font-serif tracking-tight flex items-center gap-2.5">
-            <span className="text-2xl">{country.flag}</span>
+            <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="md" />
             <span>{isEn ? country.nameEn : country.nameAr}</span>
           </span>
           <span className="text-[10px] uppercase font-mono tracking-widest text-[#E5C179] bg-[#121E1A] px-2.5 py-1 rounded border border-[#C5A059]/20">
@@ -379,7 +380,10 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
                 {/* Country GDP Column Bar */}
                 <div>
                   <div className="flex justify-between text-xs mb-1.5 font-semibold text-slate-700">
-                    <span className="flex items-center gap-1">{country.flag} {isEn ? country.nameEn : country.nameAr}</span>
+                    <span className="flex items-center gap-1">
+                      <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="xs" />
+                      <span>{isEn ? country.nameEn : country.nameAr}</span>
+                    </span>
                     <span className="font-mono text-slate-800 font-extrabold">{targetGdpLabel}</span>
                   </div>
                   <div className="w-full bg-gray-100 h-6 rounded-md overflow-hidden p-0.5 border border-gray-200">
@@ -482,7 +486,10 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
                     </svg>
                     <div className="absolute inset-0 flex flex-col justify-center items-center">
                       <span className="text-xl font-bold font-mono text-slate-vip">{targetGrowth}%</span>
-                      <span className="text-[9px] text-gray-500 font-bold">{country.flag} {country.nameEn}</span>
+                      <span className="text-[9px] text-gray-500 font-bold flex items-center justify-center gap-1">
+                        <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={country.nameEn} size="xs" />
+                        <span>{country.nameEn}</span>
+                      </span>
                     </div>
                   </div>
                   <span className={`text-[10px] font-mono mt-2 px-2 py-0.5 rounded font-extrabold uppercase ${
@@ -547,7 +554,10 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
 
                 <div>
                   <div className="flex justify-between text-xs font-semibold mb-1">
-                    <span className="flex items-center gap-1">{country.flag} {isEn ? `${country.nameEn} Grid` : `بنية ${country.nameAr}`}</span>
+                    <span className="flex items-center gap-1">
+                      <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="xs" />
+                      <span>{isEn ? `${country.nameEn} Grid` : `بنية ${country.nameAr}`}</span>
+                    </span>
                     <span className="font-mono text-slate-800 font-extrabold">{targetInfra}/100</span>
                   </div>
                   <div className="relative w-full bg-gray-100 h-3 rounded-full overflow-hidden p-0.5 border border-gray-200">
@@ -625,7 +635,10 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
                 </div>
 
                 <div>
-                  <span className="text-[11px] font-bold text-slate-700 block mb-1.5">{country.flag} {isEn ? `${country.nameEn} Fuel Index` : `مزيج وملف ${country.nameAr}`}</span>
+                  <span className="text-[11px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="xs" />
+                    <span>{isEn ? `${country.nameEn} Fuel Index` : `مزيج وملف ${country.nameAr}`}</span>
+                  </span>
                   <div className="w-full h-5 rounded overflow-hidden flex shadow-inner border border-gray-200">
                     {targetEnergyMixSegments.map((seg, sIdx) => (
                       <div 
@@ -689,7 +702,10 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
                       </span>
                     </div>
                     <div className="p-3 bg-slate-50 rounded border border-gray-100">
-                      <span className="text-gray-500 block text-[10px]">{country.flag} {isEn ? `${country.nameEn} Rank` : `ترتيب ${country.nameEn}`}</span>
+                      <span className="text-gray-500 text-[10px] flex items-center gap-1">
+                        <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={country.nameEn} size="xs" />
+                        <span>{isEn ? `${country.nameEn} Rank` : `ترتيب ${country.nameEn}`}</span>
+                      </span>
                       <span className="font-serif font-bold text-slate-vip text-sm mt-1 block">
                         {isEn ? country.indicators.competitivenessRank : country.indicators.competitivenessRank}
                       </span>
@@ -706,7 +722,7 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
                       className="w-full bg-slate-vip rounded-t-sm transition-all duration-1000 ease-out flex items-center justify-center text-[#E5C179] font-bold text-[10px]"
                       style={{ height: `${Math.max(25, 100 - targetCompetitivenessValue)}px` }}
                     >
-                      {country.flag}
+                      <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={country.nameEn} size="sm" />
                     </div>
                     <span className="text-[9px] font-bold text-gray-500 mt-1 truncate max-w-full">{country.nameEn}</span>
                   </div>
@@ -762,7 +778,7 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
                 {/* Target Delegation Value Spot */}
                 <div className="p-6 bg-slate-50/10">
                   <div className="flex items-center gap-2 text-xs font-mono text-gray-400 font-bold mb-2">
-                    <span>{country.flag}</span>
+                    <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="xs" />
                     <span>{isEn ? `${country.nameEn.toUpperCase()} INDEX` : `نتيجة ${country.nameAr}`}</span>
                   </div>
                   <p className="text-sm sm:text-base font-bold text-slate-800 leading-relaxed">
