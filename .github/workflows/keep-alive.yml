@@ -1,0 +1,62 @@
+name: Render keep-alive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping Render health endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      RENDER_HEALTH_URL: ${{ secrets.RENDER_HEALTH_URL }}
+    steps:
+      - name: Call health endpoint
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          if [ -z "${RENDER_HEALTH_URL:-}" ]; then
+            echo "::warning title=Missing Render health URL::Set the RENDER_HEALTH_URL repository secret to your deployed /health URL."
+            exit 0
+          fi
+
+          response_file="${RUNNER_TEMP}/render-health-response.txt"
+          curl_exit=0
+          http_status="$(curl \
+            --silent \
+            --show-error \
+            --location \
+            --connect-timeout 4 \
+            --max-time 8 \
+            --output "${response_file}" \
+            --write-out "%{http_code}" \
+            "${RENDER_HEALTH_URL}")" || curl_exit=$?
+
+          echo "HTTP status: ${http_status}"
+
+          if [ -s "${response_file}" ]; then
+            echo "Response body:"
+            sed -n '1,20p' "${response_file}"
+          else
+            echo "Response body: <empty>"
+          fi
+
+          if [ "${curl_exit}" -ne 0 ]; then
+            echo "::warning title=Render health ping failed::curl exited with ${curl_exit}; this keep-alive check is non-blocking."
+            exit 0
+          fi
+
+          case "${http_status}" in
+            2*)
+              echo "Render health endpoint responded successfully."
+              ;;
+            *)
+              echo "::warning title=Render health returned non-2xx::Status ${http_status}; this keep-alive check is non-blocking."
+              ;;
+          esac

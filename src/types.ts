@@ -164,7 +164,7 @@ export interface BriefingOnePagerArtifact {
   title: string;
   subtitle: string;
   country: string;
-  strategicPriority: "Critical" | "High" | "Medium" | "Low";
+  strategicPriority: string;
   lastUpdated: string;
   uaeRelevance: string;
   fastFacts: BriefingReferenceFact[];
@@ -197,7 +197,7 @@ export interface BriefingArtifacts {
 
 export type activeTabCode = "passport" | "strategic" | "briefing" | "compare" | "chat" | "predictive" | "database" | "debrief";
 
-export type AppRole = "developer" | "staff" | "executive";
+export type AppRole = "staff" | "executive";
 
 export interface AppSession {
   role: AppRole;

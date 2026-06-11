@@ -7,14 +7,13 @@ import ComparisonEngine from "./components/ComparisonEngine";
 import PredictiveIntelligenceView from "./components/PredictiveIntelligenceView";
 import AiChatAssistant from "./components/AiChatAssistant";
 import BilateralCalendar from "./components/BilateralCalendar";
-import DeveloperDashboard from "./components/DeveloperDashboard";
 import AuthPortal from "./components/AuthPortal";
 import StrategicSignalsMonitor from "./components/StrategicSignalsMonitor";
 import StrategicMeetingDebrief from "./components/StrategicMeetingDebrief";
 import CountryFlag from "./components/CountryFlag";
 import { apiFetch } from "./api";
 import { AppRole, AppSession, BriefingArtifacts, PrebuiltCountry, UaeIndicator, activeTabCode } from "./types";
-import { ShieldAlert, Layers, Award, Landmark, Eye, ArrowRight, FileText, CheckCircle2, Activity, Cpu, ChevronDown, Crown, Target, Sparkles, UsersRound, BrainCircuit, MessageCircle, X, Bot } from "lucide-react";
+import { ShieldAlert, Layers, Award, Landmark, Eye, ArrowRight, FileText, CheckCircle2, Activity, Cpu, ChevronDown, Crown, Target, Sparkles, UsersRound, BrainCircuit, MessageCircle, X, Bot, Search } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useGsapScrollCards } from "./hooks/useGsapScrollCards";
 
@@ -40,8 +39,17 @@ interface CountryOption {
   flagUrl?: string;
 }
 
+function normalizeCountrySearch(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[-_]/g, " ")
+    .toLocaleLowerCase()
+    .trim();
+}
+
 function normalizeStoredRole(role: unknown): AppRole | null {
-  if (role === "developer" || role === "staff" || role === "executive") {
+  if (role === "staff" || role === "executive") {
     return role;
   }
 
@@ -63,6 +71,7 @@ function readStoredAppSession(): AppSession | null {
     const parsed = JSON.parse(stored) as AppSession;
     const normalizedRole = normalizeStoredRole(parsed.role);
     if (!normalizedRole) {
+      window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
       return null;
     }
 
@@ -104,6 +113,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<activeTabCode>("passport");
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState<boolean>(false);
+  const [countrySearchQuery, setCountrySearchQuery] = useState<string>("");
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState<boolean>(false);
 
@@ -156,7 +166,7 @@ export default function App() {
 
   // Initialize shared comparison values without loading a country briefing.
   useEffect(() => {
-    if (!session || session.role === "developer") {
+    if (!session) {
       return;
     }
 
@@ -278,6 +288,16 @@ export default function App() {
     setCurrentStep(2); // Set workflow timeline stage to Step 2: Target country selected
   };
 
+  const toggleCountryDropdown = () => {
+    setCountrySearchQuery("");
+    setIsCountryDropdownOpen((current) => !current);
+  };
+
+  const closeCountryDropdown = () => {
+    setCountrySearchQuery("");
+    setIsCountryDropdownOpen(false);
+  };
+
   const handleAuthenticated = (nextSession: AppSession) => {
     // Placeholder session persistence:
     // Replace with verified auth tokens, server-issued role claims, and user records when real auth is connected.
@@ -306,18 +326,6 @@ export default function App() {
     setIsCalendarOpen(false);
   };
 
-  const refreshDatabaseIndex = async () => {
-    try {
-      const resp = await apiFetch("/api/advisor/compare");
-      const data = await resp.json();
-      if (data.countries) {
-        setCountriesIndex({ ...data.countries });
-      }
-    } catch (e) {
-      console.error("Failed to refresh database index:", e);
-    }
-  };
-
   const isEn = language === "en";
   const enrichedBilateralOptions = availableBilateralOptions.map((option) => {
     const indexedCountry = countriesIndex[option.code];
@@ -342,6 +350,12 @@ export default function App() {
     firstCountry.nameEn.localeCompare(secondCountry.nameEn, "en", { sensitivity: "base" }) ||
     firstCountry.code.localeCompare(secondCountry.code, "en", { sensitivity: "base" })
   );
+  const normalizedCountrySearchQuery = normalizeCountrySearch(countrySearchQuery);
+  const filteredCountryOptions = normalizedCountrySearchQuery
+    ? countryOptions.filter((option) =>
+        normalizeCountrySearch(`${option.nameEn} ${option.nameAr} ${option.code}`).includes(normalizedCountrySearchQuery)
+      )
+    : countryOptions;
   const selectedCountryOption = countryOptions.find((option) => option.code === selectedCountryCode);
   const suggestedCountryOptions = ["india", "germany", "singapore"]
     .map((code) => countryOptions.find((option) => option.code === code))
@@ -539,21 +553,6 @@ export default function App() {
     );
   }
 
-  if (session.role === "developer") {
-    return (
-      <div className="min-h-screen bg-[#0E0E0D] flex flex-col" id="majlis-developer-application-root">
-        <main className="max-w-[1700px] xl:max-w-[1850px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 flex-1 w-full">
-          <DeveloperDashboard
-            language={language}
-            countriesCount={Object.keys(countriesIndex).length}
-            onRefreshDatabase={refreshDatabaseIndex}
-            onClose={handleLogout}
-          />
-        </main>
-      </div>
-    );
-  }
-
   if (session.role === "executive") {
     return (
       <div className="min-h-screen bg-[#F8F8F6] flex flex-col justify-between" id="majlis-executive-briefing-root">
@@ -589,7 +588,7 @@ export default function App() {
               <div className="relative inline-block text-left" id="executive-country-selector-wrapper">
                 <button
                   type="button"
-                  onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
+                  onClick={toggleCountryDropdown}
                   className="bg-white hover:bg-gray-50 border border-gold-border rounded-sm shadow-sm px-4 py-2.5 inline-flex items-center justify-between gap-3 text-xs font-bold text-slate-vip focus:outline-none focus:ring-1 focus:ring-gold-deep cursor-pointer min-w-[210px]"
                   id="executive-country-selector-btn"
                 >
@@ -613,19 +612,32 @@ export default function App() {
 
                 {isCountryDropdownOpen && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => setIsCountryDropdownOpen(false)}></div>
+                    <div className="fixed inset-0 z-40" onClick={closeCountryDropdown}></div>
                     <div
-                      className="origin-top-left absolute left-0 mt-1.5 w-64 rounded-sm shadow-xl bg-white border border-gold-border z-50 focus:outline-none divide-y divide-gray-100 max-h-60 overflow-y-auto"
+                      className="origin-top-left absolute left-0 mt-1.5 w-72 rounded-sm shadow-xl bg-white border border-gold-border z-50 focus:outline-none overflow-hidden"
                       id="executive-country-selector-panel"
                     >
-                      <div className="py-1">
-                        {countryOptions.map((option) => (
+                      <div className="p-2 border-b border-gray-100">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                          <input
+                            type="search"
+                            value={countrySearchQuery}
+                            onChange={(event) => setCountrySearchQuery(event.target.value)}
+                            placeholder={isEn ? "Search countries" : "ابحث عن دولة"}
+                            autoFocus
+                            className="w-full rounded-md border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-xs font-medium text-slate-vip outline-none transition focus:border-gold-deep focus:bg-white focus:ring-1 focus:ring-gold-deep"
+                          />
+                        </div>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto py-1">
+                        {filteredCountryOptions.map((option) => (
                           <button
                             key={option.code}
                             type="button"
                             onClick={() => {
                               handleCountryPicked(option.code);
-                              setIsCountryDropdownOpen(false);
+                              closeCountryDropdown();
                             }}
                             className={`w-full text-left px-4 py-2.5 text-xs flex items-center justify-between transition-colors cursor-pointer ${
                               selectedCountryCode === option.code
@@ -642,6 +654,11 @@ export default function App() {
                             )}
                           </button>
                         ))}
+                        {filteredCountryOptions.length === 0 && (
+                          <div className="px-4 py-5 text-center text-xs font-semibold text-gray-500">
+                            {isEn ? "No countries found" : "لم يتم العثور على دول"}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </>
@@ -880,7 +897,7 @@ export default function App() {
             <div className="relative inline-block text-left" id="country-dropdown-spinner-wrapper">
               <button
                 type="button"
-                onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
+                onClick={toggleCountryDropdown}
                 className="bg-white hover:bg-gray-50 border border-gold-border rounded-sm shadow-sm px-4 py-2.5 inline-flex items-center justify-between gap-3 text-xs font-bold text-slate-vip focus:outline-none focus:ring-1 focus:ring-gold-deep cursor-pointer min-w-[200px]"
                 id="country-spinner-trigger-btn"
               >
@@ -906,21 +923,34 @@ export default function App() {
                 <>
                   <div 
                     className="fixed inset-0 z-40" 
-                    onClick={() => setIsCountryDropdownOpen(false)}
+                    onClick={closeCountryDropdown}
                   ></div>
                   
                   <div 
-                    className="origin-top-left absolute left-0 mt-1.5 w-64 rounded-sm shadow-xl bg-white border border-gold-border z-50 focus:outline-none divide-y divide-gray-100 max-h-60 overflow-y-auto"
+                    className="origin-top-left absolute left-0 mt-1.5 w-72 rounded-sm shadow-xl bg-white border border-gold-border z-50 focus:outline-none overflow-hidden"
                     id="country-spinner-options-panel"
                   >
-                    <div className="py-1">
-                      {countryOptions.map((opt) => (
+                    <div className="p-2 border-b border-gray-100">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                        <input
+                          type="search"
+                          value={countrySearchQuery}
+                          onChange={(event) => setCountrySearchQuery(event.target.value)}
+                          placeholder={isEn ? "Search countries" : "ابحث عن دولة"}
+                          autoFocus
+                          className="w-full rounded-md border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-xs font-medium text-slate-vip outline-none transition focus:border-gold-deep focus:bg-white focus:ring-1 focus:ring-gold-deep"
+                        />
+                      </div>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto py-1">
+                      {filteredCountryOptions.map((opt) => (
                         <button
                           key={opt.code}
                           type="button"
                           onClick={() => {
                             handleCountryPicked(opt.code);
-                            setIsCountryDropdownOpen(false);
+                            closeCountryDropdown();
                           }}
                           className={`w-full text-left px-4 py-2.5 text-xs flex items-center justify-between transition-colors cursor-pointer ${
                             selectedCountryCode === opt.code
@@ -937,6 +967,11 @@ export default function App() {
                           )}
                         </button>
                       ))}
+                      {filteredCountryOptions.length === 0 && (
+                        <div className="px-4 py-5 text-center text-xs font-semibold text-gray-500">
+                          {isEn ? "No countries found" : "لم يتم العثور على دول"}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </>

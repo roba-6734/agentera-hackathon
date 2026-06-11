@@ -16,7 +16,6 @@ interface HeaderProps {
 
 export default function Header({ language, setLanguage, selectedCountryNameEn, selectedCountryNameAr, onOpenCalendar, sessionDisplayName, sessionRole, onLogout }: HeaderProps) {
   const roleLabel = {
-    developer: language === "en" ? "Developer" : "مطوّر",
     staff: language === "en" ? "Staff" : "فريق العمل",
     executive: language === "en" ? "Executive" : "قيادي",
   }[sessionRole];
