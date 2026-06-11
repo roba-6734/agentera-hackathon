@@ -678,6 +678,30 @@ select {
   animation: fadeInUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+#executive-briefing-workspace {
+  max-width: min(1760px, calc(100vw - 2rem));
+}
+
+#executive-primary-workspace-grid,
+#executive-main-workspace-column,
+#executive-strategic-signals-side-panel {
+  min-width: 0;
+}
+
+#executive-strategic-signals-side-panel {
+  max-height: calc(100vh - 7rem);
+}
+
+#executive-strategic-signals-side-panel > section {
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+}
+
+#executive-decision-support-panel,
+#executive-advisor-access-tabs,
+#executive-briefing-parts-panel {
+  scroll-margin-top: 7rem;
+}
+
 #navigation-rail-buttons button,
 #country-spinner-trigger-btn,
 #executive-country-selector-btn,

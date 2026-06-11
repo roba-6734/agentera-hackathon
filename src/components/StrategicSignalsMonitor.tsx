@@ -234,7 +234,8 @@ export default function StrategicSignalsMonitor({ language, compact = false, aud
     );
   };
 
-  const signalsToRender = compact ? signals.slice(0, 4) : signals;
+  const isExecutiveCompact = compact && audience === "executive";
+  const signalsToRender = compact ? signals.slice(0, isExecutiveCompact ? 3 : 4) : signals;
 
   return (
     <section
@@ -242,16 +243,16 @@ export default function StrategicSignalsMonitor({ language, compact = false, aud
       id={`${audience}-strategic-signals-monitor`}
       style={{ direction: language === "ar" ? "rtl" : "ltr" }}
     >
-      <div className={`bg-slate-vip border-b border-gold-deep/20 flex items-center justify-between gap-3 ${compact ? "p-3.5" : "p-4"}`}>
+      <div className={`bg-slate-vip border-b border-gold-deep/20 flex items-center justify-between gap-3 ${compact ? "p-4" : "p-4"}`}>
         <div className="flex items-center gap-2 min-w-0">
-          <RadioTower className="w-4 h-4 text-gold-deep shrink-0" />
+          <RadioTower className={`${isExecutiveCompact ? "w-4.5 h-4.5" : "w-4 h-4"} text-gold-deep shrink-0`} />
           <div className="min-w-0">
-            <h3 className="text-xs uppercase font-mono tracking-widest text-gray-100 font-extrabold truncate">
+            <h3 className={`${isExecutiveCompact ? "text-sm" : "text-xs"} uppercase font-mono tracking-widest text-gray-100 font-extrabold truncate`}>
               {compact
                 ? isEn ? "Strategic Signals" : "المؤشرات الاستراتيجية"
                 : isEn ? "Strategic Signals Monitor" : "مراقب المؤشرات الاستراتيجية"}
             </h3>
-            <p className="text-[10px] text-gray-400 mt-1">
+            <p className={`${isExecutiveCompact ? "text-xs" : "text-[10px]"} text-gray-400 mt-1 leading-5`}>
               {audience === "executive"
                 ? isEn ? "News & strategic signals for leadership review" : "أخبار ومؤشرات استراتيجية لمراجعة القيادة"
                 : isEn ? "News & trends for staff review" : "أخبار واتجاهات لمراجعة فريق العمل"}
@@ -283,7 +284,7 @@ export default function StrategicSignalsMonitor({ language, compact = false, aud
         </div>
       </div>
 
-      <div className="p-3.5 space-y-3">
+      <div className={`${isExecutiveCompact ? "p-4 space-y-4" : "p-3.5 space-y-3"}`}>
         <button
           type="button"
           onClick={() => setIsFiltersOpen((isOpen) => !isOpen)}
@@ -385,11 +386,11 @@ export default function StrategicSignalsMonitor({ language, compact = false, aud
         )}
 
         {!isLoading && !errorMessage && signals.length > 0 && (
-          <div className={`space-y-3 overflow-y-auto pr-1 ${compact ? "max-h-[420px]" : "max-h-[560px]"}`} id="strategic-signals-top-five-list">
+          <div className={`space-y-3 overflow-y-auto pr-1 ${compact ? isExecutiveCompact ? "max-h-[560px]" : "max-h-[420px]" : "max-h-[560px]"}`} id="strategic-signals-top-five-list">
             {signalsToRender.map((signal) => (
-              <article key={signal.id} className={`border border-gold-border rounded-lg bg-[#FDFDFC] hover:bg-gold-bg/50 transition-all ${compact ? "p-3" : "p-3.5"}`}>
+              <article key={signal.id} className={`border border-gold-border rounded-lg bg-[#FDFDFC] hover:bg-gold-bg/50 transition-all ${isExecutiveCompact ? "p-4" : compact ? "p-3" : "p-3.5"}`}>
                 <div className="flex items-start justify-between gap-2">
-                  <span className="text-[9px] uppercase tracking-widest font-mono font-black text-emerald-deep bg-emerald-deep/10 border border-emerald-deep/10 px-1.5 py-0.5 rounded-sm">
+                  <span className={`${isExecutiveCompact ? "text-[10px]" : "text-[9px]"} uppercase tracking-widest font-mono font-black text-emerald-deep bg-emerald-deep/10 border border-emerald-deep/10 px-1.5 py-0.5 rounded-sm`}>
                     {categoryLabelById[signal.category]}
                   </span>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -408,10 +409,10 @@ export default function StrategicSignalsMonitor({ language, compact = false, aud
                   </div>
                 </div>
 
-                <h4 className="text-xs font-serif font-bold text-slate-vip leading-5 mt-2 line-clamp-2">
+                <h4 className={`${isExecutiveCompact ? "text-sm leading-6" : "text-xs leading-5"} font-serif font-bold text-slate-vip mt-2 line-clamp-2`}>
                   {signal.title}
                 </h4>
-                <p className={`text-[11px] text-gray-600 leading-5 mt-1 ${compact ? "line-clamp-2" : ""}`}>
+                <p className={`${isExecutiveCompact ? "text-xs leading-5" : "text-[11px] leading-5"} text-gray-600 mt-1 ${compact ? "line-clamp-2" : ""}`}>
                   {signal.summary}
                 </p>
 

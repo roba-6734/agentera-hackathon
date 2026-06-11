@@ -224,72 +224,74 @@ export default function ExecutiveDecisionSupport({
   const objective = cleanText(meetingObjective, 180);
 
   return (
-    <section className="grid grid-cols-1 xl:grid-cols-12 gap-4" id="executive-decision-support-panel">
-      <div className={`bg-white rounded-sm shadow-md border-l-4 ${recommendationStyle.border} p-5 md:p-6 xl:col-span-5`}>
-        <div className="flex items-start justify-between gap-4">
+    <section className="space-y-5" id="executive-decision-support-panel">
+      <div className={`bg-white rounded-sm shadow-md border-l-4 ${recommendationStyle.border} p-5 md:p-7`}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div className={`h-10 w-10 rounded-sm flex items-center justify-center shrink-0 ${recommendationStyle.icon}`}>
-              <Target className="w-5 h-5" />
+            <div className={`h-12 w-12 rounded-sm flex items-center justify-center shrink-0 ${recommendationStyle.icon}`}>
+              <Target className="w-5.5 h-5.5" />
             </div>
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-widest font-mono font-black text-emerald-deep">
                 {isEn ? "Recommended Position" : "الموقف الموصى به"}
               </p>
-              <h3 className="text-lg md:text-xl font-serif font-bold text-slate-vip">
-                {isEn ? "Executive Decision Card" : "بطاقة القرار التنفيذي"}
+              <h3 className="text-xl md:text-2xl font-serif font-bold text-slate-vip leading-tight">
+                {isEn ? "Executive Decision Snapshot" : "ملخص القرار التنفيذي"}
               </h3>
             </div>
           </div>
-          <span className={`shrink-0 rounded-sm border px-3 py-1.5 text-[11px] font-mono font-black uppercase ${recommendationStyle.badge}`}>
+          <span className={`shrink-0 rounded-sm border px-4 py-2 text-xs font-mono font-black uppercase ${recommendationStyle.badge}`}>
             {recommendationLabels[recommendationMode][language]}
           </span>
         </div>
 
-        <div className="mt-5 space-y-4">
-          <div>
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(22rem,0.9fr)] gap-5">
+          <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-widest font-mono font-black text-gray-500">
               {isEn ? "Short Rationale" : "المبرر المختصر"}
             </p>
-            <p className="mt-1 text-sm leading-6 text-slate-vip font-medium">
+            <p className="mt-2 text-base leading-7 text-slate-vip font-medium">
               {rationale}
             </p>
           </div>
 
-          <div className="bg-[#F8F8F6] border border-gold-border/60 rounded-sm p-3.5">
-            <div className="flex items-center gap-2 text-gold-deep">
-              <Sparkles className="w-4 h-4" />
-              <p className="text-[10px] uppercase tracking-widest font-mono font-black">
-                {isEn ? "Best Next Move" : "أفضل خطوة تالية"}
+          <div className="space-y-3 min-w-0">
+            <div className="bg-[#F8F8F6] border border-gold-border/60 rounded-sm p-4">
+              <div className="flex items-center gap-2 text-gold-deep">
+                <Sparkles className="w-4 h-4" />
+                <p className="text-[10px] uppercase tracking-widest font-mono font-black">
+                  {isEn ? "Best Next Move" : "أفضل خطوة تالية"}
+                </p>
+              </div>
+              <p className="mt-2 text-base leading-7 text-slate-vip font-semibold">
+                {nextMove}
               </p>
             </div>
-            <p className="mt-1.5 text-sm leading-6 text-slate-vip font-semibold">
-              {nextMove}
-            </p>
-          </div>
 
-          {objective && (
-            <div className="flex items-start gap-2 text-xs leading-5 text-gray-500">
-              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-deep" />
-              <span>
-                {isEn ? "Aligned to objective: " : "مرتبط بهدف الاجتماع: "}
-                {objective}
-              </span>
-            </div>
-          )}
+            {objective && (
+              <div className="flex items-start gap-2 text-sm leading-6 text-gray-500">
+                <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-emerald-deep" />
+                <span>
+                  {isEn ? "Aligned to objective: " : "مرتبط بهدف الاجتماع: "}
+                  {objective}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-sm shadow-md border-l-4 border-amber-500 p-5 md:p-6 xl:col-span-7">
+      <div className="bg-white rounded-sm shadow-md border-l-4 border-amber-500 p-5 md:p-7">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-sm bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
-              <ShieldAlert className="w-5 h-5" />
+            <div className="h-12 w-12 rounded-sm bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-5.5 h-5.5" />
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-widest font-mono font-black text-amber-700">
                 {isEn ? "Risks To Keep In Mind" : "مخاطر يجب الانتباه لها"}
               </p>
-              <h3 className="text-lg md:text-xl font-serif font-bold text-slate-vip">
+              <h3 className="text-xl md:text-2xl font-serif font-bold text-slate-vip leading-tight">
                 {isEn ? "Top 3 Risk Watchlist" : "أهم 3 مخاطر للمتابعة"}
               </h3>
             </div>
@@ -299,42 +301,42 @@ export default function ExecutiveDecisionSupport({
           </span>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="mt-5 overflow-hidden rounded-sm border border-gray-200 divide-y divide-gray-100">
           {risks.map((risk, index) => (
-            <article key={`${risk.risk}-${index}`} className="border border-gray-200 rounded-sm bg-white p-3.5 min-h-[250px] flex flex-col">
-              <div className="flex items-start justify-between gap-2">
+            <article
+              key={`${risk.risk}-${index}`}
+              className="grid grid-cols-1 xl:grid-cols-[5rem_minmax(0,1fr)_minmax(18rem,0.5fr)] gap-4 bg-white p-4 transition-colors hover:bg-[#F8F8F6]"
+            >
+              <div className="flex items-center justify-between gap-2 lg:flex-col lg:items-start lg:justify-start">
                 <span className="text-[10px] font-mono font-black text-gray-400">
                   {String(index + 1).padStart(2, "0")}
                 </span>
-                <span className={`rounded border px-2 py-0.5 text-[10px] font-mono font-black uppercase ${severityStyles[risk.severity]}`}>
+                <span className={`rounded border px-2.5 py-1 text-[11px] font-mono font-black uppercase ${severityStyles[risk.severity]}`}>
                   {severityLabels[risk.severity][language]}
                 </span>
               </div>
 
-              <p className="mt-3 text-sm font-serif font-bold leading-5 text-slate-vip">
-                {risk.risk}
-              </p>
-
-              <div className="mt-3 border-t border-gray-100 pt-3">
-                <p className="text-[10px] uppercase tracking-widest font-mono font-black text-emerald-deep">
+              <div className="min-w-0">
+                <p className="text-base font-serif font-bold leading-6 text-slate-vip">
+                  {risk.risk}
+                </p>
+                <p className="mt-2 text-[10px] uppercase tracking-widest font-mono font-black text-emerald-deep">
                   {isEn ? "Countermeasure" : "إجراء المعالجة"}
                 </p>
-                <p className="mt-1 text-xs leading-5 text-gray-600">
+                <p className="mt-1 text-sm leading-6 text-gray-600">
                   {risk.mitigation}
                 </p>
               </div>
 
-              <div className="mt-auto pt-3">
-                <div className="flex items-start gap-2 rounded-sm bg-[#F8F8F6] border border-gray-100 p-2.5">
-                  <Activity className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-deep" />
-                  <div>
-                    <p className="text-[9px] uppercase tracking-widest font-mono font-black text-gray-500">
-                      {isEn ? "Watch Signal" : "إشارة المتابعة"}
-                    </p>
-                    <p className="mt-1 text-[11px] leading-4 text-gray-600">
-                      {risk.watchSignal}
-                    </p>
-                  </div>
+              <div className="flex items-start gap-2 rounded-sm bg-[#F8F8F6] border border-gray-100 p-3">
+                <Activity className="mt-0.5 h-4 w-4 shrink-0 text-gold-deep" />
+                <div>
+                  <p className="text-[9px] uppercase tracking-widest font-mono font-black text-gray-500">
+                    {isEn ? "Watch Signal" : "إشارة المتابعة"}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-gray-600">
+                    {risk.watchSignal}
+                  </p>
                 </div>
               </div>
             </article>

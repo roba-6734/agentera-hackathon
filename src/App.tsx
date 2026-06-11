@@ -95,6 +95,7 @@ export default function App() {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState<boolean>(false);
   const [countrySearchQuery, setCountrySearchQuery] = useState<string>("");
+  const countrySelectorRef = useRef<HTMLDivElement | null>(null);
   const [isChatOpen, setIsChatOpen] = useState<boolean>(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState<boolean>(false);
 
@@ -293,6 +294,35 @@ export default function App() {
     setCountrySearchQuery("");
     setIsCountryDropdownOpen(false);
   };
+
+  useEffect(() => {
+    if (!isCountryDropdownOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || countrySelectorRef.current?.contains(target)) {
+        return;
+      }
+
+      closeCountryDropdown();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeCountryDropdown();
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isCountryDropdownOpen]);
 
   const handleAuthenticated = (nextSession: AppSession) => {
     // Placeholder session persistence:
@@ -547,29 +577,29 @@ export default function App() {
           onLogout={handleLogout}
         />
 
-        <main className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 flex-1 w-full space-y-6" id="executive-briefing-workspace">
-          <section className="bg-white rounded-sm shadow-md border-l-4 border-[#CBD5E1] p-5 md:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5" id="executive-briefing-control-ribbon">
+        <main className="max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-8 2xl:px-10 py-8 flex-1 w-full space-y-7" id="executive-briefing-workspace">
+          <section className="bg-white rounded-sm shadow-md border-l-4 border-[#CBD5E1] p-5 md:p-6 lg:p-7 grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_minmax(620px,auto)] 2xl:items-center gap-6" id="executive-briefing-control-ribbon">
             <div className="space-y-1">
               <span className="text-[10px] uppercase font-mono tracking-widest text-emerald-deep font-bold flex items-center gap-1">
                 <Crown className="w-3.5 h-3.5" />
                 <span>{isEn ? "EXECUTIVE MEETING MODE" : "نمط الإحاطة القيادية"}</span>
               </span>
-              <h2 className="text-xl md:text-2xl font-bold font-serif text-slate-vip">
+              <h2 className="text-2xl md:text-3xl font-bold font-serif text-slate-vip leading-tight">
                 {isEn ? "Concise Bilateral Briefing" : "إحاطة ثنائية موجزة"}
               </h2>
-              <p className="text-xs text-gray-500 max-w-2xl">
+              <p className="text-sm text-gray-500 max-w-4xl leading-6">
                 {isEn
                   ? "Focused view for meeting chairs and senior officials: context, decision priority, live news signals, and speaking posture only."
                   : "عرض مركز لرؤساء الاجتماعات وكبار المسؤولين: السياق وأولوية القرار ومؤشرات الأخبار المباشرة ونبرة الحديث فقط."}
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3" id="executive-briefing-controls">
-              <div className="relative inline-block text-left" id="executive-country-selector-wrapper">
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] items-stretch gap-3" id="executive-briefing-controls">
+              <div ref={countrySelectorRef} className="relative inline-block text-left" id="executive-country-selector-wrapper">
                 <button
                   type="button"
                   onClick={toggleCountryDropdown}
-                  className="bg-white hover:bg-gray-50 border border-gold-border rounded-sm shadow-sm px-4 py-2.5 inline-flex items-center justify-between gap-3 text-xs font-bold text-slate-vip focus:outline-none focus:ring-1 focus:ring-gold-deep cursor-pointer min-w-[210px]"
+                  className="bg-white hover:bg-gray-50 border border-gold-border rounded-sm shadow-sm px-4 py-3 inline-flex items-center justify-between gap-3 text-sm font-bold text-slate-vip focus:outline-none focus:ring-1 focus:ring-gold-deep cursor-pointer w-full min-h-[52px]"
                   id="executive-country-selector-btn"
                 >
                   <div className="flex items-center gap-2 min-w-0">
@@ -591,12 +621,10 @@ export default function App() {
                 </button>
 
                 {isCountryDropdownOpen && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={closeCountryDropdown}></div>
-                    <div
-                      className="origin-top-left absolute left-0 mt-1.5 w-72 rounded-sm shadow-xl bg-white border border-gold-border z-50 focus:outline-none overflow-hidden"
-                      id="executive-country-selector-panel"
-                    >
+                  <div
+                    className="origin-top-left absolute left-0 mt-1.5 w-72 rounded-sm shadow-xl bg-white border border-gold-border z-50 focus:outline-none overflow-hidden"
+                    id="executive-country-selector-panel"
+                  >
                       <div className="p-2 border-b border-gray-100">
                         <div className="relative">
                           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
@@ -640,25 +668,24 @@ export default function App() {
                           </div>
                         )}
                       </div>
-                    </div>
-                  </>
+                  </div>
                 )}
               </div>
 
-              <form onSubmit={(event) => { event.preventDefault(); triggerSyncSearch(); }} className="flex items-center gap-2 border border-gold-border rounded-sm p-1 bg-white shadow-sm" id="executive-meeting-objective-form">
+              <form onSubmit={(event) => { event.preventDefault(); triggerSyncSearch(); }} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border border-gold-border rounded-sm p-1.5 bg-white shadow-sm" id="executive-meeting-objective-form">
                 <input
                   type="text"
                   placeholder={isEn ? "Meeting objective..." : "هدف الاجتماع..."}
                   value={meetingObjective}
                   onChange={(event) => setMeetingObjective(event.target.value)}
                   disabled={isGenerating}
-                  className="px-2 py-1.5 text-xs w-48 sm:w-56 outline-none bg-transparent placeholder-gray-400 font-sans border-0"
+                  className="px-3 py-2.5 text-sm w-full min-w-0 outline-none bg-transparent placeholder-gray-400 font-sans border-0"
                   id="executive-meeting-objective-input"
                 />
                 <button
                   type="submit"
                   disabled={isGenerating || !selectedCountryCode}
-                  className="px-3.5 py-2 bg-slate-vip hover:bg-gold-deep hover:text-slate-vip text-white text-[10px] uppercase tracking-widest font-extrabold rounded-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all font-mono"
+                  className="px-4 py-3 bg-slate-vip hover:bg-gold-deep hover:text-slate-vip text-white text-[11px] uppercase tracking-widest font-extrabold rounded-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all font-mono min-h-[44px]"
                   id="executive-refresh-brief-btn"
                 >
                   <span>
@@ -674,9 +701,9 @@ export default function App() {
             </div>
           </section>
 
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6" id="executive-primary-workspace-grid">
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(390px,450px)] gap-6 2xl:gap-8 items-start" id="executive-primary-workspace-grid">
             <div
-              className="xl:col-span-8 space-y-6"
+              className="min-w-0 space-y-6 2xl:space-y-8"
               id="executive-main-workspace-column"
               style={{ direction: language === "ar" ? "rtl" : "ltr" }}
             >
@@ -783,12 +810,6 @@ export default function App() {
                     </h3>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2 text-[10px] font-mono font-black uppercase">
-                  <span className="bg-gold-deep text-slate-vip px-2.5 py-1 rounded-sm">{isEn ? "Summary" : "ملخص"}</span>
-                  <span className="bg-white/10 text-white px-2.5 py-1 rounded-sm border border-white/15">{isEn ? "Talking Points" : "نقاط الحديث"}</span>
-                  <span className="bg-white/10 text-white px-2.5 py-1 rounded-sm border border-white/15">{isEn ? "One-Pager" : "صفحة واحدة"}</span>
-                  <span className="bg-white/10 text-white px-2.5 py-1 rounded-sm border border-white/15">{isEn ? "Slides" : "شرائح"}</span>
-                </div>
               </div>
 
               <div className="p-4 md:p-6">
@@ -814,7 +835,7 @@ export default function App() {
           )}
             </div>
 
-            <aside className="xl:col-span-4 xl:sticky xl:top-6 xl:self-start" id="executive-strategic-signals-side-panel">
+            <aside className="min-w-0 xl:sticky xl:top-8 xl:self-start" id="executive-strategic-signals-side-panel">
               <StrategicSignalsMonitor language={language} compact audience="executive" />
             </aside>
           </div>
@@ -964,7 +985,7 @@ export default function App() {
 
            {/* Styled premium spinner country selector with dropdown options */}
           <div className="flex flex-wrap items-center gap-3 xl:col-span-4 xl:self-center" id="quick-bilateral-selector">
-            <div className="relative inline-block text-left" id="country-dropdown-spinner-wrapper">
+            <div ref={countrySelectorRef} className="relative inline-block text-left" id="country-dropdown-spinner-wrapper">
               <button
                 type="button"
                 onClick={toggleCountryDropdown}
@@ -990,16 +1011,10 @@ export default function App() {
               </button>
 
               {isCountryDropdownOpen && (
-                <>
-                  <div 
-                    className="fixed inset-0 z-40" 
-                    onClick={closeCountryDropdown}
-                  ></div>
-                  
-                  <div 
-                    className="origin-top-left absolute left-0 mt-1.5 w-72 rounded-sm shadow-xl bg-white border border-gold-border z-50 focus:outline-none overflow-hidden"
-                    id="country-spinner-options-panel"
-                  >
+                <div
+                  className="origin-top-left absolute left-0 mt-1.5 w-72 rounded-sm shadow-xl bg-white border border-gold-border z-50 focus:outline-none overflow-hidden"
+                  id="country-spinner-options-panel"
+                >
                     <div className="p-2 border-b border-gray-100">
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
@@ -1078,8 +1093,7 @@ export default function App() {
                         {isEn ? "Clear" : "مسح"}
                       </button>
                     </div>
-                  </div>
-                </>
+                </div>
               )}
             </div>
 
