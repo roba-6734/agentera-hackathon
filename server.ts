@@ -895,6 +895,77 @@ const prebuiltCountries: Record<string, any> = {
   }
 };
 
+const DEMO_COUNTRY_PROFILE_SOURCE = "demo-prebuilt-country-profiles";
+const demoCountryIds = new Set(Object.keys(prebuiltCountries));
+const demoCountryAliases: Record<string, string> = {
+  brazil: "brazil",
+  brasil: "brazil",
+  germany: "germany",
+  deutschland: "germany",
+  india: "india",
+  singapore: "singapore",
+  "united-states": "united-states",
+  "united-states-of-america": "united-states",
+  usa: "united-states",
+  us: "united-states",
+  america: "united-states",
+  "united-kingdom": "united-kingdom",
+  "united-kingdom-of-great-britain-and-northern-ireland": "united-kingdom",
+  uk: "united-kingdom",
+  gb: "united-kingdom",
+  britain: "united-kingdom",
+  "great-britain": "united-kingdom",
+  china: "china",
+  "peoples-republic-of-china": "china",
+  prc: "china",
+  japan: "japan",
+  "saudi-arabia": "saudi-arabia",
+  "kingdom-of-saudi-arabia": "saudi-arabia",
+  ksa: "saudi-arabia",
+  egypt: "egypt",
+  "egypt-arab-rep": "egypt",
+  "egypt-arab-republic": "egypt",
+  "arab-republic-of-egypt": "egypt",
+};
+const demoCountryIsoCodes: Record<string, string> = {
+  brazil: "BRA",
+  germany: "DEU",
+  india: "IND",
+  singapore: "SGP",
+  "united-states": "USA",
+  "united-kingdom": "GBR",
+  china: "CHN",
+  japan: "JPN",
+  "saudi-arabia": "SAU",
+  egypt: "EGY",
+};
+
+function resolveDemoCountryId(countryId: string): string {
+  const normalizedCountryId = normalizeCountryId(countryId);
+  return demoCountryAliases[normalizedCountryId] || (demoCountryIds.has(normalizedCountryId) ? normalizedCountryId : "");
+}
+
+function isDemoCountryId(countryId: string): boolean {
+  return Boolean(resolveDemoCountryId(countryId));
+}
+
+function getDemoCountryProfile(countryId: string): any | undefined {
+  const resolvedCountryId = resolveDemoCountryId(countryId);
+  const countryData = resolvedCountryId ? prebuiltCountries[resolvedCountryId] : undefined;
+  return countryData ? cloneJson(countryData) : undefined;
+}
+
+function buildDemoCountryIntelligenceRow(countryData: any): Record<string, any> {
+  return {
+    id: countryData.id,
+    country_name: countryData.nameEn,
+    iso_code: demoCountryIsoCodes[normalizeCountryId(countryData.id)] || normalizeCountryId(countryData.id).toUpperCase(),
+    source: DEMO_COUNTRY_PROFILE_SOURCE,
+    profile_status: "demo",
+    profile_json: countryData,
+  };
+}
+
 type NeonCountryIntelligenceRow = {
   id: number | string;
   hub_country_id: number | null;
@@ -2500,6 +2571,11 @@ async function translateCountryDataForLanguage(
 }
 
 async function loadCountryProfile(countryId: string, rawCountry: string): Promise<{ countryData: any; source: string }> {
+  const demoCountryData = getDemoCountryProfile(countryId);
+  if (demoCountryData) {
+    return { countryData: demoCountryData, source: DEMO_COUNTRY_PROFILE_SOURCE };
+  }
+
   const localBase = prebuiltCountries[countryId] || buildGenericCountryData(rawCountry, countryId);
   let mergedCountryData = localBase;
   let source = prebuiltCountries[countryId] ? "local-standby-database" : "generated-standby-profile";
@@ -2526,6 +2602,8 @@ async function loadAllCountryProfiles(): Promise<Record<string, any>> {
       const normalizedRecord = normalizeNeonCountryRow(countryRecord);
       const countryId = normalizeCountryId(normalizedRecord.id || normalizedRecord.nameEn || countryRecord.country_name);
       if (!countryId) return;
+      if (isDemoCountryId(countryId)) return;
+
       const localBase = mergedCountries[countryId] || buildGenericCountryData(countryRecord.country_name || countryId, countryId);
       mergedCountries[countryId] = deepMergeCountryData(localBase, { ...normalizedRecord, id: countryId });
     });
@@ -4083,6 +4161,18 @@ ${rawData}`;
 app.get("/api/advisor/country-intelligence/:country", async (req, res) => {
   const requestedCountry = normalizeShortText(req.params.country, "brazil", 160);
   const normalizedCountry = normalizeCountryId(requestedCountry);
+  const demoCountryData = getDemoCountryProfile(normalizedCountry);
+
+  if (demoCountryData) {
+    return res.json({
+      success: true,
+      source: DEMO_COUNTRY_PROFILE_SOURCE,
+      table: "prebuiltCountries",
+      countryId: demoCountryData.id,
+      row: buildDemoCountryIntelligenceRow(demoCountryData),
+      countryData: demoCountryData,
+    });
+  }
 
   try {
     const row = await fetchNeonCountryProfile(normalizedCountry, requestedCountry);
@@ -4120,6 +4210,7 @@ app.get("/api/advisor/database-status", async (req, res) => {
   res.status(neonStatus.reachable || !neonStatus.configured ? 200 : 503).json({
     success: neonStatus.reachable,
     standardDatabasePriority: [
+      DEMO_COUNTRY_PROFILE_SOURCE,
       "neon-country-intelligence-profiles",
       "local-standby-database",
     ],

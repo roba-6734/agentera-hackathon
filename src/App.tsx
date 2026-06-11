@@ -362,15 +362,6 @@ export default function App() {
       step: 8,
       badge: "MEMO",
     },
-    ...(session?.role === "staff"
-      ? [{
-          code: "debrief" as activeTabCode,
-          labelEn: "Meeting Debrief",
-          labelAr: "تحليل الاجتماع",
-          Icon: BrainCircuit,
-          step: 7,
-        }]
-      : []),
     {
       code: "compare" as activeTabCode,
       labelEn: "Sovereign Comparison",
@@ -385,6 +376,15 @@ export default function App() {
       Icon: Eye,
       step: 5,
     },
+    ...(session?.role === "staff"
+      ? [{
+          code: "debrief" as activeTabCode,
+          labelEn: "Meeting Debrief",
+          labelAr: "تحليل الاجتماع",
+          Icon: BrainCircuit,
+          step: 7,
+        }]
+      : []),
   ];
   const showSignalsPanel = session?.role === "staff" && activeTab !== "debrief";
   const activeWorkspaceTab = workspaceTabItems.find((item) => item.code === activeTab);
@@ -731,12 +731,62 @@ export default function App() {
           )}
         </main>
 
+        <button
+          onClick={() => {
+            if (activeCountry) {
+              setIsChatOpen(!isChatOpen);
+            }
+          }}
+          disabled={!activeCountry}
+          title={
+            activeCountry
+              ? isEn ? "Open executive AI advisor chat" : "فتح محادثة المستشار الذكي القيادي"
+              : isEn ? "Select and initialize a country first" : "اختر دولة وابدأ البحث أولاً"
+          }
+          className="fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#94A3B8] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+          id="ai-policy-chat-launcher"
+          style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+        >
+          <div className="flex items-center gap-2.5">
+            <MessageCircle className="w-4 h-4 opacity-90" />
+            <span className="chat-launcher-label">{isEn ? "Executive AI Advisor Chat" : "محادثة المستشار الذكي القيادي"}</span>
+          </div>
+          {!isChatOpen && (
+            <span className="chat-launcher-dot h-2 w-2 rounded-full bg-emerald-light animate-pulse ml-2 shrink-0 block"></span>
+          )}
+          {isChatOpen && (
+            <X className="chat-launcher-close w-4 h-4 text-gold-deep ml-2 shrink-0" />
+          )}
+        </button>
+
         <footer className="bg-slate-vip border-t border-gold-deep/15 py-5 mt-8 text-white" id="executive-briefing-footer">
           <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 flex flex-col md:flex-row items-center justify-between gap-3 text-xs font-mono text-gray-400">
             <span className="font-serif font-extrabold text-gold-deep">Ministry of Energy & Infrastructure</span>
             <span>{isEn ? "Executive Briefing Node" : "وحدة الإحاطة القيادية"}</span>
           </div>
         </footer>
+
+        {isChatOpen && activeCountry && (
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-transparent"
+              onClick={() => setIsChatOpen(false)}
+              id="chat-outside-dismiss-backdrop"
+            />
+            <div
+              className="fixed bottom-28 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[560px] lg:w-[640px] max-w-[calc(100vw-2rem)] h-[min(720px,calc(100vh-9rem))] bg-white rounded-lg shadow-2xl border border-[#CBD5E1] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
+              style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+            >
+              <AiChatAssistant
+                language={language}
+                selectedCountryCode={selectedCountryCode}
+                selectedCountryNameEn={activeCountry.nameEn}
+                selectedCountryNameAr={activeCountry.nameAr}
+                onClose={() => setIsChatOpen(false)}
+              />
+            </div>
+          </>
+        )}
       </div>
     );
   }

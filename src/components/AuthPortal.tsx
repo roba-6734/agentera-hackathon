@@ -107,7 +107,7 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
       <div className="auth-light-beam auth-light-beam-one" />
       <div className="auth-light-beam auth-light-beam-two" />
 
-      <header className="relative z-10 max-w-[1180px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 animate-fade-in-down">
+      <header className="auth-portal-header relative z-10 mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 animate-fade-in-down">
         <div className="auth-glass-pill flex items-center gap-3 min-w-0 rounded-lg px-3 py-2 w-full sm:w-auto">
           <div className="auth-logo-badge h-14 w-14 rounded-lg flex items-center justify-center shrink-0">
             <img src={majlisLogo} alt="Majlis AI logo" className="h-12 w-10 object-contain" />
@@ -131,9 +131,9 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
         </button>
       </header>
 
-      <main className="relative z-10 max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 lg:py-14">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-stretch">
-          <section className="lg:col-span-7 flex flex-col justify-center animate-fade-in-up">
+      <main className="auth-portal-main relative z-10 mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8">
+        <div className="auth-main-grid grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-stretch">
+          <section className="auth-content-column lg:col-span-7 flex flex-col justify-center animate-fade-in-up">
             <div className="space-y-5 sm:space-y-6 min-w-0" style={{ direction: isEn ? "ltr" : "rtl" }}>
               <div className="auth-glass-pill inline-flex items-center gap-2 rounded-lg px-3 py-2">
                 <ShieldCheck className="w-4 h-4 text-teal-glow" />
@@ -143,7 +143,7 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
               </div>
 
               <div className="space-y-3">
-                <h2 className="text-3xl sm:text-5xl font-serif font-bold text-slate-vip leading-tight break-words">
+                <h2 className="auth-hero-title text-3xl sm:text-5xl font-serif font-bold text-slate-vip leading-tight break-words">
                   {isEn ? (
                     <>
                       Select your <span className="auth-gradient-text">Majlis AI</span>{" "}
@@ -234,7 +234,7 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
             </div>
           </section>
 
-          <section className="lg:col-span-5 animate-fade-in-right min-w-0 flex flex-col justify-center">
+          <section className="auth-form-column lg:col-span-5 animate-fade-in-right min-w-0 flex flex-col justify-center">
             <form
               onSubmit={handleSubmit}
               className="auth-panel rounded-lg overflow-hidden w-full min-w-0"

@@ -287,8 +287,8 @@ export default function DeveloperDashboard({ language, countriesCount, onRefresh
             <div className="bg-[#1C1C18] rounded border border-[#2B2B24] p-3 text-[10px] font-mono text-gray-500 leading-relaxed">
               <span className="font-bold text-[#C5A059] block mb-1">DATA SOURCE:</span>
               {isEn
-                ? "Country search, comparison, and direct intelligence rows are served from Neon country_intelligence_profiles."
-                : "يتم تقديم ملفات الدول والمقارنة من جدول country_intelligence_profiles في نيون."}
+                ? "Demo countries use prebuilt profiles; all other country search, comparison, and direct intelligence rows are served from Neon country_intelligence_profiles."
+                : "تستخدم دول العرض ملفات جاهزة، بينما تُقدم بقية ملفات الدول والمقارنة من جدول country_intelligence_profiles في نيون."}
             </div>
           </div>
         </div>
@@ -299,10 +299,10 @@ export default function DeveloperDashboard({ language, countriesCount, onRefresh
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#20201B] pb-4">
                 <div>
                   <h3 className="text-base font-bold font-serif text-white">
-                    {isEn ? "Live Neon Country Intelligence Rows" : "سجلات نيون الحية لملفات الدول"}
+                    {isEn ? "Country Intelligence Rows" : "سجلات ملفات الدول"}
                   </h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    {isEn ? "Inspect rows from country_intelligence_profiles and the UI-safe profile derived from them." : "استعراض بيانات جدول نيون وشكل الملف المستخدم في الواجهة."}
+                    {isEn ? "Inspect demo prebuilt profiles or Neon country_intelligence_profiles rows and the UI-safe profile derived from them." : "استعراض ملفات العرض الجاهزة أو بيانات جدول نيون وشكل الملف المستخدم في الواجهة."}
                   </p>
                 </div>
               </div>
@@ -317,7 +317,7 @@ export default function DeveloperDashboard({ language, countriesCount, onRefresh
               {isLoadingCountries ? (
                 <div className="text-center py-12">
                   <RefreshCw className="w-8 h-8 animate-spin text-gold-deep mx-auto mb-2" />
-                  <p className="text-xs font-mono text-gray-500">{isEn ? "Querying Neon country intelligence..." : "يتم فحص بيانات نيون..."}</p>
+                  <p className="text-xs font-mono text-gray-500">{isEn ? "Querying country intelligence..." : "يتم فحص بيانات الدول..."}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">

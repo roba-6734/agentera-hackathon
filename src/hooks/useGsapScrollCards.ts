@@ -6,9 +6,6 @@ gsap.registerPlugin(ScrollTrigger);
 
 const CARD_REVEAL_SELECTOR = [
   "[data-gsap-card]",
-  ".auth-assist-card",
-  ".auth-role-card",
-  ".auth-panel",
   ".ai-assist-card",
   "#cabinet-briefing-upper-ribbon",
   "#intelligence-hub-strip",
