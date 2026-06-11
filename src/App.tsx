@@ -837,33 +837,30 @@ export default function App() {
           </div>
         </main>
 
-        <button
-          onClick={() => {
-            if (activeCountry) {
-              setIsChatOpen(!isChatOpen);
+        {!isChatOpen && (
+          <button
+            onClick={() => {
+              if (activeCountry) {
+                setIsChatOpen(true);
+              }
+            }}
+            disabled={!activeCountry}
+            title={
+              activeCountry
+                ? isEn ? "Open executive AI advisor chat" : "فتح محادثة المستشار الذكي القيادي"
+                : isEn ? "Select and initialize a country first" : "اختر دولة وابدأ البحث أولاً"
             }
-          }}
-          disabled={!activeCountry}
-          title={
-            activeCountry
-              ? isEn ? "Open executive AI advisor chat" : "فتح محادثة المستشار الذكي القيادي"
-              : isEn ? "Select and initialize a country first" : "اختر دولة وابدأ البحث أولاً"
-          }
-          className="fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#94A3B8] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
-          id="ai-policy-chat-launcher"
-          style={{ direction: language === "ar" ? "rtl" : "ltr" }}
-        >
-          <div className="flex items-center gap-2.5">
-            <MessageCircle className="w-4 h-4 opacity-90" />
-            <span className="chat-launcher-label">{isEn ? "Executive AI Advisor Chat" : "محادثة المستشار الذكي القيادي"}</span>
-          </div>
-          {!isChatOpen && (
+            className="fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#94A3B8] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+            id="ai-policy-chat-launcher"
+            style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+          >
+            <div className="flex items-center gap-2.5">
+              <MessageCircle className="w-4 h-4 opacity-90" />
+              <span className="chat-launcher-label">{isEn ? "Executive AI Advisor Chat" : "محادثة المستشار الذكي القيادي"}</span>
+            </div>
             <span className="chat-launcher-dot h-2 w-2 rounded-full bg-emerald-light animate-pulse ml-2 shrink-0 block"></span>
-          )}
-          {isChatOpen && (
-            <X className="chat-launcher-close w-4 h-4 text-gold-deep ml-2 shrink-0" />
-          )}
-        </button>
+          </button>
+        )}
 
         <footer className="bg-slate-vip border-t border-gold-deep/15 py-5 mt-8 text-white" id="executive-briefing-footer">
           <div className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 flex flex-col md:flex-row items-center justify-between gap-3 text-xs font-mono text-gray-400">
@@ -1403,9 +1400,9 @@ export default function App() {
           </div>
         </section>
 
-        {activeCountry && (
+        {activeCountry && !isChatOpen && (
           <button
-            onClick={() => setIsChatOpen(!isChatOpen)}
+            onClick={() => setIsChatOpen(true)}
             className={`fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#94A3B8] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm ${showSignalsPanel ? "staff-signals-chat-launcher" : ""}`}
             id="ai-policy-chat-launcher"
             style={{ direction: language === "ar" ? "rtl" : "ltr" }}
@@ -1414,12 +1411,7 @@ export default function App() {
               <MessageCircle className="w-4 h-4 opacity-90" />
               <span className="chat-launcher-label">{isEn ? "AI Policy Advisor Chat" : "المستشار الرقمي الفوري"}</span>
             </div>
-            {!isChatOpen && (
-              <span className="chat-launcher-dot h-2 w-2 rounded-full bg-emerald-light animate-pulse ml-2 shrink-0 block"></span>
-            )}
-            {isChatOpen && (
-              <X className="chat-launcher-close w-4 h-4 text-gold-deep ml-2 shrink-0" />
-            )}
+            <span className="chat-launcher-dot h-2 w-2 rounded-full bg-emerald-light animate-pulse ml-2 shrink-0 block"></span>
           </button>
         )}
 

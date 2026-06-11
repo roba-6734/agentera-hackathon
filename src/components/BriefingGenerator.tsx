@@ -2630,7 +2630,7 @@ export default function BriefingGenerator({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5" id="one-pager-decision-strip">
+              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-2.5" id="one-pager-decision-strip">
                 {onePagerDecisionCards.map((card) => (
                   <div key={card.label} className={`rounded border p-3.5 min-h-[108px] ${card.tone}`}>
                     <p className={`text-[10px] uppercase tracking-widest font-mono font-black ${card.labelClass}`}>{card.label}</p>
@@ -2639,8 +2639,8 @@ export default function BriefingGenerator({
                 ))}
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 items-start">
-                <section className="xl:col-span-4 space-y-3">
+              <div className="grid grid-cols-1 2xl:grid-cols-12 gap-3 items-start">
+                <section className="2xl:col-span-4 space-y-3">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep">{isEn ? "Fast Facts" : "حقائق سريعة"}</h4>
                   <div className="grid grid-cols-2 gap-2">
                     {onePagerFactsForDisplay.slice(0, 8).map((fact, index) => (
@@ -2655,7 +2655,7 @@ export default function BriefingGenerator({
                   </div>
                 </section>
 
-                <section className="xl:col-span-5 space-y-3">
+                <section className="2xl:col-span-5 space-y-3">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep">{isEn ? "Sector Scorecard" : "بطاقة القطاعات"}</h4>
                   <div className="overflow-hidden border border-gray-200 rounded">
                     <table className="w-full text-xs">
@@ -2687,7 +2687,7 @@ export default function BriefingGenerator({
                   </div>
                 </section>
 
-                <section className="xl:col-span-3 space-y-3">
+                <section className="2xl:col-span-3 space-y-3">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep">{isEn ? "Leadership" : "القيادة"}</h4>
                   <div className="space-y-2">
                     {onePagerLeadership.slice(0, 3).map((leader, index) => (
@@ -2701,8 +2701,8 @@ export default function BriefingGenerator({
                 </section>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
-                <section className="lg:col-span-5 bg-white border border-gray-200 rounded p-3.5 h-fit self-start">
+              <div className="grid grid-cols-1 2xl:grid-cols-12 gap-3 items-start">
+                <section className="2xl:col-span-5 bg-white border border-gray-200 rounded p-3.5 h-fit self-start">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep mb-3">{isEn ? "Opportunity Map" : "خريطة الفرص"}</h4>
                   <div className="space-y-2.5">
                     {onePagerOpportunities.slice(0, 3).map((opportunity, index) => (
@@ -2717,7 +2717,7 @@ export default function BriefingGenerator({
                   </div>
                 </section>
 
-                <section className="lg:col-span-4 bg-white border border-gray-200 rounded p-3.5 h-fit self-start">
+                <section className="2xl:col-span-4 bg-white border border-gray-200 rounded p-3.5 h-fit self-start">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep mb-3">{isEn ? "Risk And Mitigation" : "المخاطر والمعالجة"}</h4>
                   <div className="space-y-2.5">
                     {onePagerRisks.slice(0, 2).map((risk, index) => (
@@ -2732,7 +2732,7 @@ export default function BriefingGenerator({
                   </div>
                 </section>
 
-                <section className="lg:col-span-3 bg-slate-vip text-white rounded p-3.5 h-fit self-start">
+                <section className="2xl:col-span-3 bg-slate-vip text-white rounded p-3.5 h-fit self-start">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-gold-deep mb-3 flex items-center gap-1.5">
                     <Clock3 className="w-3.5 h-3.5" />
                     <span>{isEn ? "90-Day Actions" : "خطوات 90 يوما"}</span>

@@ -271,6 +271,7 @@ export default function AiChatAssistant({
   const [userInput, setUserInput] = useState("");
   const [isQuerying, setIsQuerying] = useState(false);
   const [agentRequestPhase, setAgentRequestPhase] = useState<"idle" | "sending" | "waiting">("idle");
+  const [thinkingStepIndex, setThinkingStepIndex] = useState(0);
   const [lastWorkflowStatus, setLastWorkflowStatus] = useState<"ready" | "n8n" | "local-fallback">("ready");
   const [chatLog, setChatLog] = useState<ChatMessage[]>(initialThread.messages);
   const [voiceStatus, setVoiceStatus] = useState<VoiceInputStatus>("idle");
@@ -324,6 +325,19 @@ export default function AiChatAssistant({
   }, [chatLog, isQuerying]);
 
   useEffect(() => {
+    if (!isQuerying) {
+      setThinkingStepIndex(0);
+      return;
+    }
+
+    const thinkingTimer = window.setInterval(() => {
+      setThinkingStepIndex((currentIndex) => currentIndex + 1);
+    }, 1500);
+
+    return () => window.clearInterval(thinkingTimer);
+  }, [isQuerying]);
+
+  useEffect(() => {
     return () => {
       if (recordingTimerRef.current) {
         window.clearInterval(recordingTimerRef.current);
@@ -371,6 +385,24 @@ export default function AiChatAssistant({
           label: "مقارنة السياسات والمؤشرات مع الإمارات",
           query: `توفير مقارنة تحليلية مباشرة لجاهزية الطرق والموانئ في ${selectedCountryNameAr} مع المكتسبات الفيدرالية للإمارات.`,
         },
+      ];
+
+  const advisorThinkingSteps = isEn
+    ? [
+        "Routing secure advisor request...",
+        "Retrieving relevant intelligence...",
+        "Cross-checking policy context...",
+        "Organizing the response...",
+        "Advisor thinking through options...",
+        "Drafting executive recommendation...",
+      ]
+    : [
+        "توجيه الطلب الآمن إلى المستشار...",
+        "استرجاع المعلومات ذات الصلة...",
+        "مطابقة السياق السياساتي...",
+        "تنظيم الرد التنفيذي...",
+        "المستشار يوازن الخيارات...",
+        "صياغة التوصية القيادية...",
       ];
 
   const resetThread = () => {
@@ -667,8 +699,8 @@ export default function AiChatAssistant({
   const workflowLabel =
     lastWorkflowStatus === "n8n" ? "N8N" : lastWorkflowStatus === "local-fallback" ? "LOCAL" : "READY";
   const agentLoadingLabel = agentRequestPhase === "sending"
-    ? (isEn ? "Sending request to advisor..." : "جارٍ إرسال الطلب إلى المستشار...")
-    : (isEn ? "Waiting for advisor response..." : "بانتظار رد المستشار...");
+    ? advisorThinkingSteps[0]
+    : advisorThinkingSteps[1 + (thinkingStepIndex % (advisorThinkingSteps.length - 1))];
 
   return (
     <div className="bg-white rounded-sm shadow-md border border-gold-border overflow-hidden flex flex-col h-full" id="ai-chat-assistant-container">
@@ -748,7 +780,7 @@ export default function AiChatAssistant({
             </div>
             <div className="bg-white rounded-sm border border-gold-border p-4 flex items-center gap-2">
               <div className="h-2 w-2 rounded-full bg-gold-deep animate-ping"></div>
-              <span className="text-xs text-gray-400 font-semibold font-mono">
+              <span key={agentLoadingLabel} className="text-xs text-gray-500 font-semibold font-mono animate-in fade-in duration-300">
                 {agentLoadingLabel}
               </span>
             </div>
