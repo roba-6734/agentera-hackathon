@@ -385,7 +385,7 @@ export default function App() {
       )
     : countryOptions;
   const selectedCountryOption = countryOptions.find((option) => option.code === selectedCountryCode);
-  const suggestedCountryOptions = ["india", "germany", "singapore"]
+  const suggestedCountryOptions = ["saudi-arabia", "united-states", "china"]
     .map((code) => countryOptions.find((option) => option.code === code))
     .filter((option): option is CountryOption => Boolean(option));
   const selectedCountryNameEn = activeCountry?.nameEn || selectedCountryOption?.nameEn || "Select country";
@@ -450,7 +450,8 @@ export default function App() {
         }]
       : []),
   ];
-  const showSignalsPanel = session?.role === "staff" && activeTab !== "debrief";
+  const isStaffSetupMode = session?.role === "staff" && !activeCountry && activeTab !== "debrief";
+  const showSignalsPanel = session?.role === "staff" && Boolean(activeCountry) && activeTab !== "debrief";
   const activeWorkspaceTab = workspaceTabItems.find((item) => item.code === activeTab);
   const workspaceSectionTitle = activeCountry
     ? `${isEn ? activeWorkspaceTab?.labelEn || "Workspace" : activeWorkspaceTab?.labelAr || "مساحة العمل"} - ${isEn ? activeCountry.nameEn : activeCountry.nameAr}`
@@ -931,6 +932,232 @@ export default function App() {
 
       {/* Primary Workspace container */}
       <main className="max-w-[1700px] xl:max-w-[1850px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 flex-1 w-full space-y-8" id="application-primary-workspace">
+        {isStaffSetupMode ? (
+          <motion.section
+            key="staff-setup"
+            {...workspacePanelMotion}
+            className="mx-auto w-full max-w-4xl"
+            id="initial-briefing-setup"
+            style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+          >
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                triggerSyncSearch();
+              }}
+              className="bg-white rounded-sm shadow-md border-l-4 border-[#CBD5E1] p-5 md:p-7 lg:p-8 space-y-6"
+            >
+              <div className="flex flex-col gap-1.5">
+                <span className="inline-flex items-center gap-2 text-[10px] uppercase font-mono tracking-widest text-emerald-deep font-bold">
+                  <Target className="w-3.5 h-3.5" />
+                  <span>{isEn ? "Briefing setup" : "إعداد الإحاطة"}</span>
+                </span>
+                <h1 className="text-2xl md:text-3xl font-bold font-serif text-slate-vip leading-tight">
+                  {isEn ? "Prepare briefing" : "تحضير الإحاطة"}
+                </h1>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] gap-4">
+                <div className="space-y-2 min-w-0">
+                  <label className="text-xs font-mono font-extrabold uppercase tracking-wide text-slate-vip" htmlFor="setup-country-selector-btn">
+                    {isEn ? "Country" : "الدولة"}
+                  </label>
+                  <div ref={countrySelectorRef} className="relative" id="setup-country-selector-wrapper">
+                    <button
+                      type="button"
+                      onClick={toggleCountryDropdown}
+                      disabled={isGenerating}
+                      className="w-full min-h-[52px] rounded-lg border border-[#D8E0EF] bg-white px-4 py-3 text-left text-sm font-bold text-slate-vip shadow-sm transition hover:border-gold-deep/50 focus:outline-none focus:ring-4 focus:ring-blue-900/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      id="setup-country-selector-btn"
+                    >
+                      <span className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-2 min-w-0">
+                          <CountryFlag
+                            flag={selectedCountryOption?.flag || activeCountry?.flag}
+                            flagUrl={selectedCountryOption?.flagUrl || activeCountry?.flagUrl}
+                            countryName={isEn ? selectedCountryNameEn : selectedCountryNameAr}
+                            size="sm"
+                          />
+                          <span className="truncate">
+                            {selectedCountryOption
+                              ? isEn ? selectedCountryOption.nameEn : selectedCountryOption.nameAr
+                              : isEn ? "Select country" : "اختر الدولة"}
+                          </span>
+                        </span>
+                        <ChevronDown
+                          className="w-4 h-4 text-gold-deep shrink-0 transition-transform duration-200"
+                          style={{ transform: isCountryDropdownOpen ? "rotate(180deg)" : "none" }}
+                        />
+                      </span>
+                    </button>
+
+                    {isCountryDropdownOpen && (
+                      <div
+                        className="origin-top-left absolute left-0 right-0 mt-1.5 rounded-sm shadow-xl bg-white border border-gold-border z-50 focus:outline-none overflow-hidden"
+                        id="setup-country-options-panel"
+                      >
+                        <div className="p-2 border-b border-gray-100">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                            <input
+                              type="search"
+                              value={countrySearchQuery}
+                              onChange={(event) => setCountrySearchQuery(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                }
+                              }}
+                              placeholder={isEn ? "Search countries" : "ابحث عن دولة"}
+                              autoFocus
+                              className="w-full rounded-md border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-xs font-medium text-slate-vip outline-none transition focus:border-gold-deep focus:bg-white focus:ring-1 focus:ring-gold-deep"
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto py-1">
+                          {filteredCountryOptions.map((option) => (
+                            <button
+                              key={option.code}
+                              type="button"
+                              onClick={() => {
+                                handleCountryPicked(option.code);
+                                closeCountryDropdown();
+                              }}
+                              className={`w-full px-4 py-2.5 text-left text-xs flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                selectedCountryCode === option.code
+                                  ? "bg-gold-bg text-emerald-deep font-extrabold"
+                                  : "text-slate-vip hover:bg-gray-50 font-medium"
+                              }`}
+                            >
+                              <span className="flex items-center gap-2 min-w-0">
+                                <CountryFlag flag={option.flag} flagUrl={option.flagUrl} countryName={isEn ? option.nameEn : option.nameAr} size="sm" />
+                                <span className="truncate">{isEn ? option.nameEn : option.nameAr}</span>
+                              </span>
+                              {selectedCountryCode === option.code && (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-deep shrink-0" />
+                              )}
+                            </button>
+                          ))}
+                          {filteredCountryOptions.length === 0 && (
+                            <div className="px-4 py-5 text-center text-xs font-semibold text-gray-500">
+                              {isEn ? "No countries found" : "لم يتم العثور على دول"}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2 min-w-0">
+                  <label className="text-xs font-mono font-extrabold uppercase tracking-wide text-slate-vip" htmlFor="setup-meeting-objective-input">
+                    {isEn ? "Meeting objective" : "هدف الاجتماع"}
+                  </label>
+                  <input
+                    id="setup-meeting-objective-input"
+                    type="text"
+                    value={meetingObjective}
+                    onChange={(event) => setMeetingObjective(event.target.value)}
+                    disabled={isGenerating}
+                    placeholder={isEn ? "Energy cooperation, grid resilience..." : "التعاون في الطاقة ومرونة الشبكات..."}
+                    className="meeting-setup-input min-h-[52px] w-full rounded-lg border border-[#D8E0EF] bg-white px-4 py-3 text-sm text-slate-vip outline-none focus:border-gold-deep focus:ring-4 focus:ring-blue-900/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-mono font-extrabold uppercase tracking-wide text-slate-vip">
+                  {isEn ? "Focus" : "المحور"}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {meetingTopicChips.map((chip) => (
+                    <button
+                      key={chip.labelEn}
+                      type="button"
+                      onClick={() => setMeetingObjective(isEn ? chip.valueEn : chip.valueAr)}
+                      disabled={isGenerating}
+                      className="meeting-topic-chip disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isEn ? chip.labelEn : chip.labelAr}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs font-mono font-extrabold uppercase tracking-wide text-slate-vip">
+                  {isEn ? "Suggested countries" : "دول مقترحة"}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {suggestedCountryOptions.map((option) => {
+                    const isSelected = selectedCountryCode === option.code;
+                    return (
+                      <button
+                        key={option.code}
+                        type="button"
+                        onClick={() => {
+                          handleCountryPicked(option.code);
+                          closeCountryDropdown();
+                        }}
+                        disabled={isGenerating}
+                        className={`empty-country-suggestion-button group w-full rounded-lg border px-3 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-gold-deep/45 hover:shadow-md cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 ${
+                          isSelected
+                            ? "border-gold-deep bg-gold-bg/70"
+                            : "border-[#D8E0EF] bg-white"
+                        }`}
+                      >
+                        <span className="flex items-center justify-between gap-3">
+                          <span className="flex items-center gap-2 min-w-0">
+                            <CountryFlag
+                              flag={option.flag}
+                              flagUrl={option.flagUrl}
+                              countryName={isEn ? option.nameEn : option.nameAr}
+                              size="sm"
+                            />
+                            <span className="block text-sm font-bold text-slate-vip truncate">
+                              {isEn ? option.nameEn : option.nameAr}
+                            </span>
+                          </span>
+                          {isSelected ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-deep shrink-0" />
+                          ) : (
+                            <ArrowRight className="w-4 h-4 text-gold-deep shrink-0 transition-transform group-hover:translate-x-0.5" />
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 border-t border-[#E2E8F0] pt-5">
+                {selectedCountryOption && (
+                  <span className="selected-country-badge sm:mr-auto">
+                    <CountryFlag
+                      flag={selectedCountryOption.flag}
+                      flagUrl={selectedCountryOption.flagUrl}
+                      countryName={isEn ? selectedCountryOption.nameEn : selectedCountryOption.nameAr}
+                      size="sm"
+                    />
+                    <span className="truncate">{isEn ? selectedCountryOption.nameEn : selectedCountryOption.nameAr}</span>
+                  </span>
+                )}
+                <button
+                  type="submit"
+                  disabled={isGenerating || !selectedCountryCode}
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-lg bg-slate-vip px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-900/10 transition-all hover:-translate-y-0.5 hover:bg-gold-deep hover:text-slate-vip disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:translate-y-0 disabled:hover:bg-slate-vip disabled:hover:text-white"
+                >
+                  {isGenerating && (
+                    <span className="h-4 w-4 rounded-full border-2 border-white/40 border-t-white animate-spin"></span>
+                  )}
+                  <span>{isGenerating ? (isEn ? "Preparing..." : "جاري التحضير...") : (isEn ? "Prepare briefing" : "تحضير الإحاطة")}</span>
+                  {!isGenerating && <ArrowRight className="w-4 h-4" />}
+                </button>
+              </div>
+            </form>
+          </motion.section>
+        ) : (
+          <>
             {/* UPPER BANNER PROTOCOL */}
         <div className="bg-white rounded-sm shadow-md border-l-4 border-[#CBD5E1] p-4 md:p-5 grid grid-cols-1 xl:grid-cols-12 xl:items-center gap-4 xl:gap-5 relative" id="cabinet-briefing-upper-ribbon">
           <div className="absolute top-2 bottom-2 right-0 w-1 bg-gradient-to-b from-gold-deep to-emerald-deep pointer-events-none rounded-l-full opacity-60"></div>
@@ -1176,23 +1403,25 @@ export default function App() {
           </div>
         </section>
 
-        <button
-          onClick={() => setIsChatOpen(!isChatOpen)}
-          className={`fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#94A3B8] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm ${showSignalsPanel ? "staff-signals-chat-launcher" : ""}`}
-          id="ai-policy-chat-launcher"
-          style={{ direction: language === "ar" ? "rtl" : "ltr" }}
-        >
-          <div className="flex items-center gap-2.5">
-            <MessageCircle className="w-4 h-4 opacity-90" />
-            <span className="chat-launcher-label">{isEn ? "AI Policy Advisor Chat" : "المستشار الرقمي الفوري"}</span>
-          </div>
-          {!isChatOpen && (
-            <span className="chat-launcher-dot h-2 w-2 rounded-full bg-emerald-light animate-pulse ml-2 shrink-0 block"></span>
-          )}
-          {isChatOpen && (
-            <X className="chat-launcher-close w-4 h-4 text-gold-deep ml-2 shrink-0" />
-          )}
-        </button>
+        {activeCountry && (
+          <button
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            className={`fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#94A3B8] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm ${showSignalsPanel ? "staff-signals-chat-launcher" : ""}`}
+            id="ai-policy-chat-launcher"
+            style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+          >
+            <div className="flex items-center gap-2.5">
+              <MessageCircle className="w-4 h-4 opacity-90" />
+              <span className="chat-launcher-label">{isEn ? "AI Policy Advisor Chat" : "المستشار الرقمي الفوري"}</span>
+            </div>
+            {!isChatOpen && (
+              <span className="chat-launcher-dot h-2 w-2 rounded-full bg-emerald-light animate-pulse ml-2 shrink-0 block"></span>
+            )}
+            {isChatOpen && (
+              <X className="chat-launcher-close w-4 h-4 text-gold-deep ml-2 shrink-0" />
+            )}
+          </button>
+        )}
 
         <section className="workspace-section-heading flex flex-col md:flex-row md:items-end md:justify-between gap-3" id="workspace-section-heading">
           <div className="min-w-0">
@@ -1452,6 +1681,8 @@ export default function App() {
           )}
 
         </div>
+          </>
+        )}
 
       </main>
 

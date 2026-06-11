@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import pptxgen from "pptxgenjs";
-import { BriefingArtifacts, PrebuiltCountry, UaeIndicator } from "../types";
+import { BriefingArtifacts, BriefingReferenceFact, PrebuiltCountry, UaeIndicator } from "../types";
 import { FileText, Award, Layers, Volume2, ChevronLeft, ChevronRight, HelpCircle, ArrowRightLeft, FileCheck, Download, X, Printer, AlertTriangle, Video, Clock3 } from "lucide-react";
 import CountryFlag from "./CountryFlag";
 
@@ -1385,7 +1385,7 @@ export default function BriefingGenerator({
     setCurrentSlideIndex((prev) => (prev - 1 + slides.length) % slides.length);
   };
 
-  const fallbackOnePagerFastFacts = [
+  const fallbackOnePagerFastFacts: BriefingReferenceFact[] = [
     { label: isEn ? "GDP" : "الناتج المحلي", value: isEn ? country.indicators.gdp : country.indicators.gdpAr, context: isEn ? "Country profile" : "ملف الدولة" },
     { label: isEn ? "Growth" : "النمو", value: country.indicators.growth, context: isEn ? "Annual indicator" : "مؤشر سنوي" },
     { label: isEn ? "Energy mix" : "مزيج الطاقة", value: isEn ? country.indicators.energyMix : country.indicators.energyMixAr, context: isEn ? "Power system" : "نظام الطاقة" },
@@ -1445,6 +1445,61 @@ export default function BriefingGenerator({
         isEn ? "Prepare UAE financing and execution note." : "اعداد مذكرة تمويل وتنفيذ اماراتية.",
       ];
   const onePagerRecommendation = onePagerArtifact?.strategicRecommendation || (isEn ? country.predictive.proposalsEn : country.predictive.proposalsAr);
+  const onePagerTitle = onePagerArtifact?.title || (isEn ? `${country.nameEn} Strategic One-Pager` : `ملف استراتيجي موجز: ${country.nameAr}`);
+  const onePagerSubtitle = onePagerArtifact?.subtitle || (isEn ? "Fast reference for executive briefing, diplomatic positioning, and immediate UAE action." : "مرجع سريع للإحاطة القيادية والتموضع الدبلوماسي والخطوات الإماراتية الفورية.");
+  const onePagerPriority = onePagerArtifact?.strategicPriority || "High";
+  const onePagerUpdated = onePagerArtifact?.lastUpdated || "Current";
+  const onePagerUaeRelevance = onePagerArtifact?.uaeRelevance || (isEn ? country.strategicInsights.partnershipsEn : country.strategicInsights.partnershipsAr);
+  const displayedOnePagerFastFacts = onePagerFastFacts.filter((fact) => {
+    const normalizedLabel = fact.label.toLowerCase();
+    const normalizedValue = fact.value.trim().toLowerCase();
+    return !(normalizedValue === "0" && (normalizedLabel.includes("vector") || normalizedLabel.includes("memory")));
+  });
+  const onePagerFactsForDisplay = displayedOnePagerFastFacts.length >= 4 ? displayedOnePagerFastFacts : onePagerFastFacts;
+  const primaryOpportunity = onePagerOpportunities[0];
+  const primaryRisk = onePagerRisks[0];
+  const primaryLeader = onePagerLeadership.find((leader) => leader.name?.trim()) || onePagerLeadership[0];
+  const primaryAction = onePagerActions[0] || onePagerRecommendation;
+  const onePagerDecisionCards = [
+    {
+      label: isEn ? "Next Move" : "الخطوة التالية",
+      value: primaryAction,
+      tone: "bg-slate-vip text-white border-slate-vip",
+      valueClass: "text-white",
+      labelClass: "text-blue-100",
+    },
+    {
+      label: isEn ? "Lead Opportunity" : "الفرصة الرئيسية",
+      value: primaryOpportunity ? `${primaryOpportunity.title}: ${primaryOpportunity.detail}` : onePagerUaeRelevance,
+      tone: "bg-[#F1F5F9] text-slate-vip border-[#CBD5E1]",
+      valueClass: "text-slate-vip",
+      labelClass: "text-[#475569]",
+    },
+    {
+      label: isEn ? "Counterpart" : "الطرف المقابل",
+      value: primaryLeader ? `${primaryLeader.role}: ${primaryLeader.name}` : (isEn ? country.profile.leadershipEn : country.profile.leadershipAr),
+      tone: "bg-white text-slate-vip border-gray-200",
+      valueClass: "text-slate-vip",
+      labelClass: "text-emerald-deep",
+    },
+    {
+      label: isEn ? "Risk Watch" : "مراقبة المخاطر",
+      value: primaryRisk?.risk || (isEn ? country.predictive.risksEn : country.predictive.risksAr),
+      tone: "bg-amber-50 text-amber-950 border-amber-200",
+      valueClass: "text-amber-950",
+      labelClass: "text-amber-700",
+    },
+  ];
+
+  const compactText = (value: unknown, maxLength: number) => {
+    const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
+    if (normalized.length <= maxLength) {
+      return normalized;
+    }
+
+    const clipped = normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd();
+    return `${clipped}...`;
+  };
 
   const formatSectionPdfDate = () =>
     new Date().toLocaleDateString(isEn ? "en-GB" : "ar-AE", {
@@ -1762,90 +1817,538 @@ export default function BriefingGenerator({
   };
 
   const handleDownloadOnePagerPdf = () => {
-    const fastFactsHtml = onePagerFastFacts.slice(0, 10).map((fact) => `
-      <div class="info-card">
-        <span>${escapeHtml(fact.label)}</span>
-        <strong>${escapeHtml(fact.value)}</strong>
-        ${fact.context || fact.source || fact.year ? `<p style="margin-top:6px;color:#64748B;font-size:10px;">${escapeHtml([fact.context, fact.year, fact.source].filter(Boolean).join(" | "))}</p>` : ""}
-      </div>
-    `).join("");
-    const sectorRowsHtml = onePagerSectorScorecard.slice(0, 4).map((item) => `
-      <tr>
-        <td><strong>${escapeHtml(item.sector)}</strong></td>
-        <td>${escapeHtml(item.currentBaseline)}</td>
-        <td>${escapeHtml(item.uaeAngle)}</td>
-      </tr>
-    `).join("");
-    const leadershipHtml = onePagerLeadership.slice(0, 4).map((leader) => `
-      <div class="info-card">
-        <span>${escapeHtml(leader.role)}</span>
-        <strong>${escapeHtml(leader.name)}</strong>
-        ${leader.note ? `<p style="margin-top:6px;color:#64748B;font-size:10px;">${escapeHtml(leader.note)}</p>` : ""}
-      </div>
-    `).join("");
-    const opportunitiesHtml = onePagerOpportunities.slice(0, 4).map((opportunity) => `
-      <li><strong>${escapeHtml(opportunity.title)}${opportunity.priority ? ` (${escapeHtml(opportunity.priority)})` : ""}:</strong> ${escapeHtml(opportunity.detail)}</li>
-    `).join("");
-    const risksHtml = onePagerRisks.slice(0, 3).map((risk) => `
-      <li><strong>${escapeHtml(risk.risk)}</strong><br/>${escapeHtml(risk.mitigation)}</li>
-    `).join("");
-    const actionsHtml = onePagerActions.slice(0, 5).map((action) => `<li>${escapeHtml(action)}</li>`).join("");
+    setPrintError(null);
 
-    openSectionPdfDialog(
-      onePagerArtifact?.title || (isEn ? `${country.nameEn} Strategic One-Pager` : `ملف استراتيجي موجز: ${country.nameAr}`),
-      isEn ? "One-Pager Export" : "تصدير الصفحة الواحدة",
-      `
-        <section class="content-card">
-          <span>${escapeHtml(isEn ? "Executive Infographic One-Pager" : "صفحة معلومات تنفيذية واحدة")}</span>
-          <h2>${escapeHtml(onePagerArtifact?.subtitle || (isEn ? "Fast reference for executive briefing, diplomatic positioning, and immediate UAE action." : "مرجع سريع للإحاطة القيادية والتموضع الدبلوماسي والخطوات الإماراتية الفورية."))}</h2>
-          <div class="grid-2">
-            <div class="info-card"><span>${escapeHtml(isEn ? "Priority" : "الأولوية")}</span><strong>${escapeHtml(onePagerArtifact?.strategicPriority || "High")}</strong></div>
-            <div class="info-card"><span>${escapeHtml(isEn ? "Updated" : "التحديث")}</span><strong>${escapeHtml(onePagerArtifact?.lastUpdated || "Current")}</strong></div>
+    try {
+      const iframe = document.createElement("iframe");
+      iframe.title = onePagerTitle;
+      iframe.style.position = "fixed";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      iframe.style.opacity = "0";
+      iframe.style.pointerEvents = "none";
+      document.body.appendChild(iframe);
+
+      const printWindow = iframe.contentWindow;
+      const printDocument = printWindow?.document;
+      if (!printWindow || !printDocument) {
+        iframe.remove();
+        window.print();
+        return;
+      }
+
+      const factCardsHtml = onePagerFactsForDisplay.slice(0, 8).map((fact) => {
+        const context = [fact.context, fact.year].filter(Boolean).join(" | ");
+        return `
+          <div class="fact-card">
+            <span>${escapeHtml(compactText(fact.label, 42))}</span>
+            <strong>${escapeHtml(compactText(fact.value, 74))}</strong>
+            ${context ? `<small>${escapeHtml(compactText(context, 54))}</small>` : ""}
           </div>
-        </section>
-        <section class="content-card">
-          <h2>${escapeHtml(isEn ? "Fast Facts" : "حقائق سريعة")}</h2>
-          <div class="grid-3">${fastFactsHtml}</div>
-        </section>
-        <section class="content-card">
-          <h2>${escapeHtml(isEn ? "Sector Scorecard" : "بطاقة القطاعات")}</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>${escapeHtml(isEn ? "Sector" : "القطاع")}</th>
-                <th>${escapeHtml(isEn ? "Baseline" : "الوضع")}</th>
-                <th>${escapeHtml(isEn ? "UAE Angle" : "زاوية الإمارات")}</th>
-              </tr>
-            </thead>
-            <tbody>${sectorRowsHtml}</tbody>
-          </table>
-          <div class="content-card" style="margin-bottom:0;background:#F8FAFC;">
-            <span>${escapeHtml(isEn ? "UAE Relevance" : "صلة الملف بالإمارات")}</span>
-            <p style="margin-top:6px;">${escapeHtml(onePagerArtifact?.uaeRelevance || (isEn ? country.strategicInsights.partnershipsEn : country.strategicInsights.partnershipsAr))}</p>
-          </div>
-        </section>
-        <section class="content-card">
-          <h2>${escapeHtml(isEn ? "Leadership" : "القيادة")}</h2>
-          <div class="grid-2">${leadershipHtml}</div>
-        </section>
-        <section class="content-card">
-          <h2>${escapeHtml(isEn ? "Opportunity Map" : "خريطة الفرص")}</h2>
-          <ul>${opportunitiesHtml}</ul>
-        </section>
-        <section class="content-card">
-          <h2>${escapeHtml(isEn ? "Risks And Mitigation" : "المخاطر والمعالجة")}</h2>
-          <ul>${risksHtml}</ul>
-        </section>
-        <section class="content-card">
-          <h2>${escapeHtml(isEn ? "90-Day Actions" : "خطوات 90 يوما")}</h2>
-          <ol>${actionsHtml}</ol>
-        </section>
-        <div class="callout">
-          <span>${escapeHtml(isEn ? "Strategic Recommendation" : "التوصية الاستراتيجية")}</span>
-          ${escapeHtml(onePagerRecommendation)}
+        `;
+      }).join("");
+      const sectorRowsHtml = onePagerSectorScorecard.slice(0, 3).map((item) => `
+        <tr>
+          <td>
+            <strong>${escapeHtml(compactText(item.sector, 34))}</strong>
+            ${item.policyTarget ? `<small>${escapeHtml(compactText(item.policyTarget, 70))}</small>` : ""}
+          </td>
+          <td>${escapeHtml(compactText(item.currentBaseline, 142))}</td>
+          <td>${escapeHtml(compactText(item.uaeAngle, 130))}</td>
+        </tr>
+      `).join("");
+      const leadershipHtml = onePagerLeadership.slice(0, 3).map((leader) => `
+        <div class="leader-card">
+          <span>${escapeHtml(compactText(leader.role, 38))}</span>
+          <strong>${escapeHtml(compactText(leader.name, 92))}</strong>
+          ${leader.note ? `<small>${escapeHtml(compactText(leader.note, 80))}</small>` : ""}
         </div>
-      `
-    );
+      `).join("");
+      const decisionCardsHtml = onePagerDecisionCards.map((card, index) => `
+        <div class="decision-card ${index === 0 ? "primary" : ""} ${index === 3 ? "risk" : ""}">
+          <span>${escapeHtml(card.label)}</span>
+          <strong>${escapeHtml(compactText(card.value, index === 0 ? 116 : 132))}</strong>
+        </div>
+      `).join("");
+      const opportunitiesHtml = onePagerOpportunities.slice(0, 3).map((opportunity) => `
+        <div class="brief-item">
+          <div>
+            <strong>${escapeHtml(compactText(opportunity.title, 58))}</strong>
+            <p>${escapeHtml(compactText(opportunity.detail, 138))}</p>
+          </div>
+          ${opportunity.priority ? `<span class="priority-badge">${escapeHtml(opportunity.priority)}</span>` : ""}
+        </div>
+      `).join("");
+      const risksHtml = onePagerRisks.slice(0, 2).map((risk) => `
+        <div class="risk-item">
+          <strong>${escapeHtml(compactText(risk.risk, 112))}</strong>
+          <p>${escapeHtml(compactText(risk.mitigation, 128))}</p>
+        </div>
+      `).join("");
+      const actionsHtml = onePagerActions.slice(0, 4).map((action, index) => `
+        <li>
+          <span>${index + 1}</span>
+          <p>${escapeHtml(compactText(action, 118))}</p>
+        </li>
+      `).join("");
+      const generatedOn = formatSectionPdfDate();
+
+      const printHtml = `
+<!doctype html>
+<html lang="${language}" dir="${isEn ? "ltr" : "rtl"}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(onePagerTitle)}</title>
+  <style>
+    @page { size: A4 landscape; margin: 8mm; }
+    * { box-sizing: border-box; }
+    html,
+    body {
+      margin: 0;
+      background: #FFFFFF;
+      color: #101828;
+      font-family: ${isEn ? "Inter, Arial, sans-serif" : "'IBM Plex Sans Arabic', Arial, sans-serif"};
+      font-size: 8.7pt;
+      line-height: 1.28;
+      print-color-adjust: exact;
+      -webkit-print-color-adjust: exact;
+    }
+    body { width: 281mm; }
+    .one-page {
+      position: relative;
+      width: 100%;
+      min-height: 194mm;
+      overflow: hidden;
+      background: #FFFFFF;
+      border-top: 3.2mm solid #101828;
+      padding-top: 4mm;
+    }
+    .top-accent {
+      position: absolute;
+      inset-block-start: -3.2mm;
+      inset-inline-start: 0;
+      width: 100%;
+      height: 3.2mm;
+      background: linear-gradient(90deg, #1E3A8A, #4F46E5 44%, #C5A059 100%);
+    }
+    .page-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 48mm;
+      gap: 5mm;
+      align-items: start;
+      padding-bottom: 3.5mm;
+      border-bottom: 0.35mm solid #D8E0EF;
+    }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 2mm;
+      color: #1E3A8A;
+      font-size: 7.3pt;
+      font-weight: 900;
+    }
+    h1 {
+      margin: 1.6mm 0 1.4mm;
+      color: #101828;
+      font-size: 20.5pt;
+      line-height: 1.06;
+    }
+    .subtitle {
+      max-width: 198mm;
+      margin: 0;
+      color: #475569;
+      font-size: 9.4pt;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2mm;
+    }
+    .meta-card,
+    .fact-card,
+    .leader-card,
+    .decision-card,
+    .panel {
+      border: 0.28mm solid #D8E0EF;
+      border-radius: 1.5mm;
+      background: #FFFFFF;
+    }
+    .meta-card {
+      min-height: 16mm;
+      padding: 2.7mm;
+    }
+    .meta-card span,
+    .fact-card span,
+    .leader-card span,
+    .decision-card span,
+    .panel h2 {
+      display: block;
+      color: #64748B;
+      font-size: 6.7pt;
+      font-weight: 900;
+      letter-spacing: 0.03em;
+    }
+    .meta-card strong {
+      display: block;
+      margin-top: 1.3mm;
+      color: #101828;
+      font-size: 10pt;
+      line-height: 1.12;
+    }
+    .decision-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2.5mm;
+      margin-top: 3mm;
+    }
+    .decision-card {
+      min-height: 22mm;
+      padding: 3mm;
+      background: #F8FAFC;
+    }
+    .decision-card strong {
+      display: block;
+      margin-top: 1.5mm;
+      color: #101828;
+      font-size: 9.2pt;
+      line-height: 1.22;
+    }
+    .decision-card.primary {
+      background: #101828;
+      border-color: #101828;
+    }
+    .decision-card.primary span { color: #BFDBFE; }
+    .decision-card.primary strong { color: #FFFFFF; }
+    .decision-card.risk {
+      background: #FFF7ED;
+      border-color: #FDBA74;
+    }
+    .decision-card.risk span { color: #9A3412; }
+    .main-grid {
+      display: grid;
+      grid-template-columns: 0.92fr 1.2fr 0.78fr;
+      gap: 2.8mm;
+      margin-top: 3mm;
+      align-items: start;
+    }
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1.05fr 0.9fr 0.95fr;
+      gap: 2.8mm;
+      margin-top: 2.8mm;
+      align-items: start;
+    }
+    .panel {
+      padding: 3mm;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .panel h2 {
+      margin: 0 0 2.3mm;
+      color: #1E3A8A;
+      font-size: 8pt;
+    }
+    .facts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.9mm;
+    }
+    .fact-card {
+      min-height: 15.5mm;
+      padding: 2.2mm;
+      background: #F8FAFC;
+    }
+    .fact-card strong {
+      display: block;
+      margin-top: 1mm;
+      color: #101828;
+      font-size: 8.9pt;
+      line-height: 1.1;
+    }
+    .fact-card small,
+    .leader-card small,
+    td small {
+      display: block;
+      margin-top: 1mm;
+      color: #64748B;
+      font-size: 6.7pt;
+      line-height: 1.18;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 7.6pt;
+      line-height: 1.26;
+    }
+    th,
+    td {
+      border: 0.25mm solid #D8E0EF;
+      padding: 2mm;
+      text-align: start;
+      vertical-align: top;
+    }
+    th {
+      background: #101828;
+      color: #FFFFFF;
+      font-size: 6.8pt;
+      font-weight: 900;
+    }
+    td strong {
+      color: #1E3A8A;
+      font-size: 7.8pt;
+    }
+    .relevance {
+      margin-top: 2mm;
+      padding: 2.5mm;
+      border-inline-start: 1mm solid #475569;
+      background: #F1F5F9;
+      color: #101828;
+    }
+    .relevance span,
+    .recommendation span {
+      display: block;
+      margin-bottom: 1mm;
+      color: #475569;
+      font-size: 6.8pt;
+      font-weight: 900;
+    }
+    .relevance p,
+    .brief-item p,
+    .risk-item p,
+    .recommendation p,
+    .actions-list p {
+      margin: 0;
+    }
+    .leader-stack {
+      display: grid;
+      gap: 1.9mm;
+    }
+    .leader-card {
+      padding: 2.4mm;
+      background: #FFFFFF;
+    }
+    .leader-card strong {
+      display: block;
+      margin-top: 1mm;
+      color: #101828;
+      font-size: 8.4pt;
+      line-height: 1.16;
+    }
+    .brief-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 2mm;
+      padding: 2.2mm 0;
+      border-top: 0.25mm solid #E2E8F0;
+    }
+    .brief-item:first-of-type,
+    .risk-item:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .brief-item strong,
+    .risk-item strong {
+      color: #101828;
+      font-size: 8.5pt;
+    }
+    .brief-item p,
+    .risk-item p {
+      margin-top: 1mm;
+      color: #475569;
+      font-size: 7.7pt;
+      line-height: 1.25;
+    }
+    .priority-badge {
+      align-self: start;
+      border-radius: 99px;
+      background: #EEF2FF;
+      color: #3730A3;
+      padding: 0.8mm 1.6mm;
+      font-size: 6.5pt;
+      font-weight: 900;
+    }
+    .risk-panel {
+      background: #FFFBEB;
+      border-color: #FDE68A;
+    }
+    .risk-panel h2 { color: #92400E; }
+    .risk-item {
+      padding: 2.2mm 0;
+      border-top: 0.25mm solid #FDE68A;
+    }
+    .actions-panel {
+      background: #101828;
+      border-color: #101828;
+      color: #FFFFFF;
+    }
+    .actions-panel h2 { color: #C4B5FD; }
+    .actions-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 1.7mm;
+    }
+    .actions-list li {
+      display: grid;
+      grid-template-columns: 6.5mm minmax(0, 1fr);
+      gap: 1.8mm;
+      align-items: start;
+    }
+    .actions-list span {
+      display: grid;
+      place-items: center;
+      width: 5.6mm;
+      height: 5.6mm;
+      border-radius: 1.2mm;
+      background: #4F46E5;
+      color: #FFFFFF;
+      font-size: 7pt;
+      font-weight: 900;
+    }
+    .actions-list p {
+      color: #FFFFFF;
+      font-size: 7.8pt;
+      line-height: 1.25;
+    }
+    .recommendation {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 4mm;
+      align-items: center;
+      margin-top: 3mm;
+      padding: 3mm 3.5mm;
+      border-inline-start: 1.2mm solid #4F46E5;
+      background: #1E3A8A;
+      color: #FFFFFF;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .recommendation span { color: #BFDBFE; }
+    .recommendation p {
+      color: #FFFFFF;
+      font-size: 9.2pt;
+      font-weight: 800;
+      line-height: 1.24;
+    }
+    .footer-meta {
+      color: #CBD5E1;
+      font-size: 6.8pt;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    @media print {
+      body { width: auto; }
+      .one-page { min-height: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="one-page">
+    <div class="top-accent"></div>
+    <header class="page-header">
+      <section>
+        <div class="eyebrow">${formatCountryFlagForHtml(country, isEn)} ${escapeHtml(isEn ? "Executive Infographic One-Pager" : "صفحة معلومات تنفيذية واحدة")}</div>
+        <h1>${escapeHtml(onePagerTitle)}</h1>
+        <p class="subtitle">${escapeHtml(compactText(onePagerSubtitle, 180))}</p>
+      </section>
+      <section class="meta-grid">
+        <div class="meta-card">
+          <span>${escapeHtml(isEn ? "Priority" : "الأولوية")}</span>
+          <strong>${escapeHtml(compactText(onePagerPriority, 24))}</strong>
+        </div>
+        <div class="meta-card">
+          <span>${escapeHtml(isEn ? "Updated" : "التحديث")}</span>
+          <strong>${escapeHtml(compactText(onePagerUpdated, 28))}</strong>
+        </div>
+      </section>
+    </header>
+
+    <section class="decision-strip">
+      ${decisionCardsHtml}
+    </section>
+
+    <section class="main-grid">
+      <section class="panel">
+        <h2>${escapeHtml(isEn ? "Fast Facts" : "حقائق سريعة")}</h2>
+        <div class="facts-grid">${factCardsHtml}</div>
+      </section>
+
+      <section class="panel">
+        <h2>${escapeHtml(isEn ? "Sector Scorecard" : "بطاقة القطاعات")}</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>${escapeHtml(isEn ? "Sector" : "القطاع")}</th>
+              <th>${escapeHtml(isEn ? "Baseline" : "الوضع")}</th>
+              <th>${escapeHtml(isEn ? "UAE Angle" : "زاوية الإمارات")}</th>
+            </tr>
+          </thead>
+          <tbody>${sectorRowsHtml}</tbody>
+        </table>
+        <div class="relevance">
+          <span>${escapeHtml(isEn ? "UAE Relevance" : "صلة الملف بالإمارات")}</span>
+          <p>${escapeHtml(compactText(onePagerUaeRelevance, 168))}</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>${escapeHtml(isEn ? "Leadership" : "القيادة")}</h2>
+        <div class="leader-stack">${leadershipHtml}</div>
+      </section>
+    </section>
+
+    <section class="bottom-grid">
+      <section class="panel">
+        <h2>${escapeHtml(isEn ? "Opportunity Map" : "خريطة الفرص")}</h2>
+        ${opportunitiesHtml}
+      </section>
+
+      <section class="panel risk-panel">
+        <h2>${escapeHtml(isEn ? "Risk And Mitigation" : "المخاطر والمعالجة")}</h2>
+        ${risksHtml}
+      </section>
+
+      <section class="panel actions-panel">
+        <h2>${escapeHtml(isEn ? "90-Day Actions" : "خطوات 90 يوما")}</h2>
+        <ol class="actions-list">${actionsHtml}</ol>
+      </section>
+    </section>
+
+    <section class="recommendation">
+      <div>
+        <span>${escapeHtml(isEn ? "Strategic Recommendation" : "التوصية الاستراتيجية")}</span>
+        <p>${escapeHtml(compactText(onePagerRecommendation, 230))}</p>
+      </div>
+      <div class="footer-meta">${escapeHtml(isEn ? `Generated ${generatedOn}` : `تم الإنشاء في ${generatedOn}`)}</div>
+    </section>
+  </main>
+</body>
+</html>`;
+
+      const cleanup = () => {
+        setTimeout(() => iframe.remove(), 500);
+      };
+      printWindow.addEventListener("afterprint", cleanup, { once: true });
+      window.setTimeout(cleanup, 15000);
+
+      printDocument.open();
+      printDocument.write(printHtml);
+      printDocument.close();
+      window.setTimeout(() => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch (error) {
+          console.warn("One-pager print blocked:", error);
+          setPrintError(isEn ? "Could not open the PDF save dialog for the one-pager. Please try again." : "تعذر فتح نافذة حفظ PDF للصفحة الواحدة. يرجى المحاولة مرة أخرى.");
+        }
+      }, 300);
+    } catch (error) {
+      console.error("One-pager PDF generation failed:", error);
+      setPrintError(isEn ? "Could not prepare the one-pager for PDF export. Please try again." : "تعذر إعداد الصفحة الواحدة لتصدير PDF. يرجى المحاولة مرة أخرى.");
+    }
   };
 
   const renderTalkingPointCard = (tpOn: (typeof currentTP)[number], idxKey: number) => (
@@ -2086,7 +2589,7 @@ export default function BriefingGenerator({
           <div className="p-4 md:p-6 text-slate-vip relative leading-relaxed bg-[#F8F8F6]" id="one-pager-section-content">
             <div className="absolute top-0 right-0 w-full h-2 bg-gradient-to-r from-[#C5A059] via-[#005A3C] to-[#475569]"></div>
 
-            <div className="bg-white border border-gray-200 shadow-sm p-4 md:p-5 space-y-4">
+            <div className="bg-white border border-gray-200 shadow-sm p-4 md:p-5 space-y-4 overflow-hidden">
               <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 border-b border-gray-200 pb-4" id="one-pager-infographic-header">
                 <div className="space-y-2 min-w-0">
                   <div className="flex items-center gap-2">
@@ -2096,10 +2599,10 @@ export default function BriefingGenerator({
                     </span>
                   </div>
                   <h3 className="text-2xl md:text-3xl font-serif font-bold text-slate-vip leading-tight">
-                    {onePagerArtifact?.title || (isEn ? `${country.nameEn} Strategic One-Pager` : `ملف استراتيجي موجز: ${country.nameAr}`)}
+                    {onePagerTitle}
                   </h3>
                   <p className="text-sm text-gray-600 max-w-4xl">
-                    {onePagerArtifact?.subtitle || (isEn ? "Fast reference for executive briefing, diplomatic positioning, and immediate UAE action." : "مرجع سريع للإحاطة القيادية والتموضع الدبلوماسي والخطوات الإماراتية الفورية.")}
+                    {onePagerSubtitle}
                   </p>
                 </div>
 
@@ -2117,24 +2620,33 @@ export default function BriefingGenerator({
                   <div className="grid grid-cols-2 gap-2">
                     <div className="border border-gold-border bg-gold-bg/25 p-3 rounded">
                       <span className="block text-[9px] uppercase font-mono tracking-widest text-gray-500 font-bold">{isEn ? "Priority" : "الأولوية"}</span>
-                      <span className="block text-lg font-serif font-bold text-emerald-deep">{onePagerArtifact?.strategicPriority || "High"}</span>
+                      <span className="block text-lg font-serif font-bold text-emerald-deep">{onePagerPriority}</span>
                     </div>
                     <div className="border border-gray-200 bg-slate-50 p-3 rounded">
                       <span className="block text-[9px] uppercase font-mono tracking-widest text-gray-500 font-bold">{isEn ? "Updated" : "التحديث"}</span>
-                      <span className="block text-sm font-mono font-bold text-slate-vip">{onePagerArtifact?.lastUpdated || "Current"}</span>
+                      <span className="block text-sm font-mono font-bold text-slate-vip">{onePagerUpdated}</span>
                     </div>
                   </div>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2.5" id="one-pager-decision-strip">
+                {onePagerDecisionCards.map((card) => (
+                  <div key={card.label} className={`rounded border p-3.5 min-h-[108px] ${card.tone}`}>
+                    <p className={`text-[10px] uppercase tracking-widest font-mono font-black ${card.labelClass}`}>{card.label}</p>
+                    <p className={`mt-2 text-sm font-bold leading-5 line-clamp-4 ${card.valueClass}`}>{card.value}</p>
+                  </div>
+                ))}
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 items-start">
                 <section className="xl:col-span-4 space-y-3">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep">{isEn ? "Fast Facts" : "حقائق سريعة"}</h4>
                   <div className="grid grid-cols-2 gap-2">
-                    {onePagerFastFacts.slice(0, 10).map((fact, index) => (
-                      <div key={`${fact.label}-${index}`} className="bg-white border border-gray-200 rounded p-2.5 min-h-[84px]">
-                        <p className="text-[9px] uppercase tracking-widest font-mono font-bold text-gray-500 truncate">{fact.label}</p>
-                        <p className="text-base font-serif font-bold text-slate-vip leading-tight mt-1">{fact.value}</p>
+                    {onePagerFactsForDisplay.slice(0, 8).map((fact, index) => (
+                      <div key={`${fact.label}-${index}`} className="bg-white border border-gray-200 rounded p-2.5 min-h-[86px]">
+                        <p className="text-[9px] uppercase tracking-widest font-mono font-bold text-gray-500 truncate" title={fact.label}>{fact.label}</p>
+                        <p className="text-base font-serif font-bold text-slate-vip leading-tight mt-1 break-words line-clamp-3">{fact.value}</p>
                         {(fact.context || fact.source || fact.year) && (
                           <p className="text-[10px] text-gray-500 mt-1 leading-4 line-clamp-2">{[fact.context, fact.year, fact.source].filter(Boolean).join(" | ")}</p>
                         )}
@@ -2155,9 +2667,12 @@ export default function BriefingGenerator({
                         </tr>
                       </thead>
                       <tbody>
-                        {onePagerSectorScorecard.slice(0, 4).map((item, index) => (
+                        {onePagerSectorScorecard.slice(0, 3).map((item, index) => (
                           <tr key={`${item.sector}-${index}`} className="border-t border-gray-200 bg-white align-top">
-                            <td className="p-2 font-bold text-emerald-deep">{item.sector}</td>
+                            <td className="p-2 font-bold text-emerald-deep">
+                              <span>{item.sector}</span>
+                              {item.policyTarget && <span className="block text-[10px] font-medium text-gray-500 leading-4 mt-1">{item.policyTarget}</span>}
+                            </td>
                             <td className="p-2 text-gray-700 leading-5">{item.currentBaseline}</td>
                             <td className="p-2 text-gray-700 leading-5">{item.uaeAngle}</td>
                           </tr>
@@ -2168,14 +2683,14 @@ export default function BriefingGenerator({
 
                   <div className="bg-[#F1F5F9] border-l-4 border-[#475569] p-3 rounded-sm">
                     <p className="text-[10px] uppercase tracking-widest font-mono font-black text-[#475569]">{isEn ? "UAE Relevance" : "صلة الملف بالامارات"}</p>
-                    <p className="text-sm text-slate-vip leading-6 mt-1">{onePagerArtifact?.uaeRelevance || (isEn ? country.strategicInsights.partnershipsEn : country.strategicInsights.partnershipsAr)}</p>
+                    <p className="text-sm text-slate-vip leading-6 mt-1">{onePagerUaeRelevance}</p>
                   </div>
                 </section>
 
                 <section className="xl:col-span-3 space-y-3">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep">{isEn ? "Leadership" : "القيادة"}</h4>
                   <div className="space-y-2">
-                    {onePagerLeadership.slice(0, 4).map((leader, index) => (
+                    {onePagerLeadership.slice(0, 3).map((leader, index) => (
                       <div key={`${leader.role}-${index}`} className="bg-white border border-gray-200 rounded p-3">
                         <p className="text-[9px] uppercase tracking-widest font-mono font-bold text-gray-500">{leader.role}</p>
                         <p className="text-sm font-bold text-slate-vip mt-1">{leader.name}</p>
@@ -2190,7 +2705,7 @@ export default function BriefingGenerator({
                 <section className="lg:col-span-5 bg-white border border-gray-200 rounded p-3.5 h-fit self-start">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep mb-3">{isEn ? "Opportunity Map" : "خريطة الفرص"}</h4>
                   <div className="space-y-2.5">
-                    {onePagerOpportunities.slice(0, 4).map((opportunity, index) => (
+                    {onePagerOpportunities.slice(0, 3).map((opportunity, index) => (
                       <div key={`${opportunity.title}-${index}`} className="border-l-2 border-gold-deep pl-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-serif font-bold text-slate-vip">{opportunity.title}</p>
@@ -2205,9 +2720,12 @@ export default function BriefingGenerator({
                 <section className="lg:col-span-4 bg-white border border-gray-200 rounded p-3.5 h-fit self-start">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep mb-3">{isEn ? "Risk And Mitigation" : "المخاطر والمعالجة"}</h4>
                   <div className="space-y-2.5">
-                    {onePagerRisks.slice(0, 3).map((risk, index) => (
+                    {onePagerRisks.slice(0, 2).map((risk, index) => (
                       <div key={`${risk.risk}-${index}`} className="bg-amber-50 border border-amber-100 rounded p-3">
-                        <p className="text-xs font-bold text-amber-900 leading-5">{risk.risk}</p>
+                        <p className="text-xs font-bold text-amber-900 leading-5 flex items-start gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                          <span>{risk.risk}</span>
+                        </p>
                         <p className="text-[11px] text-amber-800 leading-5 mt-1">{risk.mitigation}</p>
                       </div>
                     ))}
@@ -2215,9 +2733,12 @@ export default function BriefingGenerator({
                 </section>
 
                 <section className="lg:col-span-3 bg-slate-vip text-white rounded p-3.5 h-fit self-start">
-                  <h4 className="text-xs uppercase tracking-widest font-mono font-black text-gold-deep mb-3">{isEn ? "90-Day Actions" : "خطوات 90 يوما"}</h4>
+                  <h4 className="text-xs uppercase tracking-widest font-mono font-black text-gold-deep mb-3 flex items-center gap-1.5">
+                    <Clock3 className="w-3.5 h-3.5" />
+                    <span>{isEn ? "90-Day Actions" : "خطوات 90 يوما"}</span>
+                  </h4>
                   <ol className="space-y-2">
-                    {onePagerActions.slice(0, 5).map((action, index) => (
+                    {onePagerActions.slice(0, 4).map((action, index) => (
                       <li key={`${action}-${index}`} className="flex gap-2 text-xs leading-5">
                         <span className="h-5 w-5 shrink-0 rounded bg-gold-deep text-slate-vip font-mono font-black flex items-center justify-center text-[10px]">{index + 1}</span>
                         <span>{action}</span>
