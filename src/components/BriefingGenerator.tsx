@@ -2041,11 +2041,11 @@ export default function BriefingGenerator({
 
         {/* 3. ONE-PAGER INFOGRAPHIC DATA RENDER */}
         {activeOutput === "one-pager" && (
-          <div className="p-5 md:p-8 text-slate-vip relative leading-relaxed bg-[#F8F8F6]" id="one-pager-section-content">
+          <div className="p-4 md:p-6 text-slate-vip relative leading-relaxed bg-[#F8F8F6]" id="one-pager-section-content">
             <div className="absolute top-0 right-0 w-full h-2 bg-gradient-to-r from-[#C5A059] via-[#005A3C] to-[#475569]"></div>
 
-            <div className="bg-white border border-gray-200 shadow-sm p-5 md:p-6 space-y-5">
-              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 border-b border-gray-200 pb-5" id="one-pager-infographic-header">
+            <div className="bg-white border border-gray-200 shadow-sm p-4 md:p-5 space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 border-b border-gray-200 pb-4" id="one-pager-infographic-header">
                 <div className="space-y-2 min-w-0">
                   <div className="flex items-center gap-2">
                     <CountryFlag flag={country.flag} flagUrl={country.flagUrl} countryName={isEn ? country.nameEn : country.nameAr} size="lg" />
@@ -2085,12 +2085,12 @@ export default function BriefingGenerator({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 items-start">
                 <section className="xl:col-span-4 space-y-3">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep">{isEn ? "Fast Facts" : "حقائق سريعة"}</h4>
                   <div className="grid grid-cols-2 gap-2">
                     {onePagerFastFacts.slice(0, 10).map((fact, index) => (
-                      <div key={`${fact.label}-${index}`} className="bg-white border border-gray-200 rounded p-3 min-h-[92px]">
+                      <div key={`${fact.label}-${index}`} className="bg-white border border-gray-200 rounded p-2.5 min-h-[84px]">
                         <p className="text-[9px] uppercase tracking-widest font-mono font-bold text-gray-500 truncate">{fact.label}</p>
                         <p className="text-base font-serif font-bold text-slate-vip leading-tight mt-1">{fact.value}</p>
                         {(fact.context || fact.source || fact.year) && (
@@ -2144,10 +2144,10 @@ export default function BriefingGenerator({
                 </section>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <section className="lg:col-span-1 bg-white border border-gray-200 rounded p-4">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+                <section className="lg:col-span-5 bg-white border border-gray-200 rounded p-3.5 h-fit self-start">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep mb-3">{isEn ? "Opportunity Map" : "خريطة الفرص"}</h4>
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {onePagerOpportunities.slice(0, 4).map((opportunity, index) => (
                       <div key={`${opportunity.title}-${index}`} className="border-l-2 border-gold-deep pl-3">
                         <div className="flex items-center justify-between gap-2">
@@ -2160,9 +2160,9 @@ export default function BriefingGenerator({
                   </div>
                 </section>
 
-                <section className="lg:col-span-1 bg-white border border-gray-200 rounded p-4">
+                <section className="lg:col-span-4 bg-white border border-gray-200 rounded p-3.5 h-fit self-start">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-emerald-deep mb-3">{isEn ? "Risk And Mitigation" : "المخاطر والمعالجة"}</h4>
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {onePagerRisks.slice(0, 3).map((risk, index) => (
                       <div key={`${risk.risk}-${index}`} className="bg-amber-50 border border-amber-100 rounded p-3">
                         <p className="text-xs font-bold text-amber-900 leading-5">{risk.risk}</p>
@@ -2172,7 +2172,7 @@ export default function BriefingGenerator({
                   </div>
                 </section>
 
-                <section className="lg:col-span-1 bg-slate-vip text-white rounded p-4">
+                <section className="lg:col-span-3 bg-slate-vip text-white rounded p-3.5 h-fit self-start">
                   <h4 className="text-xs uppercase tracking-widest font-mono font-black text-gold-deep mb-3">{isEn ? "90-Day Actions" : "خطوات 90 يوما"}</h4>
                   <ol className="space-y-2">
                     {onePagerActions.slice(0, 5).map((action, index) => (
