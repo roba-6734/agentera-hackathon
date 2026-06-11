@@ -378,14 +378,6 @@ export default function App() {
       step: 4,
     },
     {
-      code: "briefing" as activeTabCode,
-      labelEn: "Briefings",
-      labelAr: "الإحاطات",
-      Icon: Award,
-      step: 8,
-      badge: "MEMO",
-    },
-    {
       code: "compare" as activeTabCode,
       labelEn: "Sovereign Comparison",
       labelAr: "مقارنة المؤشرات",
@@ -399,13 +391,21 @@ export default function App() {
       Icon: Eye,
       step: 5,
     },
+    {
+      code: "briefing" as activeTabCode,
+      labelEn: "Briefings",
+      labelAr: "الإحاطات",
+      Icon: Award,
+      step: 8,
+      badge: "MEMO",
+    },
     ...(session?.role === "staff"
       ? [{
           code: "debrief" as activeTabCode,
           labelEn: "Meeting Debrief",
           labelAr: "تحليل الاجتماع",
           Icon: BrainCircuit,
-          step: 7,
+          step: 9,
         }]
       : []),
   ];
@@ -1249,7 +1249,7 @@ export default function App() {
                           type="button"
                           onClick={() => {
                             setActiveTab("debrief");
-                            setCurrentStep(7);
+                            setCurrentStep(9);
                           }}
                           className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#D8E0EF] bg-white px-4 py-2.5 text-sm font-bold text-emerald-deep transition-all hover:-translate-y-0.5 hover:border-gold-deep/45 hover:shadow-md cursor-pointer"
                         >
