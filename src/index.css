@@ -902,13 +902,15 @@ select {
   white-space: nowrap;
 }
 
-#staff-strategic-signals-monitor {
+#staff-strategic-signals-monitor,
+#executive-strategic-signals-monitor {
   border-color: rgba(203, 213, 225, 0.72);
   border-radius: 8px;
   box-shadow: 0 18px 42px rgba(15, 23, 42, 0.075);
 }
 
-#staff-strategic-signals-monitor > div:first-child {
+#staff-strategic-signals-monitor > div:first-child,
+#executive-strategic-signals-monitor > div:first-child {
   background: linear-gradient(135deg, #101828, #1E3A8A);
 }
 

@@ -10,6 +10,7 @@ import {
 interface StrategicSignalsMonitorProps {
   language: "en" | "ar";
   compact?: boolean;
+  audience?: "staff" | "executive";
 }
 
 const defaultFilters: StrategicSignalCategory[] = ["energy", "infrastructure", "trade-investment", "diplomacy"];
@@ -49,7 +50,7 @@ function formatSignalDate(publishedAt: string, language: "en" | "ar") {
   }).format(new Date(publishedAt));
 }
 
-export default function StrategicSignalsMonitor({ language, compact = false }: StrategicSignalsMonitorProps) {
+export default function StrategicSignalsMonitor({ language, compact = false, audience = "staff" }: StrategicSignalsMonitorProps) {
   const isEn = language === "en";
   const [selectedFilters, setSelectedFilters] = useState<StrategicSignalCategory[]>(defaultFilters);
   const [signals, setSignals] = useState<StrategicSignal[]>([]);
@@ -238,7 +239,7 @@ export default function StrategicSignalsMonitor({ language, compact = false }: S
   return (
     <section
       className={`bg-white rounded-lg shadow-sm border border-gold-border overflow-hidden ${compact ? "h-full" : ""}`}
-      id="staff-strategic-signals-monitor"
+      id={`${audience}-strategic-signals-monitor`}
       style={{ direction: language === "ar" ? "rtl" : "ltr" }}
     >
       <div className={`bg-slate-vip border-b border-gold-deep/20 flex items-center justify-between gap-3 ${compact ? "p-3.5" : "p-4"}`}>
@@ -251,7 +252,9 @@ export default function StrategicSignalsMonitor({ language, compact = false }: S
                 : isEn ? "Strategic Signals Monitor" : "مراقب المؤشرات الاستراتيجية"}
             </h3>
             <p className="text-[10px] text-gray-400 mt-1">
-              {isEn ? "News & trends for staff review" : "أخبار واتجاهات لمراجعة فريق العمل"}
+              {audience === "executive"
+                ? isEn ? "News & strategic signals for leadership review" : "أخبار ومؤشرات استراتيجية لمراجعة القيادة"
+                : isEn ? "News & trends for staff review" : "أخبار واتجاهات لمراجعة فريق العمل"}
             </p>
           </div>
         </div>

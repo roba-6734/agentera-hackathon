@@ -32,8 +32,8 @@ const roleOptions: Array<{
     role: "executive",
     titleEn: "Executive",
     titleAr: "قيادي",
-    descriptionEn: "Concise meeting briefing for chairs, senior officials, and decision makers who need only the essentials.",
-    descriptionAr: "إحاطة موجزة لرؤساء الاجتماعات وكبار المسؤولين وصناع القرار دون تفاصيل زائدة.",
+    descriptionEn: "Concise meeting briefing with news and strategic signals for chairs, senior officials, and decision makers.",
+    descriptionAr: "إحاطة موجزة مع الأخبار والمؤشرات الاستراتيجية لرؤساء الاجتماعات وكبار المسؤولين وصناع القرار.",
     icon: Crown,
   },
 ];
@@ -146,8 +146,8 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
                 </h2>
                 <p className="auth-portal-copy text-sm sm:text-base text-gray-600 leading-7 max-w-xl">
                   {isEn
-                    ? "Staff users prepare the full intelligence workspace. Executives receive a concise meeting brief."
-                    : "يدخل فريق العمل إلى مساحة التحضير الكاملة، ويحصل القياديون على إحاطة موجزة."}
+                    ? "Staff users prepare the full intelligence workspace. Executives receive concise meeting briefs with news and strategic signals."
+                    : "يدخل فريق العمل إلى مساحة التحضير الكاملة، ويحصل القياديون على إحاطات موجزة مع الأخبار والمؤشرات الاستراتيجية."}
                 </p>
               </div>
 

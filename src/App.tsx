@@ -559,8 +559,8 @@ export default function App() {
               </h2>
               <p className="text-xs text-gray-500 max-w-2xl">
                 {isEn
-                  ? "Focused view for meeting chairs and senior officials: context, decision priority, and speaking posture only."
-                  : "عرض مركز لرؤساء الاجتماعات وكبار المسؤولين: السياق وأولوية القرار ونبرة الحديث فقط."}
+                  ? "Focused view for meeting chairs and senior officials: context, decision priority, live news signals, and speaking posture only."
+                  : "عرض مركز لرؤساء الاجتماعات وكبار المسؤولين: السياق وأولوية القرار ومؤشرات الأخبار المباشرة ونبرة الحديث فقط."}
               </p>
             </div>
 
@@ -674,6 +674,12 @@ export default function App() {
             </div>
           </section>
 
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6" id="executive-primary-workspace-grid">
+            <div
+              className="xl:col-span-8 space-y-6"
+              id="executive-main-workspace-column"
+              style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+            >
           {activeCountry && (
             <ExecutiveDecisionSupport
               country={activeCountry}
@@ -681,6 +687,74 @@ export default function App() {
               briefingArtifacts={briefingArtifacts}
               meetingObjective={meetingObjective}
             />
+          )}
+
+          {activeCountry && (
+            <section
+              className="bg-white rounded-sm shadow-md border border-[#CBD5E1] p-3 md:p-4"
+              id="executive-advisor-access-tabs"
+              aria-label={isEn ? "Executive workspace actions" : "إجراءات مساحة العمل القيادية"}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => document.getElementById("executive-briefing-parts-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                  className={`min-h-[76px] rounded-lg border-2 px-4 py-3 text-left transition-all cursor-pointer ${
+                    isChatOpen
+                      ? "border-gray-200 bg-slate-50 text-slate-vip hover:border-gold-border hover:bg-white"
+                      : "border-gold-deep bg-gold-bg/40 text-slate-vip shadow-sm"
+                  }`}
+                  aria-pressed={!isChatOpen}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-slate-vip text-white">
+                      <FileText className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-base font-serif font-bold leading-tight">
+                        {isEn ? "Briefing Package" : "حزمة الإحاطة"}
+                      </p>
+                      <p className="mt-1 text-sm leading-5 text-gray-600">
+                        {isEn ? "Review summary, talking points, one-pager, and slides." : "مراجعة الملخص ونقاط الحديث والصفحة الواحدة والشرائح."}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsChatOpen(true)}
+                  className={`min-h-[76px] rounded-lg border-2 px-4 py-3 text-left transition-all cursor-pointer ${
+                    isChatOpen
+                      ? "border-emerald-deep bg-emerald-deep text-white shadow-lg"
+                      : "border-[#1E3A8A] bg-[#0F172A] text-white shadow-md hover:border-gold-deep hover:bg-[#1E3A8A]"
+                  }`}
+                  aria-pressed={isChatOpen}
+                  aria-controls="executive-ai-advisor-chat-panel"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-md ${isChatOpen ? "bg-white text-emerald-deep" : "bg-gold-deep text-slate-vip"}`}>
+                        <MessageCircle className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-base font-serif font-bold leading-tight">
+                          {isChatOpen
+                            ? isEn ? "AI Advisor Chat Open" : "محادثة المستشار مفتوحة"
+                            : isEn ? "Open AI Advisor Chat" : "افتح محادثة المستشار الذكي"}
+                        </p>
+                        <p className={`mt-1 text-sm leading-5 ${isChatOpen ? "text-white/85" : "text-slate-200"}`}>
+                          {isEn ? "Ask follow-up questions before or during the meeting." : "اطرح أسئلة متابعة قبل الاجتماع أو أثناءه."}
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`hidden sm:inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-mono font-black uppercase ${isChatOpen ? "bg-white text-emerald-deep" : "bg-emerald-light text-slate-vip"}`}>
+                      {isEn ? "Live" : "مباشر"}
+                    </span>
+                  </div>
+                </button>
+              </div>
+            </section>
           )}
 
           {isGenerating && !activeCountry ? (
@@ -738,6 +812,12 @@ export default function App() {
               </h3>
             </div>
           )}
+            </div>
+
+            <aside className="xl:col-span-4 xl:sticky xl:top-6 xl:self-start" id="executive-strategic-signals-side-panel">
+              <StrategicSignalsMonitor language={language} compact audience="executive" />
+            </aside>
+          </div>
         </main>
 
         <button
@@ -784,6 +864,7 @@ export default function App() {
             />
             <div
               className="fixed bottom-28 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[560px] lg:w-[640px] max-w-[calc(100vw-2rem)] h-[min(720px,calc(100vh-9rem))] bg-white rounded-lg shadow-2xl border border-[#CBD5E1] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
+              id="executive-ai-advisor-chat-panel"
               style={{ direction: language === "ar" ? "rtl" : "ltr" }}
             >
               <AiChatAssistant

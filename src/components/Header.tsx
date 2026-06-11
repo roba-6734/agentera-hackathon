@@ -51,7 +51,7 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
                 <span className="h-2 w-2 rounded-full bg-emerald-deep animate-pulse"></span>
                 <span className="text-[10px] uppercase font-mono tracking-widest text-[#4F46E5] font-bold">
                   {isExecutive
-                    ? language === "en" ? "Executive Briefing Resource" : "مورد الإحاطة القيادية"
+                    ? language === "en" ? "Executive Briefing & Signals Resource" : "مورد الإحاطة والمؤشرات القيادية"
                     : language === "en" ? "Staff Strategic Resource" : "مورد استراتيجي لفريق العمل"}
                 </span>
                 <span className="text-[9px] px-1.5 py-0.5 bg-[#F0F0EE] text-slate-vip rounded border border-gold-border font-mono font-bold">
@@ -63,7 +63,7 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
               </h1>
               <p className="text-xs text-gray-500 font-medium tracking-wide">
                 {isExecutive
-                  ? language === "en" ? "Concise Briefings for UAE Leadership" : "إحاطات موجزة لقيادة دولة الإمارات"
+                  ? language === "en" ? "Concise briefings and strategic signals for UAE leadership" : "إحاطات ومؤشرات استراتيجية موجزة لقيادة دولة الإمارات"
                   : language === "en" ? "Decision-Ready Intelligence for UAE Leadership" : "استخبارات جاهزة للقرار لقيادة دولة الإمارات"}
               </p>
             </div>
