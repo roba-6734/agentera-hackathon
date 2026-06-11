@@ -412,17 +412,17 @@ export default function App() {
       step: 3,
     },
     {
-      code: "strategic" as activeTabCode,
-      labelEn: "Strategic Insights",
-      labelAr: "الدليل الاستراتيجي الثنائي",
-      Icon: Layers,
-      step: 4,
-    },
-    {
       code: "compare" as activeTabCode,
       labelEn: "Sovereign Comparison",
       labelAr: "مقارنة المؤشرات",
       Icon: Landmark,
+      step: 4,
+    },
+    {
+      code: "strategic" as activeTabCode,
+      labelEn: "Strategic Insights",
+      labelAr: "الدليل الاستراتيجي الثنائي",
+      Icon: Layers,
       step: 4,
     },
     {
@@ -742,7 +742,7 @@ export default function App() {
                         {isEn ? "Briefing Package" : "حزمة الإحاطة"}
                       </p>
                       <p className="mt-1 text-sm leading-5 text-gray-600">
-                        {isEn ? "Review summary, talking points, one-pager, and slides." : "مراجعة الملخص ونقاط الحديث والصفحة الواحدة والشرائح."}
+                        {isEn ? "Review summary, one-pager, talking points, and slides." : "مراجعة الملخص والصفحة الواحدة ونقاط الحديث والشرائح."}
                       </p>
                     </div>
                   </div>
@@ -792,8 +792,8 @@ export default function App() {
               </h3>
               <p className="text-sm text-gray-500 mt-2">
                 {isEn
-                  ? "Executive summary, talking points, one-pager, and slides will appear here when ready."
-                  : "سيظهر الملخص التنفيذي ونقاط الحديث والصفحة الواحدة والشرائح هنا عند الجاهزية."}
+                  ? "Executive summary, one-pager, talking points, and slides will appear here when ready."
+                  : "سيظهر الملخص التنفيذي والصفحة الواحدة ونقاط الحديث والشرائح هنا عند الجاهزية."}
               </p>
             </div>
           ) : activeCountry ? (

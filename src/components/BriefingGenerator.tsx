@@ -1890,19 +1890,6 @@ export default function BriefingGenerator({
           </button>
 
           <button
-            onClick={() => setActiveOutput("talking-points")}
-            className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              activeOutput === "talking-points"
-                ? "bg-emerald-deep text-white shadow-md border border-emerald-deep"
-                : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
-            }`}
-            id="btn-output-talking-points"
-          >
-            <Volume2 className="w-4 h-4" />
-            <span>{isEn ? "Talking Points" : "نقاط الحديث للوفد"}</span>
-          </button>
-
-          <button
             onClick={() => setActiveOutput("one-pager")}
             className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
               activeOutput === "one-pager"
@@ -1913,6 +1900,19 @@ export default function BriefingGenerator({
           >
             <FileCheck className="w-4 h-4" />
             <span>{isEn ? "One-Pager" : "صفحة واحدة"}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveOutput("talking-points")}
+            className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeOutput === "talking-points"
+                ? "bg-emerald-deep text-white shadow-md border border-emerald-deep"
+                : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
+            }`}
+            id="btn-output-talking-points"
+          >
+            <Volume2 className="w-4 h-4" />
+            <span>{isEn ? "Talking Points" : "نقاط الحديث للوفد"}</span>
           </button>
 
           <button
@@ -2002,8 +2002,8 @@ export default function BriefingGenerator({
                   <p className="text-gray-600 leading-relaxed">
                     {isDatabaseBriefingSource
                       ? isEn
-                        ? "The saved country briefing package was loaded from the briefing artifacts database and rendered through the same summary, talking-points, one-pager, and slide views."
-                        : "تم تحميل حزمة الإحاطة المحفوظة من قاعدة بيانات الإحاطات وعرضها عبر الملخص ونقاط الحديث والصفحة الواحدة والشرائح نفسها."
+                        ? "The saved country briefing package was loaded from the briefing artifacts database and rendered through the same summary, one-pager, talking-points, and slide views."
+                        : "تم تحميل حزمة الإحاطة المحفوظة من قاعدة بيانات الإحاطات وعرضها عبر الملخص والصفحة الواحدة ونقاط الحديث والشرائح نفسها."
                       : isEn
                         ? "Under ministerial secure communication protocol, high-fidelity sovereign briefing directories have been loaded as standby security models due to active external gateway rate throttling."
                         : "بموجب البريد الحكومي المؤمن، تم تفعيل خط السحب الاحتياطي المباشر وقراءة التقارير الحيوية المصدقة سلفاً بدلاً من البوابات السحابية النشطة تفادياً لبطء الاتصال."}
@@ -2402,8 +2402,8 @@ export default function BriefingGenerator({
                     <div className="rounded-sm border-l-4 border-gold-deep bg-gold-bg/25 p-4">
                       <p className="text-sm font-bold text-slate-vip">
                         {isEn
-                          ? "The video brief feature is not active yet. Use the Executive Summary, Talking Points, One-Pager, and Slides tabs for the current pitch flow."
-                          : "ميزة الإحاطة المرئية غير مفعلة حالياً. استخدم تبويبات الملخص التنفيذي ونقاط الحديث والصفحة الواحدة والشرائح في مسار العرض الحالي."}
+                          ? "The video brief feature is not active yet. Use the Executive Summary, One-Pager, Talking Points, and Slides tabs for the current pitch flow."
+                          : "ميزة الإحاطة المرئية غير مفعلة حالياً. استخدم تبويبات الملخص التنفيذي والصفحة الواحدة ونقاط الحديث والشرائح في مسار العرض الحالي."}
                       </p>
                     </div>
                   </div>
