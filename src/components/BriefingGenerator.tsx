@@ -365,6 +365,7 @@ export default function BriefingGenerator({
       }))
     : null;
   const slides = artifactSlides || fallbackSlides;
+  const executiveSummaryArtifact = briefingArtifacts?.executiveSummary;
   const onePagerArtifact = briefingArtifacts?.onePager;
 
   const formatPptxFileName = (name: string) => {
@@ -1440,6 +1441,408 @@ export default function BriefingGenerator({
       ];
   const onePagerRecommendation = onePagerArtifact?.strategicRecommendation || (isEn ? country.predictive.proposalsEn : country.predictive.proposalsAr);
 
+  const formatSectionPdfDate = () =>
+    new Date().toLocaleDateString(isEn ? "en-GB" : "ar-AE", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+
+  const openSectionPdfDialog = (documentTitle: string, eyebrow: string, bodyHtml: string) => {
+    setPrintError(null);
+
+    try {
+      const iframe = document.createElement("iframe");
+      iframe.title = documentTitle;
+      iframe.style.position = "fixed";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      iframe.style.opacity = "0";
+      iframe.style.pointerEvents = "none";
+      document.body.appendChild(iframe);
+
+      const printWindow = iframe.contentWindow;
+      const printDocument = printWindow?.document;
+      if (!printWindow || !printDocument) {
+        iframe.remove();
+        window.print();
+        return;
+      }
+
+      const generatedOn = formatSectionPdfDate();
+      const printHtml = `
+<!doctype html>
+<html lang="${language}" dir="${isEn ? "ltr" : "rtl"}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(documentTitle)}</title>
+  <style>
+    @page { size: A4; margin: 14mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: #172520;
+      font-family: ${isEn ? "Inter, Arial, sans-serif" : "'Noto Kufi Arabic', Arial, sans-serif"};
+      font-size: 12px;
+      line-height: 1.48;
+    }
+    .report-shell { width: 100%; }
+    .report-header {
+      border-left: 5px solid #C5A059;
+      background: #F8FAFC;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+    }
+    [dir="rtl"] .report-header {
+      border-left: 0;
+      border-right: 5px solid #C5A059;
+    }
+    .eyebrow {
+      color: #0D4C3A;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 6px 0 8px;
+      color: #172520;
+      font-size: 24px;
+      line-height: 1.18;
+    }
+    h2 {
+      margin: 18px 0 8px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #D8E0EF;
+      color: #172520;
+      font-size: 15px;
+    }
+    h3 {
+      margin: 14px 0 6px;
+      color: #172520;
+      font-size: 13px;
+    }
+    p { margin: 0 0 10px; }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .meta-card,
+    .info-card {
+      border: 1px solid #D8E0EF;
+      background: #FFFFFF;
+      padding: 11px 12px;
+    }
+    .meta-card span,
+    .info-card span {
+      display: block;
+      color: #64748B;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .meta-card strong,
+    .info-card strong {
+      display: block;
+      margin-top: 4px;
+      color: #172520;
+      font-size: 13px;
+    }
+    .content-card {
+      border: 1px solid #D8E0EF;
+      padding: 14px;
+      margin-bottom: 12px;
+      background: #FFFFFF;
+      break-inside: avoid;
+    }
+    .briefing-content p {
+      text-align: justify;
+    }
+    .briefing-content strong {
+      color: #0D4C3A;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 12px;
+    }
+    th,
+    td {
+      border: 1px solid #D8E0EF;
+      padding: 8px;
+      text-align: start;
+      vertical-align: top;
+    }
+    th {
+      background: #172520;
+      color: #C5A059;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    ul,
+    ol {
+      margin: 8px 0 0;
+      padding-inline-start: 18px;
+    }
+    li { margin-bottom: 6px; }
+    .callout {
+      background: #0D4C3A;
+      color: #FFFFFF;
+      border-left: 4px solid #C5A059;
+      padding: 12px;
+      margin-top: 14px;
+    }
+    [dir="rtl"] .callout {
+      border-left: 0;
+      border-right: 4px solid #C5A059;
+    }
+    .callout span {
+      display: block;
+      color: #C5A059;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .footer {
+      margin-top: 18px;
+      padding-top: 10px;
+      border-top: 1px solid #D8E0EF;
+      color: #64748B;
+      font-size: 10px;
+    }
+    @media print {
+      body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .content-card,
+      tr { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main class="report-shell">
+    <section class="report-header">
+      <div class="eyebrow">${escapeHtml(eyebrow)}</div>
+      <h1>${escapeHtml(documentTitle)}</h1>
+      <div style="color:#64748B;font-size:11px;font-weight:700;">${escapeHtml(isEn ? `Generated ${generatedOn}` : `تم الإنشاء في ${generatedOn}`)}</div>
+    </section>
+    <section class="meta-grid">
+      <div class="meta-card">
+        <span>${escapeHtml(isEn ? "Partner state" : "الشريك الدولي")}</span>
+        <strong>${formatCountryFlagForHtml(country, isEn)} ${escapeHtml(isEn ? country.nameEn : country.nameAr)}</strong>
+      </div>
+      <div class="meta-card">
+        <span>${escapeHtml(isEn ? "Authority node" : "جهة الصدور")}</span>
+        <strong>${escapeHtml(isEn ? "Cabinet AI Strategic Advisor" : "مستشار الذكاء الاصطناعي لحقيبة الوزير")}</strong>
+      </div>
+    </section>
+    ${bodyHtml}
+    <div class="footer">${escapeHtml(isEn ? "UAE Digital Strategic Advisor - Section export" : "المستشار الاستراتيجي الرقمي لدولة الإمارات - تصدير القسم")}</div>
+  </main>
+</body>
+</html>`;
+
+      const cleanup = () => {
+        setTimeout(() => iframe.remove(), 500);
+      };
+      printWindow.addEventListener("afterprint", cleanup, { once: true });
+      window.setTimeout(cleanup, 15000);
+
+      printDocument.open();
+      printDocument.write(printHtml);
+      printDocument.close();
+      window.setTimeout(() => {
+        try {
+          printWindow.focus();
+          printWindow.print();
+        } catch (error) {
+          console.warn("Section print blocked:", error);
+          setPrintError(isEn ? "Could not open the PDF save dialog for this section. Please try again." : "تعذر فتح نافذة حفظ PDF لهذا القسم. يرجى المحاولة مرة أخرى.");
+        }
+      }, 300);
+    } catch (error) {
+      console.error("Section PDF generation failed:", error);
+      setPrintError(isEn ? "Could not prepare this section for PDF export. Please try again." : "تعذر إعداد هذا القسم لتصدير PDF. يرجى المحاولة مرة أخرى.");
+    }
+  };
+
+  const handleDownloadSummaryPdf = () => {
+    if (isGenerating) return;
+
+    const decisionFocusHtml = executiveSummaryArtifact?.decisionFocus
+      ? `<div class="callout"><span>${escapeHtml(isEn ? "Decision Focus" : "محور القرار")}</span>${escapeHtml(executiveSummaryArtifact.decisionFocus)}</div>`
+      : "";
+    const partnershipsHtml = executiveSummaryArtifact?.priorityPartnerships?.length
+      ? `
+        <section class="content-card">
+          <h2>${escapeHtml(isEn ? "Priority Partnerships" : "الشراكات ذات الأولوية")}</h2>
+          <ul>${executiveSummaryArtifact.priorityPartnerships.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </section>
+      `
+      : "";
+    const objectiveHtml = meetingObjective?.trim()
+      ? `
+        <section class="content-card">
+          <span>${escapeHtml(isEn ? "Meeting Objective" : "هدف الاجتماع")}</span>
+          <strong>${escapeHtml(meetingObjective.trim())}</strong>
+        </section>
+      `
+      : "";
+
+    openSectionPdfDialog(
+      isEn ? `${country.nameEn} Executive Summary` : `الملخص التنفيذي: ${country.nameAr}`,
+      isEn ? "Executive Summary Export" : "تصدير الملخص التنفيذي",
+      `
+        ${objectiveHtml}
+        <section class="content-card briefing-content">
+          <h2>${escapeHtml(isEn ? "Immediate Executive Overview" : "الملخص التنفيذي الفوري")}</h2>
+          ${formatBriefingTextForHtml(aiBriefingText)}
+          ${decisionFocusHtml}
+        </section>
+        ${partnershipsHtml}
+      `
+    );
+  };
+
+  const handleDownloadTalkingPointsPdf = () => {
+    const objectiveHtml = meetingObjective?.trim()
+      ? `
+        <section class="content-card">
+          <span>${escapeHtml(isEn ? "Meeting Objective" : "هدف الاجتماع")}</span>
+          <strong>${escapeHtml(meetingObjective.trim())}</strong>
+        </section>
+      `
+      : "";
+    const talkingPointsHtml = currentTP.map((point: any, index: number) => `
+      <section class="content-card">
+        <span>${escapeHtml(isEn ? `Talking Point ${index + 1}` : `نقطة الحديث ${index + 1}`)}</span>
+        <h2>${escapeHtml(isEn ? point.headerEn : point.headerAr)}</h2>
+        <p>${escapeHtml(isEn ? point.pointEn : point.pointAr)}</p>
+      </section>
+    `).join("");
+
+    openSectionPdfDialog(
+      isEn ? `${country.nameEn} Talking Points` : `نقاط الحديث: ${country.nameAr}`,
+      isEn ? "Talking Points Export" : "تصدير نقاط الحديث",
+      `
+        ${objectiveHtml}
+        <section class="content-card">
+          <span>${escapeHtml(isEn ? "Sovereign Dialogue Protocols" : "بروتوكولات التوجيه ونقاط المحادثة")}</span>
+          <h2>${escapeHtml(isEn ? "Bilateral Session Preparatory Talking Points" : "نقاط الحديث والأوراق التفاوضية المرشدة للوزير والوفد")}</h2>
+          <p>${escapeHtml(isEn ? "Prepared for official delegation use during bilateral ministerial engagement." : "أعدت للاستخدام الرسمي للوفد خلال الاجتماع الوزاري الثنائي.")}</p>
+        </section>
+        ${talkingPointsHtml}
+        <div class="callout">
+          <span>${escapeHtml(isEn ? "Diplomatic Notice" : "تنبيه دبلوماسي")}</span>
+          ${escapeHtml(isEn ? "Strictly for use of the official UAE delegation." : "يحظر مشاركة أو تسريب هذه البنود الاستراتيجية خارج الوفد الرسمي.")}
+        </div>
+      `
+    );
+  };
+
+  const handleDownloadOnePagerPdf = () => {
+    const fastFactsHtml = onePagerFastFacts.slice(0, 10).map((fact) => `
+      <div class="info-card">
+        <span>${escapeHtml(fact.label)}</span>
+        <strong>${escapeHtml(fact.value)}</strong>
+        ${fact.context || fact.source || fact.year ? `<p style="margin-top:6px;color:#64748B;font-size:10px;">${escapeHtml([fact.context, fact.year, fact.source].filter(Boolean).join(" | "))}</p>` : ""}
+      </div>
+    `).join("");
+    const sectorRowsHtml = onePagerSectorScorecard.slice(0, 4).map((item) => `
+      <tr>
+        <td><strong>${escapeHtml(item.sector)}</strong></td>
+        <td>${escapeHtml(item.currentBaseline)}</td>
+        <td>${escapeHtml(item.uaeAngle)}</td>
+      </tr>
+    `).join("");
+    const leadershipHtml = onePagerLeadership.slice(0, 4).map((leader) => `
+      <div class="info-card">
+        <span>${escapeHtml(leader.role)}</span>
+        <strong>${escapeHtml(leader.name)}</strong>
+        ${leader.note ? `<p style="margin-top:6px;color:#64748B;font-size:10px;">${escapeHtml(leader.note)}</p>` : ""}
+      </div>
+    `).join("");
+    const opportunitiesHtml = onePagerOpportunities.slice(0, 4).map((opportunity) => `
+      <li><strong>${escapeHtml(opportunity.title)}${opportunity.priority ? ` (${escapeHtml(opportunity.priority)})` : ""}:</strong> ${escapeHtml(opportunity.detail)}</li>
+    `).join("");
+    const risksHtml = onePagerRisks.slice(0, 3).map((risk) => `
+      <li><strong>${escapeHtml(risk.risk)}</strong><br/>${escapeHtml(risk.mitigation)}</li>
+    `).join("");
+    const actionsHtml = onePagerActions.slice(0, 5).map((action) => `<li>${escapeHtml(action)}</li>`).join("");
+
+    openSectionPdfDialog(
+      onePagerArtifact?.title || (isEn ? `${country.nameEn} Strategic One-Pager` : `ملف استراتيجي موجز: ${country.nameAr}`),
+      isEn ? "One-Pager Export" : "تصدير الصفحة الواحدة",
+      `
+        <section class="content-card">
+          <span>${escapeHtml(isEn ? "Executive Infographic One-Pager" : "صفحة معلومات تنفيذية واحدة")}</span>
+          <h2>${escapeHtml(onePagerArtifact?.subtitle || (isEn ? "Fast reference for executive briefing, diplomatic positioning, and immediate UAE action." : "مرجع سريع للإحاطة القيادية والتموضع الدبلوماسي والخطوات الإماراتية الفورية."))}</h2>
+          <div class="grid-2">
+            <div class="info-card"><span>${escapeHtml(isEn ? "Priority" : "الأولوية")}</span><strong>${escapeHtml(onePagerArtifact?.strategicPriority || "High")}</strong></div>
+            <div class="info-card"><span>${escapeHtml(isEn ? "Updated" : "التحديث")}</span><strong>${escapeHtml(onePagerArtifact?.lastUpdated || "Current")}</strong></div>
+          </div>
+        </section>
+        <section class="content-card">
+          <h2>${escapeHtml(isEn ? "Fast Facts" : "حقائق سريعة")}</h2>
+          <div class="grid-3">${fastFactsHtml}</div>
+        </section>
+        <section class="content-card">
+          <h2>${escapeHtml(isEn ? "Sector Scorecard" : "بطاقة القطاعات")}</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>${escapeHtml(isEn ? "Sector" : "القطاع")}</th>
+                <th>${escapeHtml(isEn ? "Baseline" : "الوضع")}</th>
+                <th>${escapeHtml(isEn ? "UAE Angle" : "زاوية الإمارات")}</th>
+              </tr>
+            </thead>
+            <tbody>${sectorRowsHtml}</tbody>
+          </table>
+          <div class="content-card" style="margin-bottom:0;background:#F8FAFC;">
+            <span>${escapeHtml(isEn ? "UAE Relevance" : "صلة الملف بالإمارات")}</span>
+            <p style="margin-top:6px;">${escapeHtml(onePagerArtifact?.uaeRelevance || (isEn ? country.strategicInsights.partnershipsEn : country.strategicInsights.partnershipsAr))}</p>
+          </div>
+        </section>
+        <section class="content-card">
+          <h2>${escapeHtml(isEn ? "Leadership" : "القيادة")}</h2>
+          <div class="grid-2">${leadershipHtml}</div>
+        </section>
+        <section class="content-card">
+          <h2>${escapeHtml(isEn ? "Opportunity Map" : "خريطة الفرص")}</h2>
+          <ul>${opportunitiesHtml}</ul>
+        </section>
+        <section class="content-card">
+          <h2>${escapeHtml(isEn ? "Risks And Mitigation" : "المخاطر والمعالجة")}</h2>
+          <ul>${risksHtml}</ul>
+        </section>
+        <section class="content-card">
+          <h2>${escapeHtml(isEn ? "90-Day Actions" : "خطوات 90 يوما")}</h2>
+          <ol>${actionsHtml}</ol>
+        </section>
+        <div class="callout">
+          <span>${escapeHtml(isEn ? "Strategic Recommendation" : "التوصية الاستراتيجية")}</span>
+          ${escapeHtml(onePagerRecommendation)}
+        </div>
+      `
+    );
+  };
+
   return (
     <div className="space-y-6 animate-fade-in" id="briefing-generator-workspace">
       
@@ -1542,7 +1945,7 @@ export default function BriefingGenerator({
         {/* 1. EXECUTIVE BRIEFING SUMMARY BLOCK */}
         {activeOutput === "summary" && (
           <div className="p-6 md:p-8 space-y-4" id="summary-section-content">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-gray-100 pb-4">
               <div>
                 <span className="text-[10px] bg-gold-bg text-gold-deep border border-gold-border/50 font-bold font-mono px-2 py-0.5 rounded uppercase">
                   {isEn ? "Decision AI Synthesis" : "الذكاء التحليلي المشترك"}
@@ -1551,8 +1954,21 @@ export default function BriefingGenerator({
                   {isEn ? "Immediate Executive Overview" : "تحليل الملخص والفرص للمستشار"}
                 </h3>
               </div>
-              <div className="text-[10px] text-gray-400 font-mono">
-                {isEn ? "DOC-ID: MOEI-SUM-09" : "معرف الوثيقة: MOEI-SUM-09"}
+              <div className="flex items-center gap-2">
+                <div className="text-[10px] text-gray-400 font-mono">
+                  {isEn ? "DOC-ID: MOEI-SUM-09" : "معرف الوثيقة: MOEI-SUM-09"}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadSummaryPdf}
+                  disabled={isGenerating}
+                  title={isEn ? "Save executive summary as PDF" : "حفظ الملخص التنفيذي بصيغة PDF"}
+                  aria-label={isEn ? "Save executive summary as PDF" : "حفظ الملخص التنفيذي بصيغة PDF"}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded border border-gold-border bg-white px-2 text-xs font-extrabold text-emerald-deep shadow-sm transition-all hover:-translate-y-0.5 hover:border-gold-deep hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>PDF</span>
+                </button>
               </div>
             </div>
 
@@ -1599,13 +2015,25 @@ export default function BriefingGenerator({
         {/* 2. TALKING POINTS SEGMENT */}
         {activeOutput === "talking-points" && (
           <div className="p-6 md:p-8 space-y-6" id="talking-points-section-content">
-            <div className="border-b border-gray-100 pb-4">
-              <span className="text-[10px] bg-emerald-deep/10 text-emerald-light border border-emerald-deep/20 font-bold font-mono px-2 py-0.5 rounded uppercase">
-                {isEn ? "Sovereign Dialogue Protocols" : "بروتوكولات التوجيه ونقاط المحادثة"}
-              </span>
-              <h3 className="text-xl font-bold font-serif text-slate-vip mt-1.5">
-                {isEn ? "Bilateral Session Preparatory Talking Points" : "نقاط الحديث والأوراق التفاوضية المرشدة للوزير والوفد"}
-              </h3>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-gray-100 pb-4">
+              <div>
+                <span className="text-[10px] bg-emerald-deep/10 text-emerald-light border border-emerald-deep/20 font-bold font-mono px-2 py-0.5 rounded uppercase">
+                  {isEn ? "Sovereign Dialogue Protocols" : "بروتوكولات التوجيه ونقاط المحادثة"}
+                </span>
+                <h3 className="text-xl font-bold font-serif text-slate-vip mt-1.5">
+                  {isEn ? "Bilateral Session Preparatory Talking Points" : "نقاط الحديث والأوراق التفاوضية المرشدة للوزير والوفد"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleDownloadTalkingPointsPdf}
+                title={isEn ? "Save talking points as PDF" : "حفظ نقاط الحديث بصيغة PDF"}
+                aria-label={isEn ? "Save talking points as PDF" : "حفظ نقاط الحديث بصيغة PDF"}
+                className="inline-flex h-8 w-fit items-center justify-center gap-1.5 rounded border border-gold-border bg-white px-2 text-xs font-extrabold text-emerald-deep shadow-sm transition-all hover:-translate-y-0.5 hover:border-gold-deep hover:shadow-md cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>PDF</span>
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="talking-points-cards-grid">
@@ -1655,14 +2083,26 @@ export default function BriefingGenerator({
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 min-w-[220px] text-xs">
-                  <div className="border border-gold-border bg-gold-bg/25 p-3 rounded">
-                    <span className="block text-[9px] uppercase font-mono tracking-widest text-gray-500 font-bold">{isEn ? "Priority" : "الأولوية"}</span>
-                    <span className="block text-lg font-serif font-bold text-emerald-deep">{onePagerArtifact?.strategicPriority || "High"}</span>
-                  </div>
-                  <div className="border border-gray-200 bg-slate-50 p-3 rounded">
-                    <span className="block text-[9px] uppercase font-mono tracking-widest text-gray-500 font-bold">{isEn ? "Updated" : "التحديث"}</span>
-                    <span className="block text-sm font-mono font-bold text-slate-vip">{onePagerArtifact?.lastUpdated || "Current"}</span>
+                <div className="min-w-[220px] space-y-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={handleDownloadOnePagerPdf}
+                    title={isEn ? "Save one-pager as PDF" : "حفظ الصفحة الواحدة بصيغة PDF"}
+                    aria-label={isEn ? "Save one-pager as PDF" : "حفظ الصفحة الواحدة بصيغة PDF"}
+                    className="ml-auto flex h-8 w-fit items-center justify-center gap-1.5 rounded border border-gold-border bg-white px-2 text-xs font-extrabold text-emerald-deep shadow-sm transition-all hover:-translate-y-0.5 hover:border-gold-deep hover:shadow-md cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>PDF</span>
+                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="border border-gold-border bg-gold-bg/25 p-3 rounded">
+                      <span className="block text-[9px] uppercase font-mono tracking-widest text-gray-500 font-bold">{isEn ? "Priority" : "الأولوية"}</span>
+                      <span className="block text-lg font-serif font-bold text-emerald-deep">{onePagerArtifact?.strategicPriority || "High"}</span>
+                    </div>
+                    <div className="border border-gray-200 bg-slate-50 p-3 rounded">
+                      <span className="block text-[9px] uppercase font-mono tracking-widest text-gray-500 font-bold">{isEn ? "Updated" : "التحديث"}</span>
+                      <span className="block text-sm font-mono font-bold text-slate-vip">{onePagerArtifact?.lastUpdated || "Current"}</span>
+                    </div>
                   </div>
                 </div>
               </div>

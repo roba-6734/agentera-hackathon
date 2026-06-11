@@ -10,9 +10,8 @@ import {
   Recycle, 
   Compass, 
   ArrowUpRight, 
-  Globe2, 
   Award,
-  Maximize2
+  Download
 } from "lucide-react";
 import CountryFlag from "./CountryFlag";
 
@@ -20,6 +19,18 @@ interface ComparisonEngineProps {
   country: PrebuiltCountry;
   uaeData: UaeIndicator;
   language: "en" | "ar";
+}
+
+function escapeHtml(value: string | number | null | undefined): string {
+  const replacements: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  };
+
+  return String(value ?? "").replace(/[&<>"']/g, (char) => replacements[char]);
 }
 
 // Robust parsing utilities to convert string indices to reliable numbers for calculation
@@ -260,6 +271,267 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
     }
   ];
 
+  const handleDownloadPdf = () => {
+    const generatedOn = new Date().toLocaleDateString(isEn ? "en-GB" : "ar-AE", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+    const targetCountryName = isEn ? country.nameEn : country.nameAr;
+    const uaeCountryName = isEn ? uaeData.nameEn : uaeData.nameAr;
+    const metricRows = traditionalMetrics
+      .map((metric) => `
+        <tr>
+          <th>${escapeHtml(isEn ? metric.labelEn : metric.labelAr)}</th>
+          <td>${escapeHtml(isEn ? metric.uaeValue : metric.uaeValueAr)}</td>
+          <td>${escapeHtml(isEn ? metric.countryValue : metric.countryValueAr)}</td>
+        </tr>
+      `)
+      .join("");
+    const summaryRows = [
+      {
+        label: isEn ? "GDP scale" : "حجم الناتج المحلي",
+        uaeValue: uaeGdpLabel,
+        targetValue: targetGdpLabel,
+      },
+      {
+        label: isEn ? "Annual growth" : "النمو السنوي",
+        uaeValue: `${uaeGrowth}%`,
+        targetValue: `${targetGrowth}%`,
+      },
+      {
+        label: isEn ? "Infrastructure score" : "مؤشر البنية التحتية",
+        uaeValue: `${uaeInfra}/100`,
+        targetValue: `${targetInfra}/100`,
+      },
+      {
+        label: isEn ? "Competitiveness rank" : "ترتيب التنافسية",
+        uaeValue: isEn ? uaeData.competitivenessRank : uaeData.competitivenessRankAr,
+        targetValue: isEn ? country.indicators.competitivenessRank : country.indicators.competitivenessRank,
+      },
+    ]
+      .map((item) => `
+        <div class="summary-row">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(item.uaeValue)}</strong>
+          <strong>${escapeHtml(item.targetValue)}</strong>
+        </div>
+      `)
+      .join("");
+    const printHtml = `
+      <!doctype html>
+      <html lang="${isEn ? "en" : "ar"}" dir="${isEn ? "ltr" : "rtl"}">
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(isEn ? `UAE vs ${country.nameEn} Sovereign Comparison` : `مقارنة الإمارات و${country.nameAr}`)}</title>
+          <style>
+            @page { size: A4; margin: 14mm; }
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              background: #ffffff;
+              color: #172520;
+              font-family: Inter, Arial, sans-serif;
+              font-size: 12px;
+              line-height: 1.45;
+            }
+            .report-shell {
+              width: 100%;
+            }
+            .report-header {
+              border-left: 5px solid #C5A059;
+              padding: 18px 20px;
+              background: #F8FAFC;
+              margin-bottom: 18px;
+            }
+            [dir="rtl"] .report-header {
+              border-left: 0;
+              border-right: 5px solid #C5A059;
+            }
+            .eyebrow {
+              color: #0D4C3A;
+              font-size: 10px;
+              font-weight: 800;
+              letter-spacing: 0.08em;
+              text-transform: uppercase;
+            }
+            h1 {
+              margin: 6px 0 8px;
+              font-size: 24px;
+              line-height: 1.2;
+              color: #172520;
+            }
+            .meta {
+              color: #64748B;
+              font-size: 11px;
+              font-weight: 700;
+            }
+            .country-strip {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 10px;
+              margin-bottom: 14px;
+            }
+            .country-card {
+              border: 1px solid #D8E0EF;
+              padding: 12px;
+              background: #FFFFFF;
+            }
+            .country-card span {
+              display: block;
+              color: #64748B;
+              font-size: 10px;
+              font-weight: 800;
+              text-transform: uppercase;
+            }
+            .country-card strong {
+              display: block;
+              margin-top: 4px;
+              font-size: 16px;
+              color: #172520;
+            }
+            .summary {
+              border: 1px solid #D8E0EF;
+              margin-bottom: 16px;
+            }
+            .summary-row {
+              display: grid;
+              grid-template-columns: 1.1fr 1fr 1fr;
+              gap: 10px;
+              padding: 9px 12px;
+              border-bottom: 1px solid #E2E8F0;
+              align-items: start;
+            }
+            .summary-row:first-child {
+              background: #F8FAFC;
+            }
+            .summary-row:last-child {
+              border-bottom: 0;
+            }
+            .summary-row span {
+              color: #475569;
+              font-weight: 800;
+            }
+            .summary-row strong {
+              color: #172520;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              page-break-inside: auto;
+            }
+            th,
+            td {
+              border: 1px solid #D8E0EF;
+              padding: 10px;
+              text-align: start;
+              vertical-align: top;
+            }
+            thead th {
+              background: #0D4C3A;
+              color: #FFFFFF;
+              font-size: 10px;
+              text-transform: uppercase;
+              letter-spacing: 0.06em;
+            }
+            tbody th {
+              width: 32%;
+              background: #F8FAFC;
+              color: #172520;
+            }
+            tbody td {
+              width: 34%;
+            }
+            tr {
+              break-inside: avoid;
+            }
+            .footer {
+              margin-top: 18px;
+              padding-top: 10px;
+              border-top: 1px solid #D8E0EF;
+              color: #64748B;
+              font-size: 10px;
+            }
+          </style>
+        </head>
+        <body>
+          <main class="report-shell">
+            <section class="report-header">
+              <div class="eyebrow">${escapeHtml(isEn ? "Sovereign Comparison Export" : "تصدير المقارنة السيادية")}</div>
+              <h1>${escapeHtml(isEn ? `UAE vs ${country.nameEn}` : `الإمارات و${country.nameAr}`)}</h1>
+              <div class="meta">${escapeHtml(isEn ? `Generated ${generatedOn}` : `تم الإنشاء في ${generatedOn}`)}</div>
+            </section>
+
+            <section class="country-strip">
+              <div class="country-card">
+                <span>${escapeHtml(isEn ? "Benchmark host" : "الدولة المرجعية")}</span>
+                <strong>${escapeHtml(uaeCountryName)}</strong>
+              </div>
+              <div class="country-card">
+                <span>${escapeHtml(isEn ? "Target nation" : "الدولة المستهدفة")}</span>
+                <strong>${escapeHtml(targetCountryName)}</strong>
+              </div>
+            </section>
+
+            <section class="summary">
+              <div class="summary-row">
+                <span>${escapeHtml(isEn ? "Benchmark" : "المعيار")}</span>
+                <strong>${escapeHtml(uaeCountryName)}</strong>
+                <strong>${escapeHtml(targetCountryName)}</strong>
+              </div>
+              ${summaryRows}
+            </section>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>${escapeHtml(isEn ? "Indicator" : "المؤشر")}</th>
+                  <th>${escapeHtml(uaeCountryName)}</th>
+                  <th>${escapeHtml(targetCountryName)}</th>
+                </tr>
+              </thead>
+              <tbody>${metricRows}</tbody>
+            </table>
+
+            <div class="footer">${escapeHtml(isEn ? "UAE Digital Strategic Advisor - Sovereign comparison report" : "المستشار الاستراتيجي الرقمي لدولة الإمارات - تقرير المقارنة السيادية")}</div>
+          </main>
+          <script>
+            window.addEventListener("load", () => {
+              setTimeout(() => window.print(), 250);
+            });
+          </script>
+        </body>
+      </html>
+    `;
+    const printFrame = document.createElement("iframe");
+    printFrame.title = isEn ? "Sovereign comparison PDF export" : "تصدير المقارنة السيادية";
+    printFrame.style.position = "fixed";
+    printFrame.style.width = "0";
+    printFrame.style.height = "0";
+    printFrame.style.border = "0";
+    printFrame.style.opacity = "0";
+    printFrame.style.pointerEvents = "none";
+    document.body.appendChild(printFrame);
+
+    const printWindow = printFrame.contentWindow;
+    const printDocument = printWindow?.document;
+    if (!printWindow || !printDocument) {
+      printFrame.remove();
+      window.print();
+      return;
+    }
+
+    const cleanup = () => {
+      setTimeout(() => printFrame.remove(), 500);
+    };
+    printWindow.addEventListener("afterprint", cleanup, { once: true });
+    window.setTimeout(cleanup, 15000);
+
+    printDocument.open();
+    printDocument.write(printHtml);
+    printDocument.close();
+  };
+
   return (
     <div className="space-y-6" id="country-comparison-engine-view">
       
@@ -280,7 +552,17 @@ export default function ComparisonEngine({ country, uaeData, language }: Compari
             </div>
           </div>
           
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-wrap gap-2 items-center justify-center md:justify-end">
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              title={isEn ? "Save comparison as PDF" : "حفظ المقارنة بصيغة PDF"}
+              aria-label={isEn ? "Save comparison as PDF" : "حفظ المقارنة بصيغة PDF"}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-sm border border-gold-border bg-white px-2.5 text-xs font-extrabold text-emerald-deep shadow-sm transition-all hover:-translate-y-0.5 hover:border-gold-deep hover:shadow-md cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>PDF</span>
+            </button>
             {/* Display View Mode Switcher */}
             <div className="bg-gray-100 p-1 rounded-sm flex gap-1 border border-gray-200">
               <button

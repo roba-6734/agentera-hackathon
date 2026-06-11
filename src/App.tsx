@@ -454,85 +454,6 @@ export default function App() {
       valueAr: "مواءمة المناخ والتزامات الاستدامة ومتابعة مخرجات مؤتمر الأطراف",
     },
   ];
-  const readinessItems = [
-    {
-      key: "country",
-      labelEn: "Target country",
-      labelAr: "الدولة المستهدفة",
-      detailEn: selectedCountryOption?.nameEn || "Pending",
-      detailAr: selectedCountryOption?.nameAr || "قيد الانتظار",
-      state: selectedCountryOption ? "complete" : "current",
-    },
-    {
-      key: "objective",
-      labelEn: "Meeting objective",
-      labelAr: "هدف الاجتماع",
-      detailEn: meetingObjective.trim() ? "Captured" : "Optional",
-      detailAr: meetingObjective.trim() ? "تم تسجيله" : "اختياري",
-      state: meetingObjective.trim() ? "complete" : selectedCountryOption ? "current" : "pending",
-    },
-    {
-      key: "profile",
-      labelEn: "Country profile",
-      labelAr: "ملف الدولة",
-      detailEn: activeCountry ? "Ready" : "Next",
-      detailAr: activeCountry ? "جاهز" : "التالي",
-      state: activeCountry ? "complete" : selectedCountryOption ? "current" : "pending",
-    },
-    {
-      key: "signals",
-      labelEn: "Signals review",
-      labelAr: "مراجعة المؤشرات",
-      detailEn: showSignalsPanel ? "Live" : "Available",
-      detailAr: showSignalsPanel ? "مباشر" : "متاح",
-      state: "complete",
-    },
-    {
-      key: "debrief",
-      labelEn: "Meeting debrief",
-      labelAr: "تحليل الاجتماع",
-      detailEn: "After meeting",
-      detailAr: "بعد الاجتماع",
-      state: "pending",
-    },
-  ];
-  const quickActionItems = [
-    {
-      key: "profile",
-      labelEn: "Generate profile",
-      labelAr: "توليد الملف",
-      Icon: FileText,
-      disabled: !selectedCountryOption || isGenerating,
-      onClick: () => initializeCountryFromWidget(selectedCountryOption?.code),
-    },
-    {
-      key: "schedule",
-      labelEn: "Schedule",
-      labelAr: "الجدول",
-      Icon: Award,
-      disabled: false,
-      onClick: () => setIsCalendarOpen(true),
-    },
-    {
-      key: "debrief",
-      labelEn: "Debrief",
-      labelAr: "التحليل",
-      Icon: BrainCircuit,
-      disabled: false,
-      onClick: () => {
-        setActiveTab("debrief");
-        setCurrentStep(7);
-      },
-    },
-    {
-      key: "advisor",
-      labelEn: "Ask AI",
-      labelAr: "اسأل الذكاء",
-      Icon: MessageCircle,
-      disabled: !activeCountry,
-      onClick: () => setIsChatOpen(true),
-    },
-  ];
   const signalSummaryItems = [
     { labelEn: "Energy", labelAr: "الطاقة", valueEn: "Grid watch", valueAr: "متابعة الشبكات" },
     { labelEn: "Logistics", labelAr: "اللوجستيات", valueEn: "Corridor shifts", valueAr: "تحولات الممرات" },
@@ -1408,74 +1329,20 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-1 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] gap-4">
-                    <section className="workflow-widget p-4 md:p-5">
-                      <div className="flex items-center justify-between gap-3 mb-4">
-                        <div>
-                          <p className="text-xs font-bold text-emerald-deep">{isEn ? "Readiness checklist" : "قائمة الجاهزية"}</p>
-                          <h3 className="text-base font-bold text-slate-vip mt-1">{isEn ? "Preparation progress" : "تقدم التحضير"}</h3>
+                  <section className="workflow-widget mt-4 p-4 md:p-5">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <p className="text-xs font-bold text-slate-vip">{isEn ? "Signals summary" : "ملخص المؤشرات"}</p>
+                      <span className="text-[10px] font-bold text-emerald-deep">{isEn ? "Live" : "مباشر"}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {signalSummaryItems.map((item) => (
+                        <div key={item.labelEn} className="signal-summary-row">
+                          <span className="font-bold text-slate-vip">{isEn ? item.labelEn : item.labelAr}</span>
+                          <span className="text-slate-500">{isEn ? item.valueEn : item.valueAr}</span>
                         </div>
-                        <CheckCircle2 className="w-5 h-5 text-gold-deep shrink-0" />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {readinessItems.map((item) => (
-                          <div key={item.key} className={`readiness-item readiness-item-${item.state}`}>
-                            <span className="readiness-dot">
-                              {item.state === "complete" && <CheckCircle2 className="w-3.5 h-3.5" />}
-                            </span>
-                            <span className="min-w-0">
-                              <span className="block text-sm font-bold text-slate-vip truncate">{isEn ? item.labelEn : item.labelAr}</span>
-                              <span className="block text-xs text-slate-500 truncate">{isEn ? item.detailEn : item.detailAr}</span>
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-
-                    <section className="workflow-widget p-4 md:p-5">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-bold text-emerald-deep">{isEn ? "Quick actions" : "إجراءات سريعة"}</p>
-                          <h3 className="text-base font-bold text-slate-vip mt-1">{isEn ? "Move to the next task" : "الانتقال للمهمة التالية"}</h3>
-                        </div>
-                        <Activity className="w-5 h-5 text-gold-deep shrink-0" />
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-2 gap-2.5">
-                        {quickActionItems.map((item) => {
-                          const QuickIcon = item.Icon;
-                          return (
-                            <button
-                              key={item.key}
-                              type="button"
-                              onClick={item.onClick}
-                              disabled={item.disabled}
-                              className="quick-action-widget-button"
-                            >
-                              <QuickIcon className="w-4 h-4" />
-                              <span>{isEn ? item.labelEn : item.labelAr}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <div className="signal-summary-widget mt-4 rounded-lg border border-[#D8E0EF] bg-[#F8FAFC] p-3">
-                        <div className="flex items-center justify-between gap-3 mb-2">
-                          <p className="text-xs font-bold text-slate-vip">{isEn ? "Signals summary" : "ملخص المؤشرات"}</p>
-                          <span className="text-[10px] font-bold text-emerald-deep">{isEn ? "Live" : "مباشر"}</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-1 gap-2">
-                          {signalSummaryItems.map((item) => (
-                            <div key={item.labelEn} className="signal-summary-row">
-                              <span className="font-bold text-slate-vip">{isEn ? item.labelEn : item.labelAr}</span>
-                              <span className="text-slate-500">{isEn ? item.valueEn : item.valueAr}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </section>
-                  </div>
+                      ))}
+                    </div>
+                  </section>
                 </motion.div>
               )}
             </AnimatePresence>
