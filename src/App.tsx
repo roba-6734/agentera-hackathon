@@ -10,6 +10,7 @@ import BilateralCalendar from "./components/BilateralCalendar";
 import AuthPortal from "./components/AuthPortal";
 import StrategicSignalsMonitor from "./components/StrategicSignalsMonitor";
 import StrategicMeetingDebrief from "./components/StrategicMeetingDebrief";
+import ExecutiveDecisionSupport from "./components/ExecutiveDecisionSupport";
 import CountryFlag from "./components/CountryFlag";
 import { apiFetch } from "./api";
 import { AppRole, AppSession, BriefingArtifacts, PrebuiltCountry, UaeIndicator, activeTabCode } from "./types";
@@ -83,27 +84,6 @@ function readStoredAppSession(): AppSession | null {
     console.warn("Unable to restore Majlis AI session.", error);
     return null;
   }
-}
-
-function cleanBriefingBlock(value: string, maxLength = 430) {
-  const cleaned = value
-    .replace(/^#{1,6}\s*/gm, "")
-    .replace(/\*\*(.*?)\*\*/g, "$1")
-    .replace(/^\s*[-*]\s+/gm, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 3)}...` : cleaned;
-}
-
-function getExecutiveBriefingBlocks(aiBriefingText: string, fallbackBlocks: string[]) {
-  const aiBlocks = aiBriefingText
-    .split(/\n{2,}/)
-    .map((block) => cleanBriefingBlock(block))
-    .filter((block) => block.length > 80)
-    .slice(0, 2);
-
-  return aiBlocks.length > 0 ? aiBlocks : fallbackBlocks.map((block) => cleanBriefingBlock(block));
 }
 
 export default function App() {
@@ -533,37 +513,6 @@ export default function App() {
     nodeThreeAr: isChatOpen ? "محادثة" : "مؤشر",
     modeClass: isGenerating ? "ai-assist-card-live" : activeCountry ? "ai-assist-card-ready" : "ai-assist-card-idle",
   };
-  const executiveBriefingBlocks = activeCountry
-    ? getExecutiveBriefingBlocks(aiBriefingText, [
-        isEn ? activeCountry.profile.overviewEn : activeCountry.profile.overviewAr,
-        isEn ? activeCountry.strategicInsights.partnershipsEn : activeCountry.strategicInsights.partnershipsAr,
-      ])
-    : [];
-  const executivePriorityCards = activeCountry
-    ? [
-        {
-          icon: Target,
-          titleEn: "Decision Priority",
-          titleAr: "أولوية القرار",
-          bodyEn: activeCountry.predictive.proposalsEn,
-          bodyAr: activeCountry.predictive.proposalsAr,
-        },
-        {
-          icon: Sparkles,
-          titleEn: "Strategic Opening",
-          titleAr: "المدخل الاستراتيجي",
-          bodyEn: activeCountry.strategicInsights.partnershipsEn,
-          bodyAr: activeCountry.strategicInsights.partnershipsAr,
-        },
-        {
-          icon: UsersRound,
-          titleEn: "People in the Room",
-          titleAr: "الأطراف القيادية",
-          bodyEn: activeCountry.profile.leadershipEn,
-          bodyAr: activeCountry.profile.leadershipAr,
-        },
-      ]
-    : [];
 
   useGsapScrollCards([
     session?.role,
@@ -724,6 +673,15 @@ export default function App() {
               </form>
             </div>
           </section>
+
+          {activeCountry && (
+            <ExecutiveDecisionSupport
+              country={activeCountry}
+              language={language}
+              briefingArtifacts={briefingArtifacts}
+              meetingObjective={meetingObjective}
+            />
+          )}
 
           {isGenerating && !activeCountry ? (
             <div className="bg-white rounded-sm shadow-md border border-gold-border p-12 text-center" id="executive-briefing-loading-state">
