@@ -25,11 +25,11 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
   return (
     <header className="bg-white relative border-b border-gold-border text-slate-vip overflow-hidden shadow-sm animate-fade-in-down" id="moei-executive-header">
       {/* Top premium color lines from thematic design */}
-      <div className="absolute top-0 left-0 w-full h-1.5 bg-[linear-gradient(90deg,#00732F,#14B8A6,#2563EB,#F9735B,#C5A059)]"></div>
+      <div className="absolute top-0 left-0 w-full h-1.5 bg-[linear-gradient(90deg,#0F172A,#1E3A8A,#4F46E5,#60A5FA)]"></div>
       
       {/* UAE themed subtle backdrop element */}
-      <div className="absolute inset-x-0 top-1.5 h-20 bg-[linear-gradient(105deg,rgba(20,184,166,0.14),transparent_38%,rgba(249,115,91,0.12))] pointer-events-none"></div>
-      <div className="absolute inset-x-0 bottom-0 h-px bg-[linear-gradient(90deg,transparent,rgba(197,160,89,0.5),transparent)] pointer-events-none"></div>
+      <div className="absolute inset-x-0 top-1.5 h-20 bg-[linear-gradient(105deg,rgba(30,58,138,0.08),transparent_42%,rgba(79,70,229,0.06))] pointer-events-none"></div>
+      <div className="absolute inset-x-0 bottom-0 h-px bg-[linear-gradient(90deg,transparent,rgba(100,116,139,0.28),transparent)] pointer-events-none"></div>
 
       <div className="max-w-[1700px] xl:max-w-[1850px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-5 relative z-10">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6" id="header-internal-container">
@@ -46,7 +46,7 @@ export default function Header({ language, setLanguage, selectedCountryNameEn, s
             <div className="flex flex-col justify-center" id="ministry-text-brand">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-emerald-deep animate-pulse"></span>
-                <span className="text-[10px] uppercase font-mono tracking-widest text-[#C5A059] font-bold">
+                <span className="text-[10px] uppercase font-mono tracking-widest text-[#4F46E5] font-bold">
                   {isExecutive
                     ? language === "en" ? "Executive Briefing Resource" : "مورد الإحاطة القيادية"
                     : language === "en" ? "Staff Strategic Resource" : "مورد استراتيجي لفريق العمل"}

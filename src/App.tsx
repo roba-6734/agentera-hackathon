@@ -14,9 +14,17 @@ import StrategicMeetingDebrief from "./components/StrategicMeetingDebrief";
 import CountryFlag from "./components/CountryFlag";
 import { apiFetch } from "./api";
 import { AppRole, AppSession, PrebuiltCountry, UaeIndicator, activeTabCode } from "./types";
-import { ShieldAlert, Layers, Award, Landmark, Eye, ArrowRight, FileText, CheckCircle2, Activity, Cpu, ChevronDown, Crown, Target, Sparkles, UsersRound, BrainCircuit } from "lucide-react";
+import { ShieldAlert, Layers, Award, Landmark, Eye, ArrowRight, FileText, CheckCircle2, Activity, Cpu, ChevronDown, Crown, Target, Sparkles, UsersRound, BrainCircuit, MessageCircle, X, Bot } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 
 const SESSION_STORAGE_KEY = "majlis-ai-session";
+
+const workspacePanelMotion = {
+  initial: { opacity: 0, y: 18, filter: "blur(8px)" },
+  animate: { opacity: 1, y: 0, filter: "blur(0px)" },
+  exit: { opacity: 0, y: -10, filter: "blur(6px)" },
+  transition: { duration: 0.38, ease: "easeOut" },
+};
 
 interface CountryOption {
   code: string;
@@ -171,8 +179,10 @@ export default function App() {
   // Sync selected country dataset manually based on selection and meeting objective
   const triggerSyncSearch = async (
     targetCountry: string = selectedCountryCode,
-    targetLang: "en" | "ar" = language
+    targetLang: "en" | "ar" = language,
+    options: { redirectToProfile?: boolean } = {}
   ) => {
+    const shouldRedirectToProfile = options.redirectToProfile !== false;
     const cleanTargetCountry = targetCountry.trim();
     if (!cleanTargetCountry) {
       setActiveCountry(null);
@@ -182,6 +192,10 @@ export default function App() {
     }
 
     setIsGenerating(true);
+    if (shouldRedirectToProfile) {
+      setActiveTab(session?.role === "executive" ? "briefing" : "passport");
+      setCurrentStep(session?.role === "executive" ? 8 : 3);
+    }
     try {
       const trimmedObjective = meetingObjective.trim();
       const executivePrompt = `Draft a concise executive meeting briefing for ${cleanTargetCountry}. Keep it focused on decision points, meeting leadership, and no more than three priorities.`;
@@ -210,11 +224,16 @@ export default function App() {
           setActiveCountry(data.countryData);
         }
         
-        if (meetingObjective.trim()) {
+        if (!shouldRedirectToProfile) {
+          return;
+        }
+
+        if (session?.role === "executive") {
           setActiveTab("briefing");
           setCurrentStep(8); // Elevate workflow straight to briefing presentation stage
         } else {
-          setCurrentStep(4); // Workspace successfully updated
+          setActiveTab("passport");
+          setCurrentStep(3); // Show country profile first after generation.
         }
       }
     } catch (err) {
@@ -227,7 +246,7 @@ export default function App() {
   // Synchronize language changes on demand
   useEffect(() => {
     if (activeCountry) {
-      triggerSyncSearch(selectedCountryCode, language);
+      triggerSyncSearch(selectedCountryCode, language, { redirectToProfile: false });
     }
   }, [language]);
 
@@ -362,6 +381,36 @@ export default function App() {
     },
   ];
   const showSignalsPanel = session?.role === "staff" && activeTab !== "debrief";
+  const activeWorkspaceTab = workspaceTabItems.find((item) => item.code === activeTab);
+  const assistantPortalState = {
+    titleEn: isGenerating
+      ? "Compiling intelligence update"
+      : activeCountry
+        ? `${activeWorkspaceTab?.labelEn || "Advisor"} tuned to ${activeCountry.nameEn}`
+        : "Awaiting country selection",
+    titleAr: isGenerating
+      ? "جاري تجميع تحديث استخباراتي"
+      : activeCountry
+        ? `${activeWorkspaceTab?.labelAr || "المستشار"} مضبوط على ${activeCountry.nameAr}`
+        : "بانتظار اختيار الدولة",
+    statusEn: isGenerating
+      ? "Live analysis"
+      : activeCountry
+        ? "Advisor ready"
+        : "Setup required",
+    statusAr: isGenerating
+      ? "تحليل مباشر"
+      : activeCountry
+        ? "المستشار جاهز"
+        : "يتطلب الإعداد",
+    nodeOneEn: isGenerating ? "Sync" : activeCountry ? "Ready" : "Select",
+    nodeOneAr: isGenerating ? "مزامنة" : activeCountry ? "جاهز" : "اختر",
+    nodeTwoEn: activeWorkspaceTab?.labelEn.split(" ")[0] || "Brief",
+    nodeTwoAr: activeWorkspaceTab?.labelAr || "إحاطة",
+    nodeThreeEn: isChatOpen ? "Chat" : "Signal",
+    nodeThreeAr: isChatOpen ? "محادثة" : "مؤشر",
+    modeClass: isGenerating ? "ai-assist-card-live" : activeCountry ? "ai-assist-card-ready" : "ai-assist-card-idle",
+  };
   const executiveBriefingBlocks = activeCountry
     ? getExecutiveBriefingBlocks(aiBriefingText, [
         isEn ? activeCountry.profile.overviewEn : activeCountry.profile.overviewAr,
@@ -433,7 +482,7 @@ export default function App() {
         />
 
         <main className="max-w-[1500px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 flex-1 w-full space-y-6" id="executive-briefing-workspace">
-          <section className="bg-white rounded-sm shadow-md border-l-4 border-[#C5A059] p-5 md:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5" id="executive-briefing-control-ribbon">
+          <section className="bg-white rounded-sm shadow-md border-l-4 border-[#CBD5E1] p-5 md:p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5" id="executive-briefing-control-ribbon">
             <div className="space-y-1">
               <span className="text-[10px] uppercase font-mono tracking-widest text-emerald-deep font-bold flex items-center gap-1">
                 <Crown className="w-3.5 h-3.5" />
@@ -649,7 +698,7 @@ export default function App() {
                     {isEn ? activeCountry.predictive.proposalsEn : activeCountry.predictive.proposalsAr}
                   </p>
                 </div>
-                <div className="bg-white rounded-sm shadow-md border-l-4 border-[#C5A059] p-5">
+                <div className="bg-white rounded-sm shadow-md border-l-4 border-[#CBD5E1] p-5">
                   <p className="text-[10px] uppercase tracking-widest text-gold-deep font-mono font-bold">{isEn ? "Risk Watch" : "مراقبة المخاطر"}</p>
                   <p className="text-sm leading-6 mt-2 text-gray-700">
                     {isEn ? activeCountry.predictive.risksEn : activeCountry.predictive.risksAr}
@@ -695,10 +744,10 @@ export default function App() {
       {/* Primary Workspace container */}
       <main className="max-w-[1700px] xl:max-w-[1850px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 flex-1 w-full space-y-8" id="application-primary-workspace">
             {/* UPPER BANNER PROTOCOL */}
-        <div className="bg-white rounded-sm shadow-md border-l-4 border-[#C5A059] p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 relative" id="cabinet-briefing-upper-ribbon">
+        <div className="bg-white rounded-sm shadow-md border-l-4 border-[#CBD5E1] p-5 md:p-6 grid grid-cols-1 xl:grid-cols-12 xl:items-stretch gap-4 xl:gap-5 relative" id="cabinet-briefing-upper-ribbon">
           <div className="absolute top-0 right-0 w-2 bg-gradient-to-b from-gold-deep to-emerald-deep h-full pointer-events-none rounded-r-sm"></div>
           
-          <div className="space-y-1">
+          <div className="space-y-2 xl:col-span-5 min-w-0">
             <span className="text-[10px] uppercase font-mono tracking-widest text-emerald-deep font-bold flex items-center gap-1">
               <Activity className="w-3.5 h-3.5" />
               <span>{isEn ? "COUNCIL DECISION SUPPORT" : "نظام تدقيق وتخطيط المخرجات الدبلوماسية"}</span>
@@ -711,8 +760,38 @@ export default function App() {
             </p>
           </div>
 
+          <div className={`ai-assist-card ${assistantPortalState.modeClass} xl:col-span-3 rounded-lg p-4 min-w-0`}>
+            <div className="relative z-10 flex items-center gap-3">
+              <div className="ai-node-icon h-10 w-10 rounded-lg flex items-center justify-center shrink-0">
+                <Bot className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-widest font-mono font-black text-slate-500">
+                  {isEn ? assistantPortalState.statusEn : assistantPortalState.statusAr}
+                </p>
+                <h3 className="text-sm font-serif font-bold text-slate-vip truncate">
+                  {isEn ? assistantPortalState.titleEn : assistantPortalState.titleAr}
+                </h3>
+              </div>
+            </div>
+            <div className="relative z-10 mt-4 grid grid-cols-3 gap-2">
+              <div className="ai-node-pill">
+                <BrainCircuit className="w-3.5 h-3.5" />
+                <span>{isEn ? assistantPortalState.nodeOneEn : assistantPortalState.nodeOneAr}</span>
+              </div>
+              <div className="ai-node-pill">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>{isEn ? assistantPortalState.nodeTwoEn : assistantPortalState.nodeTwoAr}</span>
+              </div>
+              <div className="ai-node-pill">
+                <Activity className="w-3.5 h-3.5" />
+                <span>{isEn ? assistantPortalState.nodeThreeEn : assistantPortalState.nodeThreeAr}</span>
+              </div>
+            </div>
+          </div>
+
            {/* Styled premium spinner country selector with dropdown options */}
-          <div className="flex flex-wrap items-center gap-3" id="quick-bilateral-selector">
+          <div className="flex flex-wrap items-center gap-3 xl:col-span-4 xl:self-center" id="quick-bilateral-selector">
             <div className="relative inline-block text-left" id="country-dropdown-spinner-wrapper">
               <button
                 type="button"
@@ -806,8 +885,8 @@ export default function App() {
         {/* TOP LEVEL CABINET BILATERAL SUMMIT & MEETING SCHEDULER REMOVED FROM MAIN INLINE ROW GRID TO OVERLAY PORTAL TRIGGERED VIA HEADER */}
 
         <section className="bg-white rounded-sm shadow-md border border-gold-border overflow-hidden" id="intelligence-hub-strip">
-          <div className="px-4 py-3 flex flex-col xl:flex-row xl:items-center gap-3">
-            <div className="flex items-center gap-2 shrink-0 min-w-[190px]">
+          <div className="p-4 grid grid-cols-1 xl:grid-cols-[minmax(180px,0.22fr)_1fr] xl:items-center gap-4">
+            <div className="flex items-center gap-2 shrink-0 min-w-0">
               <Cpu className="w-4 h-4 text-gold-deep" />
               <div>
                 <p className="text-xs uppercase font-mono tracking-widest text-slate-vip font-extrabold">
@@ -854,18 +933,19 @@ export default function App() {
 
         <button
           onClick={() => setIsChatOpen(!isChatOpen)}
-          className="fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#C5A059] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm"
+          className="fixed bottom-10 right-6 z-[100] flex items-center justify-between gap-1 px-5 py-3.5 rounded-full bg-slate-vip hover:bg-[#15241F] text-white shadow-2xl border-2 border-[#94A3B8] transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer max-w-xs sm:max-w-sm"
+          id="ai-policy-chat-launcher"
           style={{ direction: language === "ar" ? "rtl" : "ltr" }}
         >
           <div className="flex items-center gap-2.5">
-            <span className="opacity-90">🗣️</span>
-            <span>{isEn ? "AI Policy Advisor Chat" : "المستشار الرقمي الفوري"}</span>
+            <MessageCircle className="w-4 h-4 opacity-90" />
+            <span className="chat-launcher-label">{isEn ? "AI Policy Advisor Chat" : "المستشار الرقمي الفوري"}</span>
           </div>
           {!isChatOpen && (
-            <span className="h-2 w-2 rounded-full bg-emerald-light animate-pulse ml-2 shrink-0 block"></span>
+            <span className="chat-launcher-dot h-2 w-2 rounded-full bg-emerald-light animate-pulse ml-2 shrink-0 block"></span>
           )}
           {isChatOpen && (
-            <span className="text-gold-deep text-xs font-bold ml-2">✕</span>
+            <X className="chat-launcher-close w-4 h-4 text-gold-deep ml-2 shrink-0" />
           )}
         </button>
 
@@ -873,56 +953,80 @@ export default function App() {
         <div className={`grid grid-cols-1 ${showSignalsPanel ? "xl:grid-cols-12" : ""} gap-6`} id="primary-workspace-grid-layout">
           {/* MAIN COLUMN PANELS: DISPLAY CHOSEN CATEGORY WORKSPACE COMPONENTS */}
           <div className={`${showSignalsPanel ? "xl:col-span-8" : "xl:col-span-12"} space-y-6`} id="right-workspace-panel" style={{ direction: language === "ar" ? "rtl" : "ltr" }}>
-            {activeTab === "debrief" && session.role === "staff" ? (
-              <StrategicMeetingDebrief
-                language={language}
-                countryOptions={countryOptions}
-                defaultCountryCode={selectedCountryCode}
-                session={session}
-              />
-            ) : activeCountry ? (
-              <>
-                {/* 1. Country Intelligence Background */}
-                {activeTab === "passport" && (
-                  <IntelligenceProfile country={activeCountry} language={language} />
-                )}
-
-                {/* 2. Strategic Insights & Bilateral Proposals */}
-                {activeTab === "strategic" && (
-                  <StrategicInsightsView country={activeCountry} language={language} />
-                )}
-
-                {/* 3. Briefings & Presentation Slides */}
-                {activeTab === "briefing" && (
-                  <BriefingGenerator
-                    country={activeCountry}
+            <AnimatePresence mode="wait">
+              {activeTab === "debrief" && session.role === "staff" ? (
+                <motion.div key={`debrief-${selectedCountryCode || "new"}`} {...workspacePanelMotion}>
+                  <StrategicMeetingDebrief
                     language={language}
-                    aiBriefingText={aiBriefingText}
-                    isGenerating={isGenerating}
-                    briefingSource={briefingSource}
-                    meetingObjective={meetingObjective}
-                    uaeData={uaeData}
+                    countryOptions={countryOptions}
+                    defaultCountryCode={selectedCountryCode}
+                    session={session}
                   />
-                )}
+                </motion.div>
+              ) : activeCountry ? (
+                <motion.div key={`${activeCountry.id}-${activeTab}`} {...workspacePanelMotion}>
+                  {/* 1. Country Intelligence Background */}
+                  {activeTab === "passport" && (
+                    <IntelligenceProfile country={activeCountry} language={language} />
+                  )}
 
-                {/* 4. Sovereign Indicators Comparison */}
-                {activeTab === "compare" && (
-                  <ComparisonEngine country={activeCountry} uaeData={uaeData} language={language} />
-                )}
+                  {/* 2. Strategic Insights & Bilateral Proposals */}
+                  {activeTab === "strategic" && (
+                    <StrategicInsightsView country={activeCountry} language={language} />
+                  )}
 
-                {/* 5. Predictive intelligence forecasts */}
-                {activeTab === "predictive" && (
-                  <PredictiveIntelligenceView country={activeCountry} language={language} />
-                )}
-              </>
-            ) : (
-              <div className="bg-white rounded-sm shadow-md border border-gold-border p-12 text-center" id="no-country-fallback">
-                <ShieldAlert className="w-12 h-12 text-gold-deep mx-auto mb-4" />
-                <h3 className="text-lg font-serif font-bold text-slate-vip">
-                  {isEn ? "Select a country, then click Initialize Search." : "اختر دولة، ثم اضغط تحضير الإيجاز."}
-                </h3>
-              </div>
-            )}
+                  {/* 3. Briefings & Presentation Slides */}
+                  {activeTab === "briefing" && (
+                    <BriefingGenerator
+                      country={activeCountry}
+                      language={language}
+                      aiBriefingText={aiBriefingText}
+                      isGenerating={isGenerating}
+                      briefingSource={briefingSource}
+                      meetingObjective={meetingObjective}
+                      uaeData={uaeData}
+                    />
+                  )}
+
+                  {/* 4. Sovereign Indicators Comparison */}
+                  {activeTab === "compare" && (
+                    <ComparisonEngine country={activeCountry} uaeData={uaeData} language={language} />
+                  )}
+
+                  {/* 5. Predictive intelligence forecasts */}
+                  {activeTab === "predictive" && (
+                    <PredictiveIntelligenceView country={activeCountry} language={language} />
+                  )}
+                </motion.div>
+              ) : isGenerating ? (
+                <motion.div
+                  key={`loading-${selectedCountryCode || "country"}`}
+                  {...workspacePanelMotion}
+                  className="bg-white rounded-sm shadow-md border border-gold-border p-10 md:p-12 text-center"
+                  id="country-profile-loading-state"
+                >
+                  <div className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-gold-border border-t-emerald-deep animate-spin"></div>
+                  <h3 className="text-lg font-serif font-bold text-slate-vip">
+                    {isEn ? "Preparing the country profile..." : "جاري إعداد ملف الدولة..."}
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-2">
+                    {isEn ? "Majlis AI is organizing the profile before opening other workspaces." : "يقوم مجلس AI بتنظيم الملف قبل فتح بقية مساحات العمل."}
+                  </p>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="empty-country"
+                  {...workspacePanelMotion}
+                  className="bg-white rounded-sm shadow-md border border-gold-border p-12 text-center"
+                  id="no-country-fallback"
+                >
+                  <ShieldAlert className="w-12 h-12 text-gold-deep mx-auto mb-4" />
+                  <h3 className="text-lg font-serif font-bold text-slate-vip">
+                    {isEn ? "Select a country, then click Initialize Search." : "اختر دولة، ثم اضغط تحضير الإيجاز."}
+                  </h3>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {showSignalsPanel && (
@@ -959,7 +1063,7 @@ export default function App() {
             id="chat-outside-dismiss-backdrop"
           />
           <div 
-            className="fixed bottom-28 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[560px] lg:w-[640px] max-w-[calc(100vw-2rem)] h-[min(720px,calc(100vh-9rem))] bg-white rounded-lg shadow-2xl border border-[#C5A059] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
+            className="fixed bottom-28 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[560px] lg:w-[640px] max-w-[calc(100vw-2rem)] h-[min(720px,calc(100vh-9rem))] bg-white rounded-lg shadow-2xl border border-[#CBD5E1] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300"
             style={{ direction: language === "ar" ? "rtl" : "ltr" }}
           >
           <AiChatAssistant

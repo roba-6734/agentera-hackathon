@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowRight, BriefcaseBusiness, Code2, Crown, Globe, LockKeyhole, ShieldCheck, UserPlus } from "lucide-react";
+import { ArrowRight, Bot, BrainCircuit, BriefcaseBusiness, Code2, Crown, Globe, LockKeyhole, Radar, ShieldCheck, Sparkles, UserPlus } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import majlisLogo from "../../assets/images/majlis-ai-logo.png";
 import { AppRole, AppSession } from "../types";
@@ -60,6 +60,23 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [accessCode, setAccessCode] = useState("");
+  const aiPortalSignals = [
+    {
+      labelEn: "Briefing",
+      labelAr: "إحاطة",
+      icon: Sparkles,
+    },
+    {
+      labelEn: "Context",
+      labelAr: "سياق",
+      icon: BrainCircuit,
+    },
+    {
+      labelEn: "Signals",
+      labelAr: "مؤشرات",
+      icon: Radar,
+    },
+  ];
 
   const fallbackDisplayName: Record<AppRole, string> = {
     developer: "Developer User",
@@ -90,13 +107,13 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
       <div className="auth-light-beam auth-light-beam-one" />
       <div className="auth-light-beam auth-light-beam-two" />
 
-      <header className="relative z-10 max-w-[1180px] mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between gap-4 animate-fade-in-down">
-        <div className="auth-glass-pill flex items-center gap-3 min-w-0 rounded-lg px-3 py-2">
+      <header className="relative z-10 max-w-[1180px] mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 animate-fade-in-down">
+        <div className="auth-glass-pill flex items-center gap-3 min-w-0 rounded-lg px-3 py-2 w-full sm:w-auto">
           <div className="auth-logo-badge h-14 w-14 rounded-lg flex items-center justify-center shrink-0">
             <img src={majlisLogo} alt="Majlis AI logo" className="h-12 w-10 object-contain" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-widest font-mono font-bold text-[#A16C20]">
+            <p className="text-[10px] uppercase tracking-widest font-mono font-bold text-violet-diplomatic">
               {isEn ? "Secure Executive Access" : "دخول تنفيذي آمن"}
             </p>
             <h1 className="text-xl font-serif font-bold auth-gradient-text leading-tight">Majlis AI</h1>
@@ -106,7 +123,7 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
         <button
           type="button"
           onClick={() => setLanguage(isEn ? "ar" : "en")}
-          className="text-[#1B1B1B] font-bold text-xs uppercase tracking-widest px-4 py-2.5 shadow-sm transition-all duration-300 flex items-center gap-2 border-0 cursor-pointer hover:shadow-lg active:scale-95"
+          className="text-[#1B1B1B] font-bold text-xs uppercase tracking-widest px-4 py-2.5 shadow-sm transition-all duration-300 flex items-center justify-center gap-2 border-0 cursor-pointer hover:shadow-lg active:scale-95 w-full sm:w-auto"
           id="auth-language-toggle"
         >
           <Globe className="w-4 h-4" />
@@ -114,10 +131,10 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
         </button>
       </header>
 
-      <main className="relative z-10 max-w-[1180px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-14">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch">
-          <section className="lg:col-span-5 flex flex-col justify-center animate-fade-in-up">
-            <div className="space-y-6" style={{ direction: isEn ? "ltr" : "rtl" }}>
+      <main className="relative z-10 max-w-[1240px] mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 lg:py-14">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-stretch">
+          <section className="lg:col-span-7 flex flex-col justify-center animate-fade-in-up">
+            <div className="space-y-5 sm:space-y-6 min-w-0" style={{ direction: isEn ? "ltr" : "rtl" }}>
               <div className="auth-glass-pill inline-flex items-center gap-2 rounded-lg px-3 py-2">
                 <ShieldCheck className="w-4 h-4 text-teal-glow" />
                 <span className="text-[10px] uppercase tracking-widest font-mono font-extrabold text-slate-vip">
@@ -126,7 +143,7 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
               </div>
 
               <div className="space-y-3">
-                <h2 className="text-3xl sm:text-5xl font-serif font-bold text-slate-vip leading-tight">
+                <h2 className="text-3xl sm:text-5xl font-serif font-bold text-slate-vip leading-tight break-words">
                   {isEn ? (
                     <>
                       Select your <span className="auth-gradient-text">Majlis AI</span> access role.
@@ -142,7 +159,37 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-3">
+              <div className="auth-assist-card rounded-lg p-4 sm:p-5">
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="ai-node-icon h-11 w-11 rounded-lg flex items-center justify-center shrink-0">
+                      <Bot className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-widest font-mono font-black text-slate-500">
+                        {isEn ? "AI Assistance Portal" : "بوابة المساعد الذكي"}
+                      </p>
+                      <h3 className="text-base sm:text-lg font-serif font-bold text-slate-vip leading-tight">
+                        {isEn ? "Policy intelligence ready" : "استخبارات السياسات جاهزة"}
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 sm:min-w-[255px]">
+                    {aiPortalSignals.map((signal) => {
+                      const SignalIcon = signal.icon;
+                      return (
+                        <div key={signal.labelEn} className="ai-node-pill">
+                          <SignalIcon className="w-3.5 h-3.5" />
+                          <span>{isEn ? signal.labelEn : signal.labelAr}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3" id="auth-role-distribution-panel">
                 {roleOptions.map((option, index) => {
                   const RoleIcon = option.icon;
                   const isSelected = selectedRole === option.role;
@@ -165,7 +212,7 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
                     >
                       <div className="relative z-10 flex items-start justify-between gap-3">
                         <div className={`p-2.5 rounded-lg shadow-sm ${isSelected ? "bg-white/18 text-white" : "bg-white text-emerald-deep"}`}>
-                          <RoleIcon className="w-5 h-5" />
+                          <RoleIcon className="w-5 h-5 text-current" />
                         </div>
                         {isSelected && (
                           <span className="text-[9px] uppercase font-mono font-black text-white bg-white/18 px-2 py-1 rounded-md">
@@ -176,7 +223,7 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
                       <h3 className={`relative z-10 mt-4 text-base font-serif font-bold ${isSelected ? "text-white" : "text-slate-vip"}`}>
                         {isEn ? option.titleEn : option.titleAr}
                       </h3>
-                      <p className={`relative z-10 mt-2 text-xs leading-5 ${isSelected ? "text-white/82" : "text-gray-500"}`}>
+                      <p className={`relative z-10 mt-2 text-xs leading-5 ${isSelected ? "text-white/82" : "text-slate-600"}`}>
                         {isEn ? option.descriptionEn : option.descriptionAr}
                       </p>
                     </motion.button>
@@ -186,15 +233,15 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
             </div>
           </section>
 
-          <section className="lg:col-span-7 animate-fade-in-right">
+          <section className="lg:col-span-5 animate-fade-in-right min-w-0 flex flex-col justify-center">
             <form
               onSubmit={handleSubmit}
-              className="auth-panel rounded-lg overflow-hidden"
+              className="auth-panel rounded-lg overflow-hidden w-full min-w-0"
               style={{ direction: isEn ? "ltr" : "rtl" }}
             >
-              <div className="auth-panel-header relative px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 overflow-hidden">
+              <div className="auth-panel-header relative px-4 sm:px-6 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 overflow-hidden">
                 <div className="relative z-10">
-                  <p className="text-[10px] uppercase tracking-widest text-[#FFD38B] font-mono font-extrabold">
+                  <p className="text-[10px] uppercase tracking-widest text-blue-100 font-mono font-extrabold">
                     {isEn ? "Authentication" : "المصادقة"}
                   </p>
                   <h2 className="text-lg font-serif font-bold text-white mt-1">
@@ -227,7 +274,7 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
               </div>
 
               <AnimatePresence mode="wait">
-                <motion.div key={authMode} {...formMotion} className="relative z-10 p-6 sm:p-8 space-y-5">
+                <motion.div key={authMode} {...formMotion} className="relative z-10 p-4 sm:p-8 space-y-5">
                   {authMode === "signup" && (
                     <label className="block space-y-1.5">
                       <span className="text-[10px] uppercase tracking-widest font-mono font-extrabold text-gray-500">
@@ -273,7 +320,7 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
                   </label>
 
                   <div className="bg-white/66 border border-white/70 rounded-lg p-4 flex items-start gap-3 shadow-sm">
-                    <UserPlus className="w-4 h-4 text-coral-bright shrink-0 mt-0.5" />
+                    <UserPlus className="w-4 h-4 text-violet-diplomatic shrink-0 mt-0.5" />
                     <p className="text-xs text-gray-500 leading-5">
                       {isEn
                         ? "This hackathon build uses placeholder authentication. The selected role is stored only in browser session storage."
@@ -283,16 +330,16 @@ export default function AuthPortal({ language, setLanguage, onAuthenticated }: A
 
                   <button
                     type="submit"
-                    className="auth-submit-button w-full text-white font-mono font-black text-xs uppercase tracking-widest py-3.5 rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 hover:shadow-2xl active:scale-[0.99]"
+                    className="auth-submit-button w-full min-h-12 px-3 text-white font-mono font-black text-[10px] sm:text-xs uppercase tracking-widest leading-4 py-3.5 rounded-lg flex items-center justify-center gap-2 text-center cursor-pointer transition-all duration-300 hover:shadow-2xl active:scale-[0.99]"
                   >
-                    <span>
+                    <span className="min-w-0">
                       {selectedRole === "developer"
                         ? isEn ? "Enter Developer Console" : "دخول وحدة المطور"
                         : selectedRole === "executive"
                           ? isEn ? "Enter Executive Briefing" : "دخول الإحاطة القيادية"
                           : isEn ? "Enter Staff Workspace" : "دخول مساحة فريق العمل"}
                     </span>
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-4 h-4 shrink-0" />
                   </button>
                 </motion.div>
               </AnimatePresence>
